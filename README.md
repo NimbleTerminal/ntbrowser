@@ -12,6 +12,44 @@ ntbrowser [-allow host] [-allow-private] [-nav free|allowlist|confirm] [-externa
 
 `URL` is `http(s)://…` or, for the start page only, `file://…`.
 
+## Flags
+
+| Flag | Default | Meaning |
+| --- | --- | --- |
+| `-nav free\|allowlist\|confirm` | `free` | Link navigation: any http(s) origin; confined to the origin plus `-allow`; or ask before leaving the origin |
+| `-allow host[,host]` | | Extra hosts `fetch()` (and allowlist navigation) may reach; a leading dot allows subdomains |
+| `-allow-private` | off | Permit loopback and private addresses (development only) |
+| `-external-scripts` | off | Fetch `<script src>` through the same policy |
+| `-width px` | 800 | Initial document width; the terminal's pixel geometry takes over once known |
+| `-slice d` | 50ms | JavaScript time budget per entry; three overruns disable the page |
+| `-seed n` | 0 | PRNG seed for `Math.random` (0 = time-based) |
+
+## Keys
+
+`Tab`/`Shift+Tab` cycle links · `Enter` opens the selected link · `⌫` or `⌥←` back · `⌥→` forward · `^R` reload · `/` search · `q` quit. Mouse clicks reach page elements; the page cannot swallow these keys.
+
+## Security model
+
+JavaScript runs in a pure-Go interpreter with no `os`, `net` or environment access, a per-entry time slice, a heap budget, and a bounded DOM; the only network path is a `fetch()` confined to the page's origin plus `-allow`, dialled through an address-vetting transport. Page text reaches the terminal only through a control-stripping boundary.
+
+| Threat | Control | Enforced in |
+| --- | --- | --- |
+| Script reads/writes files | no `os` import; source maps disabled at the `Parse` call (not just on the runtime); `file:` rejected by `Allowed` and `ResolveURL` | `jsvm` (three tests), `netpolicy` |
+| Script opens sockets / SSRF to metadata or LAN | only `fetch` exists; scheme/host allowlist; DNS-resolved IP vetted then dialed (`netip`-based: loopback, RFC1918, link-local, CGNAT, multicast, plus NAT64 `64:ff9b::/96` by embedded address, `64:ff9b:1::/48`, 6to4 by embedded address, Teredo, IPv4-compatible); redirects re-admitted; no proxy env; top-level navigation uses the same dialer with `AnyOrigin` | `netpolicy` (`TestForbiddenIPCoversTransitionPrefixes`) |
+| Exfiltrate via DNS/timing | no DNS primitive; 10 ms clock; MaxInFlight 4 | `jsvm`, `netpolicy` |
+| Terminal escape injection via `console.log`, `<title>`, hrefs, warnings or error strings | `jsvm.safeString` for console text; `app.clean` (C0, DEL, C1, U+2028/9) on everything stored for the status and title lines and again in `View`; nthtml strips controls on its own paths | `jsvm`, `app` (`TestViewNeverCarriesTerminalEscapes`) |
+| CPU exhaustion | per-entry slice, strikes → disabled, call-stack cap, interval clamp | `jsvm`, `loop` |
+| Memory exhaustion | `dom.Limits` incl. `TotalBytes` ≤ nthtml limits (serialized size bounded, so `Render` cannot fail on a within-budget tree); listener/timer/frame caps; body and script caps; heap watchdog → `dropPage` (runtime closed, requests cancelled, GC); `SetMemoryLimit` as a soft last layer | `dom`, `jsvm`, `loop`, `netpolicy`, `cmd` |
+| UI ↔ VM deadlock | VM sends via buffered outbox + forwarder; UI never blocking-posts | `loop` |
+| Node/listener budget exhaustion via detached or never-inserted nodes | every parentless node is released when no wrapper is alive (GC cleanup reports); forced GC + bounded wait + one retry under pressure; transactional writes; counts kept as integers in Go | `dom`, `jsvm` (tests) |
+| Stale navigation wins (UI URL ≠ VM page) | `LoadPage` generation; `pageLoadedMsg` sequence; history moves on success only | `loop`, `app` (tests) |
+| Navigation blocked by the fetch allowlist, or fetch widened by navigation | two policies: `AnyOrigin` only for top-level navigation under free/confirmed, never for `fetch()`; both share the IP-vetting dialer | `netpolicy`, `app` |
+| Page keeps the terminal busy with clicks the user did not make | clicks and keys originate only from Bubble Tea input; the page has no synthetic `dispatchEvent`/`click()` | `loop` |
+| Prototype pollution of host paths | captured `JSON.parse`; frozen globals; wrappers resolve through `Tree` each call | `jsvm` |
+| Use-after-free / handle forgery | integer `NodeID`s, never reused; forged ids reach only this page's own nodes | `dom`, `jsvm` |
+| Page hijacks `q`/`ctrl+c`, search typing, or navigation | host handles keys first and withholds search-box keystrokes; navigation is user-initiated only, resolved against base, http(s) only after the start page; JS can only `preventDefault` | `app`, `loop` |
+| Frame storm | dirty flag + coalescing + `MinFrame`; one render in flight; stale frames dropped by `Gen` | `loop`, `app` |
+
 ## Architecture
 
 ```
