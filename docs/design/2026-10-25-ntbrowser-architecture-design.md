@@ -1,7 +1,7 @@
 # ntbrowser: sandboxed JS runtime over nthtml — architecture design
 
 Date: 2026-10-25 · Status: draft v4, two review rounds addressed (builder check; Evan's external review of v3), open questions answered by Evan, re-based on nthtml v0.1.0, awaiting approval · Author: Claude (Fable 5.1) with Evan
-Companion spike (compiles, tests pass): `/private/tmp/claude-501/-Users-evan-projects-ntbrowser/e06c4cde-3b2d-437e-9072-cb4b9460b88f/scratchpad/ntbrowser-spike`
+Implementation status: v1 implemented in this repository on 2026-10-25 from an implementation plan. The Go blocks below are the design-time snapshot the plan transcribed; the whole-branch review then changed four things in the repo (plain `TypeError`s instead of `goja.NewGoError`; `dom.Parse` drops invalid attribute/tag names instead of failing; `file:` allowed for the start page on Reload/Back; a nil `Fetcher` means deny-all) plus two executor rulings (`isJSType` without `module`; `cleanText` for invalid UTF-8/NUL). Where this document and the repository differ, the repository is current.
 
 ## 1. Intent
 
