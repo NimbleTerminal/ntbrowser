@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"errors"
+	"io"
 	"strings"
 	"testing"
 
@@ -92,5 +94,34 @@ func TestDegenerateTerminalSizes(t *testing.T) {
 	}
 	if w := documentWidth(m.viewer); w < 32 || w > 4096 {
 		t.Fatalf("documentWidth out of range: %d", w)
+	}
+}
+
+// Reload and Back to a file:// start page must work: file: is refused for
+// links, not for the page the user asked for (spec decision 16).
+func TestReloadAndBackToFileStartPage(t *testing.T) {
+	SetLocalReader(func(path string) (io.ReadCloser, error) {
+		return io.NopCloser(strings.NewReader("<p>local " + path + "</p>")), nil
+	})
+	t.Cleanup(func() { SetLocalReader(func(string) (io.ReadCloser, error) { return nil, errors.New("disabled") }) })
+	m := newModel(t, NavFree)
+	m.start = "file:///tmp/page.html"
+	m.current = mustURL(t, m.start)
+	m.history, m.hIndex = []string{m.start, "https://page.test/b"}, 1
+	// Back to the start page.
+	msg := m.step(-1)().(pageLoadedMsg)
+	if msg.err != nil || msg.html != "<p>local /tmp/page.html</p>" {
+		t.Fatalf("Back to file start page: err=%v html=%q", msg.err, msg.html)
+	}
+	// Reload while on it.
+	m.hIndex, m.current = 0, mustURL(t, m.start)
+	msg = m.navigate(m.current.String(), m.hIndex, m.anyOriginFor())().(pageLoadedMsg)
+	if msg.err != nil {
+		t.Fatalf("reload of file start page: %v", msg.err)
+	}
+	// A link to another local file is still refused.
+	msg = m.navigate("file:///etc/passwd", pushNew, true)().(pageLoadedMsg)
+	if msg.err == nil {
+		t.Fatal("a file: link other than the start page was accepted")
 	}
 }

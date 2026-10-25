@@ -115,7 +115,14 @@ func (m *Model) Init() tea.Cmd { return m.navigate(m.start, pushNew, true) }
 func (m *Model) navigate(href string, hist int, anyOrigin bool) tea.Cmd {
 	m.navSeq++
 	seq := m.navSeq
-	firstPage := m.hIndex < 0 // captured on the Update goroutine; the Cmd runs elsewhere
+	// file: is allowed for the page the user asked for on the command line,
+	// whenever it is (re)visited: first load, Reload, Back. Captured on the
+	// Update goroutine; the Cmd runs elsewhere.
+	startKey := m.start
+	if su, err := url.Parse(m.start); err == nil {
+		startKey = su.String()
+	}
+	firstPage := m.hIndex < 0
 	policy := m.policy
 	policy.Origin, policy.AnyOrigin, policy.MaxBody = m.current, anyOrigin, 1<<20
 	return func() tea.Msg {
@@ -125,7 +132,7 @@ func (m *Model) navigate(href string, hist int, anyOrigin bool) tea.Cmd {
 		}
 		switch u.Scheme {
 		case "file":
-			if !firstPage {
+			if !firstPage && u.String() != startKey {
 				return pageLoadedMsg{seq: seq, err: fmt.Errorf("file: navigation is only allowed for the start page")}
 			}
 			data, err := readLocal(u.Path)
