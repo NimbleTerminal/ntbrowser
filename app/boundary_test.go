@@ -159,3 +159,22 @@ func TestFrameWithoutWarningsKeepsStatus(t *testing.T) {
 		t.Fatalf("frame wiped the status line: %q", m.status)
 	}
 }
+
+// The "loading …" status is replaced by the first frame of the new page;
+// later frames without warnings leave the status alone.
+func TestFirstFrameClearsLoadingStatus(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	l := loop.New(ctx, loop.Config{Width: 400}, dropSink{})
+	go l.Run()
+	m := New(l, netpolicy.Policy{}, NavFree, "")
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m.Update(pageLoadedMsg{html: "<p>x</p>", base: mustURL(t, "https://example.test/"), seq: m.navSeq, hist: pushNew})
+	if !strings.HasPrefix(m.status, "loading ") {
+		t.Fatalf("status after load: %q", m.status)
+	}
+	m.Update(loop.FrameMsg{Gen: 1, Result: renderTall(t, `<p>x</p>`)})
+	if strings.HasPrefix(m.status, "loading ") {
+		t.Fatalf("first frame left the loading status: %q", m.status)
+	}
+}

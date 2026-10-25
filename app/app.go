@@ -234,8 +234,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = clean("render: " + v.Err.Error())
 			return m, nil
 		}
-		if len(v.Result.Warnings) > 0 {
-			m.status = clean(strings.Join(v.Result.Warnings, "; ")) // only warnings replace the status; a log line survives the next frame
+		switch {
+		case len(v.Result.Warnings) > 0:
+			m.status = clean(strings.Join(v.Result.Warnings, "; ")) // warnings replace the status; a log line survives the next frame
+		case m.resetView:
+			m.status = "" // the page's first frame: "loading …" is over
 		}
 		if m.viewer == nil {
 			// nthtml.New leaves ReflowTypeset off, which is what the host
