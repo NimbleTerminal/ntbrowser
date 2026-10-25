@@ -1,0 +1,15 @@
+<!doctype html>
+<html><head><title>rAF ticker</title></head>
+<body>
+  <h1>requestAnimationFrame</h1>
+  <div id="box" style="width:40px;height:20px;background:#48f;margin-left:0px"></div>
+  <script>
+    let frames = 0;
+    function step() {
+      frames++;
+      document.getElementById("box").setAttribute("style", "width:40px;height:20px;background:#48f;margin-left:" + (frames * 30) + "px");
+      if (frames < 3) requestAnimationFrame(step); else console.log("raf done 3");
+    }
+    requestAnimationFrame(step);
+  </script>
+</body></html>

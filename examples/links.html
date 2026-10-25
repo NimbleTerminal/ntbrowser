@@ -1,0 +1,12 @@
+<!doctype html>
+<html><head><title>Links</title></head>
+<body>
+  <h1>Link interception</h1>
+  <p><a id="first" href="/first">intercepted link</a> · <a id="second" href="/second">plain link</a></p>
+  <script>
+    document.getElementById("first").addEventListener("click", e => {
+      e.preventDefault();
+      console.log("intercepted");
+    });
+  </script>
+</body></html>

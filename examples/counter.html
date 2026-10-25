@@ -1,0 +1,15 @@
+<!doctype html>
+<html><head><title>Counter</title></head>
+<body>
+  <h1>setInterval counter</h1>
+  <p>Count: <span id="n">0</span></p>
+  <script>
+    let n = 0;
+    const el = document.getElementById("n");
+    const id = setInterval(() => {
+      n++;
+      el.textContent = String(n);
+      if (n === 5) { clearInterval(id); console.log("counter done 5"); }
+    }, 20);
+  </script>
+</body></html>

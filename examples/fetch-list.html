@@ -1,0 +1,17 @@
+<!doctype html>
+<html><head><title>Fetch list</title></head>
+<body>
+  <h1>fetch()-driven list</h1>
+  <ul id="list"></ul>
+  <script>
+    fetch("/items.json").then(r => r.json()).then(items => {
+      const list = document.getElementById("list");
+      for (const item of items) {
+        const li = document.createElement("li");
+        li.textContent = item;
+        list.appendChild(li);
+      }
+      console.log("fetch done " + items.length);
+    }).catch(e => console.error("fetch failed: " + e));
+  </script>
+</body></html>
