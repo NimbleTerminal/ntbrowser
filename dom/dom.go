@@ -215,11 +215,23 @@ func (t *Tree) ingest(parent *Node, src *html.Node, depth int) error {
 			}
 			n, err := t.NewElement(c.Data)
 			if err != nil {
-				return err
+				if errors.Is(err, ErrLimit) {
+					return err
+				}
+				// A tag name the serializer could not emit safely (framework
+				// or non-ASCII custom elements): keep its content, drop the
+				// element. Budget failures still abort, as nthtml's would.
+				if err := t.ingest(parent, c, depth); err != nil {
+					return err
+				}
+				continue
 			}
 			for _, a := range c.Attr {
 				if err := t.SetAttr(n, a.Key, a.Val); err != nil {
-					return err
+					if errors.Is(err, ErrLimit) && !strings.Contains(err.Error(), "attributes") {
+						return err // the page's byte budget, not a per-element cap
+					}
+					continue // @click, :class, [hidden], (input), #ref, or the 33rd attribute: dropped, page kept
 				}
 			}
 			t.attach(parent, n)
