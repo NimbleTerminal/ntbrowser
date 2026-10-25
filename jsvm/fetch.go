@@ -35,13 +35,13 @@ func (s *Sandbox) fetch(call goja.FunctionCall) goja.Value {
 		// Runs on the VM goroutine, outside any Run slice, so settle under one.
 		_ = s.Run(func(vm *goja.Runtime) error {
 			if err != nil {
-				return reject(vm.NewGoError(err))
+				return reject(jsError(vm, err))
 			}
 			return resolve(s.responseObject(resp))
 		})
 	})
 	if err != nil {
-		_ = reject(vm.NewGoError(err))
+		_ = reject(jsError(vm, err))
 	}
 	return vm.ToValue(promise)
 }
@@ -95,7 +95,7 @@ func errValue(vm *goja.Runtime, err error) goja.Value {
 	if errors.As(err, &ex) {
 		return ex.Value()
 	}
-	return vm.NewGoError(err)
+	return jsError(vm, err)
 }
 
 func toLowerASCII(s string) string {

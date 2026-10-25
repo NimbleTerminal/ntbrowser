@@ -17,7 +17,9 @@ import (
 // only allowed path is goja.Parse(name, src, parser.WithDisableSourceMaps)
 // followed by goja.CompileAST, in Sandbox.Eval.
 func TestOnlyHardenedCompilePath(t *testing.T) {
-	forbidden := map[string]bool{"Compile": true, "MustCompile": true, "RunString": true, "RunScript": true}
+	forbidden := map[string]bool{"Compile": true, "MustCompile": true, "RunString": true, "RunScript": true,
+		// NewGoError attaches the Go error as a reflected, writable `value` (spec §2 anti-goal).
+		"NewGoError": true}
 	files, _ := filepath.Glob("*.go")
 	for _, f := range files {
 		if strings.HasSuffix(f, "_test.go") {

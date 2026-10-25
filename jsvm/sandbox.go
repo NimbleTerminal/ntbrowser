@@ -362,7 +362,7 @@ func (s *Sandbox) timerFunc(repeat bool) func(goja.FunctionCall) goja.Value {
 		}
 		id, ok := s.host.SetTimer(delay, repeat, fn, args)
 		if !ok {
-			panic(s.vm.NewGoError(errors.New("too many timers")))
+			panic(jsError(s.vm, errors.New("too many timers")))
 		}
 		return s.vm.ToValue(id)
 	}
@@ -407,6 +407,16 @@ func (s *Sandbox) consoleObject() *goja.Object {
 // safeString renders a JS value for a terminal: bounded length and no C0/C1
 // control characters, so a page cannot inject escape sequences (OSC, DCS,
 // cursor moves, Kitty graphics commands) into the host's status line or log.
+// jsError is the only way the sandbox turns a Go error into something the
+// page can catch: a plain TypeError whose message is control-stripped and
+// capped. Never goja.NewGoError, which attaches the Go error itself as a
+// reflected `value` property with readable, callable and writable Go fields
+// (spec §2 anti-goal; TestOnlyHardenedCompilePath forbids it statically,
+// TestErrorsNeverCarryGoValues checks what a page can see).
+func jsError(vm *goja.Runtime, err error) *goja.Object {
+	return vm.NewTypeError(safeString(vm.ToValue(err.Error())))
+}
+
 func safeString(v goja.Value) string {
 	if v == nil {
 		return "undefined"

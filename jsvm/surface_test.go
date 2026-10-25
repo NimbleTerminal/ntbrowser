@@ -2,6 +2,8 @@ package jsvm
 
 import (
 	"go/build"
+	"net"
+	"net/url"
 	"sort"
 	"strings"
 	"testing"
@@ -30,16 +32,25 @@ func TestNoSystemImports(t *testing.T) {
 	}
 }
 
-type nopHost struct{ lines []string }
+type nopHost struct {
+	lines    []string
+	fetchErr error  // when set, Fetch fails with it once the test calls pending()
+	pending  func() // the deferred completion, as the loop would deliver it later on the VM goroutine
+}
 
 func (h *nopHost) SetTimer(time.Duration, bool, goja.Callable, []goja.Value) (int, bool) {
 	return 1, true
 }
-func (h *nopHost) ClearTimer(int)                                       {}
-func (h *nopHost) RequestFrame(goja.Callable) int                       { return 1 }
-func (h *nopHost) CancelFrame(int)                                      {}
-func (h *nopHost) Fetch(FetchRequest, func(FetchResponse, error)) error { return nil }
-func (h *nopHost) Log(level, line string)                               { h.lines = append(h.lines, level+": "+line) }
+func (h *nopHost) ClearTimer(int)                 {}
+func (h *nopHost) RequestFrame(goja.Callable) int { return 1 }
+func (h *nopHost) CancelFrame(int)                {}
+func (h *nopHost) Fetch(_ FetchRequest, done func(FetchResponse, error)) error {
+	if h.fetchErr != nil {
+		h.pending = func() { done(FetchResponse{}, h.fetchErr) }
+	}
+	return nil
+}
+func (h *nopHost) Log(level, line string) { h.lines = append(h.lines, level+": "+line) }
 
 // TestGlobalSurface snapshots every global name scripts can see. A new name
 // here is a review event: it means the boundary grew.
@@ -141,5 +152,37 @@ func TestTextContentSetterReleasesListeners(t *testing.T) {
 	}
 	if s.nListen != 3 {
 		t.Fatalf("nListen=%d want 3", s.nListen)
+	}
+}
+
+// Every error the sandbox throws or rejects with is a plain JavaScript error
+// carrying only a message: no reflected Go value (spec §2 anti-goal). Checked
+// for a failed fetch (whatever error chain the Go HTTP stack produced) and a
+// dom budget failure.
+func TestErrorsNeverCarryGoValues(t *testing.T) {
+	tree, _ := dom.Parse(strings.NewReader("<body></body>"), dom.Limits{Nodes: 6})
+	host := &nopHost{fetchErr: &url.Error{Op: "Get", URL: "https://x.test/", Err: &net.OpError{Op: "dial", Addr: &net.TCPAddr{IP: net.IPv4(10, 1, 2, 3), Port: 443}}}}
+	s := New(Config{}, tree, host)
+	src := `
+		globalThis.report = [];
+		function inspect(tag, e) {
+			report.push(tag + ":" + (e instanceof Error) + ":" + (e.value === undefined) + ":" + Object.keys(e).join(",") + ":" + typeof e.message);
+		}
+		const keep = []; // held, so the GC cannot reclaim them and the budget trips
+		try { for (;;) keep.push(document.createElement("div")); } catch (e) { inspect("dom", e); }
+		fetch("https://x.test/").catch(e => inspect("fetch", e));`
+	if err := s.Eval("t.js", src); err != nil {
+		t.Fatal(err)
+	}
+	if host.pending == nil {
+		t.Fatal("fetch was not started")
+	}
+	host.pending() // completion arrives outside any slice; the rejection and its catch run now
+	v, _ := s.vm.RunString("report.join(\"|\")")
+	got := v.String()
+	for _, want := range []string{"dom:true:true::string", "fetch:true:true::string"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("page saw a non-plain error: %q (want %q)", got, want)
+		}
 	}
 }

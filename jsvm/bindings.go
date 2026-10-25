@@ -150,10 +150,7 @@ func (s *Sandbox) nodeArg(v goja.Value) *dom.Node {
 }
 
 func (s *Sandbox) throw(err error) {
-	if errors.Is(err, dom.ErrLimit) {
-		panic(s.vm.NewGoError(err)) // RangeError-like; catchable by the page
-	}
-	panic(s.vm.NewTypeError(err.Error()))
+	panic(jsError(s.vm, err)) // catchable by the page; a budget failure reads like a RangeError
 }
 
 // collectNow is the budget-pressure path: force a GC, give the cleanup
@@ -367,7 +364,7 @@ func (s *Sandbox) wrapAll(nodes []*dom.Node, elementsOnly bool) goja.Value {
 func (s *Sandbox) query(from *dom.Node, sel string, all bool) goja.Value {
 	nodes, err := s.tree.Query(from, sel, all)
 	if err != nil {
-		panic(s.vm.NewGoError(err)) // SyntaxError in browsers; GoError here
+		panic(jsError(s.vm, err)) // SyntaxError in browsers; TypeError here
 	}
 	if !all {
 		if len(nodes) == 0 {
@@ -530,7 +527,7 @@ func (s *Sandbox) addListener(w *goja.Object, n *dom.Node, typ string, fn goja.V
 	if s.nListen >= s.cfg.MaxListeners {
 		s.collectNow()
 		if s.nListen >= s.cfg.MaxListeners {
-			panic(s.vm.NewGoError(errors.New("too many event listeners")))
+			panic(jsError(s.vm, errors.New("too many event listeners")))
 		}
 	}
 	arr := s.listenerList(w, typ, true)
