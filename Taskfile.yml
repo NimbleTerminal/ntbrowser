@@ -1,0 +1,59 @@
+# ntbrowser - Copyright (c) 2026 Neomantra Corp.
+version: '3'
+
+env:
+  GOWORK: 'off'
+  CGO_ENABLED: '0'
+  GIT_PAGER: 'cat'
+
+vars:
+  EXE: '{{if eq OS "windows"}}.exe{{end}}'
+  WASM_PKGS: ./dom ./jsvm ./loop ./netpolicy
+
+tasks:
+  default:
+    desc: Build the library and the ntbrowser binary
+    cmds:
+      - task: build
+
+  list:
+    desc: List available tasks
+    cmds:
+      - task --list-all
+
+  build:
+    desc: Build everything and the binary into bin/
+    cmds:
+      - go build -mod=readonly ./...
+      - go build -mod=readonly -o bin/ntbrowser{{.EXE}} ./cmd/ntbrowser
+
+  test:
+    desc: Run the test suite under the race detector
+    cmds:
+      - go test -race -count=1 ./...
+
+  vet:
+    desc: go vet
+    cmds:
+      - go vet ./...
+
+  wasm:
+    desc: Compile the sandbox-side packages for js/wasm (compile-only in v1)
+    env:
+      GOOS: js
+      GOARCH: wasm
+    cmds:
+      - go build {{.WASM_PKGS}}
+
+  check:
+    desc: vet, test, wasm
+    cmds:
+      - task: vet
+      - task: test
+      - task: wasm
+
+  run:
+    desc: 'Run ntbrowser (task run -- [flags] URL)'
+    interactive: true
+    cmds:
+      - go run ./cmd/ntbrowser {{.CLI_ARGS}}
