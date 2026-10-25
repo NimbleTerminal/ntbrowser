@@ -1,0 +1,772 @@
+// Package dom is ntbrowser's own mutable document tree. JavaScript never sees
+// these structs: the jsvm package hands scripts integer handles and proxies
+// every operation through Tree methods. nthtml's document.Document is
+// immutable, so a committed Tree is serialized to HTML and re-parsed by nthtml
+// on every frame; this package is the single writable model.
+package dom
+
+import (
+	"errors"
+	"fmt"
+	"io"
+	"sort"
+	"strings"
+	"unicode/utf8"
+
+	"golang.org/x/net/html"
+	"golang.org/x/net/html/atom"
+)
+
+// Limits bound what scripts can grow the tree into. Zero fields use defaults.
+// They are deliberately at or below nthtml's document.DefaultLimits so a
+// serialized tree can never exceed the renderer's own budget: Nodes and Depth
+// stay under nthtml's, and TotalBytes bounds the *serialized* size (escaped
+// text, tags, attributes and minted ids), so a tree inside these limits never
+// makes document.Render fail with ErrLimit. The per-node TextBytes cap alone
+// would not do that (8000 × 64 KiB is far over nthtml's 1 MiB input cap).
+type Limits struct {
+	Nodes      int // total live nodes (default 8000; nthtml caps parsing at 10000)
+	Depth      int // nesting depth (default 48; nthtml caps at 64)
+	TextBytes  int // bytes per text node or attribute value (default 64 KiB)
+	Attrs      int // attributes per element (default 32)
+	TotalBytes int // upper bound of Serialize() output (default 1 MiB = nthtml DefaultLimits.Bytes)
+}
+
+var DefaultLimits = Limits{Nodes: 8000, Depth: 48, TextBytes: 64 << 10, Attrs: 32, TotalBytes: 1 << 20}
+
+// Serialized-size accounting. Every cost is an upper bound of what write()
+// emits for that node, so Σ cost ≥ len(Serialize()). Elements reserve room
+// for a minted ` id="nt-h-N"` (≤ 20 bytes for ids under 10^8).
+const elementOverhead = 5 + 20 // '<' + '>' + '</' + '>' + minted id reserve
+
+func textCost(s string) int           { return len(html.EscapeString(s)) }
+func elementCost(tag string) int      { return 2*len(tag) + elementOverhead }
+func attrCost(name, value string) int { return len(name) + 4 + textCost(value) } // ' name="value"'
+
+func nodeCost(n *Node) int {
+	if n.kind == Text {
+		return textCost(n.text)
+	}
+	c := elementCost(n.tag)
+	for _, a := range n.attrs {
+		c += attrCost(a.Name, a.Value)
+	}
+	return c
+}
+
+var ErrLimit = errors.New("ntbrowser/dom: resource limit exceeded")
+
+// NodeID is the only thing JavaScript ever holds. IDs are never reused within
+// one Tree, so a stale handle fails closed instead of aliasing a new node.
+type NodeID int
+
+type Kind uint8
+
+const (
+	Element Kind = iota
+	Text
+)
+
+type Node struct {
+	id       NodeID
+	kind     Kind
+	tag      string // lower-case; empty for text nodes
+	text     string // text nodes only
+	attrs    []Attr // ordered, unique keys, lower-case names
+	parent   *Node
+	children []*Node
+	// listeners is the set of event types JS registered on this node. The
+	// serializer gives such elements a stable id attribute so nthtml's
+	// Box.Anchor / Result.Anchors can be mapped back to a NodeID on hit test.
+	listeners map[string]struct{}
+}
+
+type Attr struct{ Name, Value string }
+
+func (n *Node) ID() NodeID        { return n.id }
+func (n *Node) Kind() Kind        { return n.kind }
+func (n *Node) Tag() string       { return n.tag }
+func (n *Node) Text() string      { return n.text }
+func (n *Node) Parent() *Node     { return n.parent }
+func (n *Node) Children() []*Node { return append([]*Node(nil), n.children...) }
+
+func (n *Node) Attr(name string) (string, bool) {
+	name = strings.ToLower(name)
+	for _, a := range n.attrs {
+		if a.Name == name {
+			return a.Value, true
+		}
+	}
+	return "", false
+}
+
+// HasListener reports whether any JS listener of the given type is attached.
+func (n *Node) HasListener(typ string) bool {
+	_, ok := n.listeners[typ]
+	return ok
+}
+
+// Tree is single-owner: only the VM goroutine mutates it. Serialize produces
+// an immutable snapshot string that may be rendered on another goroutine.
+type Tree struct {
+	limits Limits
+	root   *Node // synthetic "document" node
+	nodes  map[NodeID]*Node
+	// detached holds every parentless non-root node: subtree roots removed
+	// from the document and nodes created but not (yet) inserted. The bridge
+	// releases them once no wrapper in the subtree is alive; see Release.
+	detached map[NodeID]*Node
+	nextID   NodeID
+	live     int
+	bytes    int // Σ nodeCost over live nodes; ≥ len(Serialize())
+	dirty    bool
+	title    string
+	// Scripts collected during Parse, in document order. They are stripped
+	// from the serialized HTML so nthtml never sees them (defense in depth;
+	// nthtml also never executes scripts).
+	Scripts []Script
+}
+
+type Script struct {
+	Inline string // inline source; empty when Src is set
+	Src    string // external src as written; the host decides whether to fetch it
+}
+
+func limits(l Limits) Limits {
+	d := DefaultLimits
+	if l.Nodes > 0 && l.Nodes < d.Nodes {
+		d.Nodes = l.Nodes
+	}
+	if l.Depth > 0 && l.Depth < d.Depth {
+		d.Depth = l.Depth
+	}
+	if l.TextBytes > 0 && l.TextBytes < d.TextBytes {
+		d.TextBytes = l.TextBytes
+	}
+	if l.Attrs > 0 && l.Attrs < d.Attrs {
+		d.Attrs = l.Attrs
+	}
+	if l.TotalBytes > 0 && l.TotalBytes < d.TotalBytes {
+		d.TotalBytes = l.TotalBytes
+	}
+	return d // values above defaults are ignored, mirroring nthtml's policy
+}
+
+// Parse builds a Tree from HTML using golang.org/x/net/html (already a
+// dependency of nthtml). Script bodies are collected into t.Scripts and are
+// not part of the tree. Input must already be bounded by the caller.
+func Parse(r io.Reader, l Limits) (*Tree, error) {
+	t := &Tree{limits: limits(l), nodes: map[NodeID]*Node{}, detached: map[NodeID]*Node{}}
+	t.root = t.newNode(Element, "#document")
+	delete(t.detached, t.root.id)
+	doc, err := html.Parse(r)
+	if err != nil {
+		return nil, err
+	}
+	if err := t.ingest(t.root, doc, 0); err != nil {
+		return nil, err
+	}
+	t.dirty = true
+	return t, nil
+}
+
+func (t *Tree) ingest(parent *Node, src *html.Node, depth int) error {
+	for c := src.FirstChild; c != nil; c = c.NextSibling {
+		switch c.Type {
+		case html.DoctypeNode, html.CommentNode:
+			continue
+		case html.TextNode:
+			if strings.TrimSpace(c.Data) == "" && parent.tag != "pre" {
+				if parent.tag == "#document" || parent.tag == "html" || parent.tag == "head" {
+					continue
+				}
+			}
+			n, err := t.NewText(c.Data)
+			if err != nil {
+				return err
+			}
+			t.attach(parent, n)
+		case html.ElementNode:
+			switch c.DataAtom {
+			case atom.Script:
+				s := Script{}
+				for _, a := range c.Attr {
+					if strings.EqualFold(a.Key, "src") {
+						s.Src = a.Val
+					}
+					if strings.EqualFold(a.Key, "type") && !isJSType(a.Val) {
+						s.Src, s.Inline = "", "" // JSON/template blocks are not code
+						goto skip
+					}
+				}
+				if s.Src == "" && c.FirstChild != nil {
+					s.Inline = c.FirstChild.Data
+				}
+				t.Scripts = append(t.Scripts, s)
+			skip:
+				continue
+			case atom.Title:
+				if c.FirstChild != nil {
+					t.title = c.FirstChild.Data
+				}
+			}
+			if depth+1 > t.limits.Depth {
+				return fmt.Errorf("%w: depth %d", ErrLimit, t.limits.Depth)
+			}
+			n, err := t.NewElement(c.Data)
+			if err != nil {
+				return err
+			}
+			for _, a := range c.Attr {
+				if err := t.SetAttr(n, a.Key, a.Val); err != nil {
+					return err
+				}
+			}
+			t.attach(parent, n)
+			if err := t.ingest(n, c, depth+1); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func isJSType(v string) bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "", "text/javascript", "application/javascript", "text/ecmascript": // not "module": Goja has no ES modules
+		return true
+	}
+	return false
+}
+
+func (t *Tree) newNode(k Kind, tag string) *Node {
+	t.nextID++
+	n := &Node{id: t.nextID, kind: k, tag: tag}
+	t.nodes[n.id] = n
+	t.detached[n.id] = n // parentless until attached
+	return n
+}
+
+// charge reserves delta serialized bytes or fails with ErrLimit.
+func (t *Tree) charge(delta int) error {
+	if delta > 0 && t.bytes+delta > t.limits.TotalBytes {
+		return fmt.Errorf("%w: serialized size over %d bytes", ErrLimit, t.limits.TotalBytes)
+	}
+	t.bytes += delta
+	return nil
+}
+
+// ---- mutation API: the only entry points the JS bridge is allowed to call ----
+
+func (t *Tree) Root() *Node          { return t.root }
+func (t *Tree) Title() string        { return t.title }
+func (t *Tree) Dirty() bool          { return t.dirty }
+func (t *Tree) ClearDirty()          { t.dirty = false }
+func (t *Tree) Node(id NodeID) *Node { return t.nodes[id] }
+
+func (t *Tree) Body() *Node {
+	return t.find(t.root, func(n *Node) bool { return n.tag == "body" })
+}
+
+func (t *Tree) NewElement(tag string) (*Node, error) {
+	tag = strings.ToLower(tag)
+	if tag == "" || tag == "script" || tag == "#document" || !validName(tag) {
+		return nil, fmt.Errorf("ntbrowser/dom: invalid tag %q", tag)
+	}
+	if t.live+1 > t.limits.Nodes {
+		return nil, fmt.Errorf("%w: %d nodes", ErrLimit, t.limits.Nodes)
+	}
+	if err := t.charge(elementCost(tag)); err != nil {
+		return nil, err
+	}
+	t.live++
+	return t.newNode(Element, tag), nil
+}
+
+// cleanText makes page text safe to carry: invalid UTF-8 becomes U+FFFD and
+// NUL is dropped, so the serializer's output is always valid UTF-8 nthtml
+// accepts.
+func cleanText(s string) string {
+	if utf8.ValidString(s) && !strings.ContainsRune(s, 0) {
+		return s
+	}
+	return strings.ReplaceAll(strings.ToValidUTF8(s, "\uFFFD"), "\x00", "")
+}
+
+func (t *Tree) NewText(s string) (*Node, error) {
+	s = cleanText(s)
+	if len(s) > t.limits.TextBytes {
+		return nil, fmt.Errorf("%w: text over %d bytes", ErrLimit, t.limits.TextBytes)
+	}
+	if t.live+1 > t.limits.Nodes {
+		return nil, fmt.Errorf("%w: %d nodes", ErrLimit, t.limits.Nodes)
+	}
+	if err := t.charge(textCost(s)); err != nil {
+		return nil, err
+	}
+	t.live++
+	n := t.newNode(Text, "")
+	n.text = s
+	return n, nil
+}
+
+func (t *Tree) SetAttr(n *Node, name, value string) error {
+	name = strings.ToLower(name)
+	value = cleanText(value)
+	if n.kind != Element || !validName(name) {
+		return errors.New("ntbrowser/dom: invalid attribute name")
+	}
+	if len(value) > t.limits.TextBytes {
+		return fmt.Errorf("%w: attribute over %d bytes", ErrLimit, t.limits.TextBytes)
+	}
+	// Event-handler attributes are inert: the only way to run code is
+	// addEventListener through the bridge, which the loop controls.
+	if strings.HasPrefix(name, "on") {
+		return nil
+	}
+	for i := range n.attrs {
+		if n.attrs[i].Name == name {
+			if err := t.charge(textCost(value) - textCost(n.attrs[i].Value)); err != nil {
+				return err
+			}
+			n.attrs[i].Value = value
+			t.dirty = true
+			return nil
+		}
+	}
+	if len(n.attrs) >= t.limits.Attrs {
+		return fmt.Errorf("%w: %d attributes", ErrLimit, t.limits.Attrs)
+	}
+	if err := t.charge(attrCost(name, value)); err != nil {
+		return err
+	}
+	n.attrs = append(n.attrs, Attr{name, value})
+	t.dirty = true
+	return nil
+}
+
+func (t *Tree) RemoveAttr(n *Node, name string) {
+	name = strings.ToLower(name)
+	for i := range n.attrs {
+		if n.attrs[i].Name == name {
+			t.bytes -= attrCost(n.attrs[i].Name, n.attrs[i].Value)
+			n.attrs = append(n.attrs[:i], n.attrs[i+1:]...)
+			t.dirty = true
+			return
+		}
+	}
+}
+
+func (t *Tree) SetText(n *Node, s string) error {
+	if len(s) > t.limits.TextBytes {
+		return fmt.Errorf("%w: text over %d bytes", ErrLimit, t.limits.TextBytes)
+	}
+	s = cleanText(s)
+	switch n.kind {
+	case Text:
+		if err := t.charge(textCost(s) - textCost(n.text)); err != nil {
+			return err
+		}
+		n.text = s
+	case Element: // textContent setter semantics: replace all children
+		// Allocate first so a failed write leaves the children in place
+		// (the bridge may retry after a GC). An empty string just clears, as
+		// in browsers, and costs no node.
+		var c *Node
+		if s != "" {
+			var err error
+			if c, err = t.NewText(s); err != nil {
+				return err
+			}
+		}
+		for _, old := range n.children {
+			old.parent = nil
+			t.detached[old.id] = old // the bridge releases them once unreferenced
+		}
+		n.children = nil
+		if c != nil {
+			t.attach(n, c)
+		}
+	}
+	t.dirty = true
+	return nil
+}
+
+// TextContent concatenates descendant text, like the DOM getter.
+func TextContent(n *Node) string {
+	var b strings.Builder
+	var walk func(*Node)
+	walk = func(n *Node) {
+		if n.kind == Text {
+			b.WriteString(n.text)
+		}
+		for _, c := range n.children {
+			walk(c)
+		}
+	}
+	walk(n)
+	return b.String()
+}
+
+func (t *Tree) Append(parent, child *Node) error {
+	return t.InsertBefore(parent, child, nil)
+}
+
+func (t *Tree) InsertBefore(parent, child, ref *Node) error {
+	if parent.kind != Element || parent == child {
+		return errors.New("ntbrowser/dom: invalid parent")
+	}
+	for a := parent; a != nil; a = a.parent {
+		if a == child {
+			return errors.New("ntbrowser/dom: cycle")
+		}
+	}
+	if depthOf(parent)+height(child) > t.limits.Depth {
+		return fmt.Errorf("%w: depth %d", ErrLimit, t.limits.Depth)
+	}
+	if ref != nil && ref.parent != parent {
+		return errors.New("ntbrowser/dom: reference node is not a child")
+	}
+	if ref == child {
+		return nil // insertBefore(node, node) is a move to its own place: no-op
+	}
+	if child.parent != nil {
+		t.detach(child)
+	}
+	if ref == nil {
+		t.attach(parent, child)
+		t.dirty = true
+		return nil
+	}
+	for i, c := range parent.children {
+		if c == ref {
+			parent.children = append(parent.children[:i], append([]*Node{child}, parent.children[i:]...)...)
+			child.parent = parent
+			delete(t.detached, child.id)
+			t.dirty = true
+			return nil
+		}
+	}
+	// Unreachable after the checks above; if it ever happens the child is
+	// parentless and must stay reapable.
+	t.detached[child.id] = child
+	return errors.New("ntbrowser/dom: reference node is not a child")
+}
+
+// Detach removes the subtree from its parent but keeps it alive: browser
+// semantics, where a removed node stays usable through JS references and can
+// be re-inserted. Detached roots count toward the node budget until Release.
+func (t *Tree) Detach(n *Node) {
+	if n == t.root || n.parent == nil {
+		return
+	}
+	t.detach(n)
+	t.detached[n.id] = n
+	t.dirty = true
+}
+
+// Release frees a detached subtree. The bridge calls it when no JS wrapper
+// for any node in the subtree is alive any more (or never existed).
+func (t *Tree) Release(n *Node) {
+	if n.parent != nil || n == t.root {
+		return // attached nodes are never released
+	}
+	delete(t.detached, n.id)
+	t.release(n)
+}
+
+// Attached reports whether n is reachable from the document root.
+func (t *Tree) Attached(n *Node) bool { return t.RootOf(n) == t.root }
+
+// RootOf returns the topmost ancestor: the document root, or a detached root.
+func (t *Tree) RootOf(n *Node) *Node {
+	for n.parent != nil {
+		n = n.parent
+	}
+	return n
+}
+
+// Live is the number of nodes counted against the budget, attached or not.
+func (t *Tree) Live() int { return t.live }
+
+// Walk visits n and its descendants in document order.
+func Walk(n *Node, fn func(*Node)) {
+	fn(n)
+	for _, c := range n.children {
+		Walk(c, fn)
+	}
+}
+
+func (t *Tree) AddListener(n *Node, typ string) {
+	if n.listeners == nil {
+		n.listeners = map[string]struct{}{}
+	}
+	if _, had := n.listeners[typ]; !had {
+		n.listeners[typ] = struct{}{}
+		// An element that can be clicked needs an anchor name in the raster.
+		if _, hasID := n.Attr("id"); !hasID && n.kind == Element {
+			t.dirty = true
+		}
+	}
+}
+
+func (t *Tree) RemoveListener(n *Node, typ string) { delete(n.listeners, typ) }
+
+// ByID resolves an id attribute (including synthetic ones from Serialize).
+func (t *Tree) ByID(id string) *Node {
+	if n, ok := parseSynthetic(id); ok {
+		return t.nodes[n]
+	}
+	return t.find(t.root, func(n *Node) bool { v, ok := n.Attr("id"); return ok && v == id })
+}
+
+// Query supports the selector subset the bridge exposes: tag, #id, .class and
+// descendant combinations of those. Anything richer throws in JS.
+func (t *Tree) Query(from *Node, selector string, all bool) ([]*Node, error) {
+	parts := strings.Fields(selector)
+	if len(parts) == 0 || len(parts) > 8 {
+		return nil, errors.New("ntbrowser/dom: unsupported selector")
+	}
+	preds := make([]func(*Node) bool, 0, len(parts))
+	for _, p := range parts {
+		pred, err := simplePredicate(p)
+		if err != nil {
+			return nil, err
+		}
+		preds = append(preds, pred)
+	}
+	var out []*Node
+	var walk func(n *Node) bool
+	walk = func(n *Node) bool {
+		for _, c := range n.children {
+			if c.kind == Element && preds[len(preds)-1](c) && ancestorsMatch(c, preds[:len(preds)-1], from) {
+				out = append(out, c)
+				if !all {
+					return true
+				}
+			}
+			if walk(c) {
+				return true
+			}
+		}
+		return false
+	}
+	walk(from)
+	return out, nil
+}
+
+func ancestorsMatch(n *Node, preds []func(*Node) bool, stop *Node) bool {
+	i := len(preds) - 1
+	for a := n.parent; a != nil && a != stop && i >= 0; a = a.parent {
+		if preds[i](a) {
+			i--
+		}
+	}
+	return i < 0
+}
+
+func simplePredicate(p string) (func(*Node) bool, error) {
+	switch {
+	case strings.HasPrefix(p, "#"):
+		id := p[1:]
+		return func(n *Node) bool { v, ok := n.Attr("id"); return ok && v == id }, nil
+	case strings.HasPrefix(p, "."):
+		cls := p[1:]
+		return func(n *Node) bool { return hasClass(n, cls) }, nil
+	case p == "*":
+		return func(*Node) bool { return true }, nil
+	case validName(p):
+		tag := strings.ToLower(p)
+		return func(n *Node) bool { return n.tag == tag }, nil
+	}
+	return nil, fmt.Errorf("ntbrowser/dom: unsupported selector %q", p)
+}
+
+func hasClass(n *Node, cls string) bool {
+	v, _ := n.Attr("class")
+	for _, c := range strings.Fields(v) {
+		if c == cls {
+			return true
+		}
+	}
+	return false
+}
+
+// ---- serialization: the frame handed to nthtml ----
+
+// Serialize writes the tree as HTML that nthtml's document.Parse accepts.
+// <script> never appears (none are in the tree). Elements with listeners
+// but no id get a synthetic id so nthtml's Result.Anchors / Box.Anchor can
+// be mapped back to NodeIDs for hit testing. Text and attribute values are
+// escaped by x/net/html, so a script cannot smuggle markup through
+// textContent or setAttribute.
+func (t *Tree) Serialize() string {
+	var b strings.Builder
+	t.write(&b, t.root)
+	return b.String()
+}
+
+func (t *Tree) write(b *strings.Builder, n *Node) {
+	switch n.kind {
+	case Text:
+		if n.parent != nil && (n.parent.tag == "style") {
+			b.WriteString(sanitizeCSS(n.text)) // style text is raw, not escaped
+			return
+		}
+		b.WriteString(html.EscapeString(n.text))
+		return
+	case Element:
+		if n.tag != "#document" {
+			b.WriteByte('<')
+			b.WriteString(n.tag)
+			hasID := false
+			for _, a := range n.attrs {
+				if a.Name == "id" {
+					hasID = true
+				}
+				b.WriteByte(' ')
+				b.WriteString(a.Name)
+				b.WriteString(`="`)
+				b.WriteString(html.EscapeString(a.Value))
+				b.WriteByte('"')
+			}
+			if !hasID && len(n.listeners) > 0 {
+				fmt.Fprintf(b, ` id="%s"`, syntheticID(n.id))
+			}
+			b.WriteByte('>')
+		}
+		for _, c := range n.children {
+			t.write(b, c)
+		}
+		if n.tag != "#document" && !voidElement(n.tag) {
+			b.WriteString("</")
+			b.WriteString(n.tag)
+			b.WriteByte('>')
+		}
+	}
+}
+
+// sanitizeCSS only prevents a </style> break-out; nthtml's own CSS parser
+// enforces rule budgets and ignores url() resources.
+func sanitizeCSS(s string) string { return strings.ReplaceAll(s, "</", "<\\/") }
+
+const syntheticPrefix = "nt-h-"
+
+func syntheticID(id NodeID) string { return fmt.Sprintf("%s%d", syntheticPrefix, int(id)) }
+
+func parseSynthetic(s string) (NodeID, bool) {
+	if !strings.HasPrefix(s, syntheticPrefix) {
+		return 0, false
+	}
+	var n int
+	if _, err := fmt.Sscanf(s[len(syntheticPrefix):], "%d", &n); err != nil {
+		return 0, false
+	}
+	return NodeID(n), true
+}
+
+// ---- internals ----
+
+func (t *Tree) attach(p, c *Node) {
+	c.parent = p
+	p.children = append(p.children, c)
+	delete(t.detached, c.id)
+}
+
+func (t *Tree) detach(c *Node) {
+	p := c.parent
+	for i, s := range p.children {
+		if s == c {
+			p.children = append(p.children[:i], p.children[i+1:]...)
+			break
+		}
+	}
+	c.parent = nil
+}
+
+func (t *Tree) release(n *Node) {
+	delete(t.nodes, n.id)
+	delete(t.detached, n.id)
+	t.live--
+	t.bytes -= nodeCost(n)
+	for _, c := range n.children {
+		t.release(c)
+	}
+}
+
+// Bytes is the accounted upper bound of len(Serialize()).
+func (t *Tree) Bytes() int { return t.bytes }
+
+func (t *Tree) find(from *Node, pred func(*Node) bool) *Node {
+	if pred(from) {
+		return from
+	}
+	for _, c := range from.children {
+		if r := t.find(c, pred); r != nil {
+			return r
+		}
+	}
+	return nil
+}
+
+func depthOf(n *Node) int {
+	d := 0
+	for ; n != nil; n = n.parent {
+		d++
+	}
+	return d
+}
+
+func height(n *Node) int {
+	h := 0
+	for _, c := range n.children {
+		h = max(h, height(c))
+	}
+	return h + 1
+}
+
+func validName(s string) bool {
+	if s == "" || len(s) > 64 {
+		return false
+	}
+	for i, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z':
+		case i > 0 && (r >= '0' && r <= '9' || r == '-' || r == '_' || r == ':'):
+		default:
+			return false
+		}
+	}
+	return true
+}
+
+func voidElement(tag string) bool {
+	switch tag {
+	case "br", "hr", "img", "meta", "link", "input", "col", "wbr":
+		return true
+	}
+	return false
+}
+
+// DetachedRoots lists subtree roots removed from the document and not released.
+func (t *Tree) DetachedRoots() []*Node {
+	out := make([]*Node, 0, len(t.detached))
+	for _, n := range t.detached {
+		out = append(out, n)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].id < out[j].id })
+	return out
+}
+
+// Listeners lists nodes that registered a listener of typ, in document order.
+// The loop uses it to decide whether a terminal event is worth forwarding.
+func (t *Tree) Listeners(typ string) []*Node {
+	var out []*Node
+	for _, n := range t.nodes {
+		if n.HasListener(typ) {
+			out = append(out, n)
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].id < out[j].id })
+	return out
+}
