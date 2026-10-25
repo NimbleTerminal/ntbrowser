@@ -179,3 +179,27 @@ func TestDisabledPageIsDropped(t *testing.T) {
 		}
 	}
 }
+
+// A page loaded without a Fetcher gets deny-all, never a nil dereference on
+// a worker goroutine (which would take the whole process down).
+func TestNilFetcherDeniesInsteadOfPanicking(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sink := make(chanSink, 256)
+	l := New(ctx, Config{Width: 200, ExternalScripts: true}, sink)
+	go l.Run()
+	l.LoadPage(`<body><script src="https://x.test/a.js"></script><script>
+	  fetch("https://x.test/d").catch(e => console.log("fetch refused " + (e instanceof Error)));
+	</script></body>`, "https://example.test/", nil)
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case <-deadline:
+			t.Fatal("no refusal reported")
+		case m := <-sink:
+			if lm, ok := m.(LogMsg); ok && lm.Line == "fetch refused true" {
+				return
+			}
+		}
+	}
+}

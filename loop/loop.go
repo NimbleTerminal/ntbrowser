@@ -219,6 +219,9 @@ func (l *Loop) tryPost(fn func()) bool {
 // it hands off without blocking.
 func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) {
 	gen := l.navGen.Add(1) // taken synchronously on the caller: call order == generation order
+	if fetcher == nil {
+		fetcher = netpolicy.New(netpolicy.Policy{}) // the zero policy denies everything; never a nil dereference on a worker
+	}
 	task := func() {
 		if gen != l.navGen.Load() {
 			return // a newer LoadPage exists; whichever order the handoffs ran in, it wins
