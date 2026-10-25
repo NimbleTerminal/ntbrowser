@@ -142,3 +142,20 @@ func TestFirstFrameReflowsAtTerminalWidth(t *testing.T) {
 type chanSink chan tea.Msg
 
 func (c chanSink) Send(m tea.Msg) { c <- m }
+
+// A log line must survive the frame that follows it; frames only replace the
+// status when the renderer has warnings to show.
+func TestFrameWithoutWarningsKeepsStatus(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	l := loop.New(ctx, loop.Config{Width: 400}, dropSink{})
+	go l.Run()
+	m := New(l, netpolicy.Policy{}, NavFree, "")
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m.Update(loop.FrameMsg{Gen: 1, Result: renderTall(t, `<p>x</p>`)})
+	m.Update(loop.LogMsg{Level: "log", Line: "hello from the page"})
+	m.Update(loop.FrameMsg{Gen: 2, Result: renderTall(t, `<p>y</p>`)})
+	if !strings.Contains(m.status, "hello from the page") {
+		t.Fatalf("frame wiped the status line: %q", m.status)
+	}
+}

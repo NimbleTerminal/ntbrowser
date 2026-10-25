@@ -227,7 +227,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = clean("render: " + v.Err.Error())
 			return m, nil
 		}
-		m.status = clean(strings.Join(v.Result.Warnings, "; "))
+		if len(v.Result.Warnings) > 0 {
+			m.status = clean(strings.Join(v.Result.Warnings, "; ")) // only warnings replace the status; a log line survives the next frame
+		}
 		if m.viewer == nil {
 			// nthtml.New leaves ReflowTypeset off, which is what the host
 			// wants: the loop re-flows on Resize, at its own width, off the
