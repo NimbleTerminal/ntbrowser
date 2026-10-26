@@ -1,6 +1,6 @@
 # ntbrowser: subresource loading (stylesheets and images) — design
 
-Date: 2026-10-25 · Status: draft v3, builder-checked and re-verified against nthtml `main` at db867c8 (2026-10-26, unreleased); one question open for Evan (§11); awaiting approval · Author: Claude (Fable 5.1) with Evan
+Date: 2026-10-25 · Status: draft v3, builder-checked and re-verified against nthtml `main` at db867c8 (2026-10-26, unreleased); §11 answered (fix nthtml); awaiting approval of the whole document · Author: Claude (Fable 5.1) with Evan
 Extends: `2026-10-25-ntbrowser-architecture-design.md` (v4, implemented). Everything there stands; this document adds one capability and the policy around it.
 
 ## 1. Intent
@@ -208,4 +208,4 @@ Two ways:
 1. **Fix nthtml** (recommended, and more strongly than in v2): all four are small, they benefit every nthtml user and every inline stylesheet, and items 2 and 3 have no clean host-side form. Then release nttypeset and nthtml, pin the new nthtml here, and this design injects CSS verbatim. Cost: a release train before ntbrowser can ship this, and §5 decision 15 of the v4 design ("no nthtml work blocks v1") is reopened for this round.
 2. **Host-side pre-pass** in `subres`: flatten at-rules before `SetStyle` (drop non-matching `@media`, keep matching bodies, strip the others), re-run on `Resize` since matching depends on width, apply the same pass to inline `<style>` text in the serializer, and have the `dom` serializer emit presentational attributes as inline `style`. Cost: a CSS pre-parser in ntbrowser that must agree with nthtml's, re-flattening per width change, package ownership changes (`dom` or the loop must transform inline styles), and item 2 stays broken (subtext links black, comment links not underlined) until nthtml changes anyway.
 
-Which do you want? The rest of this document is the same under either answer, except that option 2 adds a `subres.Flatten(css string, width int) string` component and a `dom` hook.
+**Evan's answer (2026-10-26): option 1, fix nthtml.** The four items are being done upstream by a separate agent; this round's plan starts by pinning the nthtml release that carries them, and `subres` injects CSS verbatim. No `Flatten` component, no `dom` transform hook.
