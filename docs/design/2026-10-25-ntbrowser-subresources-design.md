@@ -1,6 +1,6 @@
 # ntbrowser: subresource loading (stylesheets and images) — design
 
-Date: 2026-10-25 · Status: draft v3, builder-checked and re-verified against nthtml `main` at db867c8 (2026-10-26, unreleased); §11 resolved by nthtml v0.1.1; awaiting approval of the whole document · Author: Claude (Fable 5.1) with Evan
+Date: 2026-10-25 · Status: draft v4 (v3 plus decisions 18–19 and the deferred-backgrounds note), builder-checked and re-verified against nthtml `main` at db867c8 (2026-10-26, unreleased); §11 resolved by nthtml v0.1.1; awaiting approval of the whole document · Author: Claude (Fable 5.1) with Evan
 Extends: `2026-10-25-ntbrowser-architecture-design.md` (v4, implemented). Everything there stands; this document adds one capability and the policy around it.
 
 ## 1. Intent
@@ -21,7 +21,9 @@ Loading `https://news.ycombinator.com/` today gives the right structure and work
 **Non-goals (this round)**
 
 - Running ntbrowser in the browser. `js/wasm` stays compile-only; the new package compiles for it.
-- Web fonts, CSS `url()` backgrounds, `@import`, `<picture>`/`srcset`, `<video>`, favicons. nthtml renders none of the first two, so fetching them buys nothing yet (HN's vote arrows are a CSS `background: url(triangle.svg)` and will stay invisible until nthtml paints backgrounds).
+- Web fonts, `<picture>`/`srcset`, `<video>`, favicons.
+- CSS `url()` background images. **Deferred, not dismissed**: nthtml v0.1.1 paints no backgrounds, so there is nothing to fetch for yet; it is the first item of the next round once nthtml exposes CSS-referenced image sources, and the `Session` design below already keys images by raw string so a second discovery source slots in. HN's vote arrows stay invisible until then.
+- Form controls, `<iframe>`, SVG `<use>` sprites: content gaps measured in the ten-page sample, none of them styling.
 - A cross-navigation cache. Pages are always re-fetched (v4 decision 16); subresources follow.
 - Changing `<script src>` handling: `-external-scripts` stays its own switch.
 
@@ -95,7 +97,9 @@ Loading `https://news.ycombinator.com/` today gives the right structure and work
 14. **No mixed content** (my call): an `https:` page may not load `http:` stylesheets or images in any mode; the subresource `Fetcher` carries the page scheme and `Allowed` refuses a downgrade (redirects included). A legacy `http:` page may load either. Browsers block the same; a network attacker must not be able to restyle a secure page or watch which pages are read.
 15. **Flags stay orthogonal** (my call): `-nav allowlist` does not change the subresource default; the README states the lockdown pair (`-nav allowlist -subresources origin`) in one line.
 16. **A failed frame is retried once without images** when nthtml returns `ErrLimit` (page height or pixels), with a warning; images are the only thing the host added, so removing them is the only degradation that cannot break content.
-17. **Privacy note, not a mechanism**: `ModeAny` lets a page load a tracking pixel from any public host, exactly as a browser would, minus cookies and `Referer`. `ModeOrigin` is the lockdown. The README says so in one sentence next to the flag.
+18. **`@import` is resolved by the loader** (added after the ten-page measurement: Lobsters and the Python docs import whole sheets; nthtml v0.1.1 skips `@import` statements). `Session` scans each loaded sheet's leading `@import` statements (before the first rule, per CSS), fetches each as `KindStyle` through the same gates, applies an optional media condition with the same evaluator semantics nthtml uses (`screen`/`all` true, width features against the document width, anything else false, re-evaluated on resize by re-splicing, not refetching), and splices the imported text in place of the statement. Depth is capped at 3, imports count toward `MaxStylesheets` and the byte and rule budgets, and a cycle or a failed import leaves the statement out with a warning. Imports block the first frame with their parent sheet, under the same `StyleTimeout`.
+19. **`<noscript>` is not serialized** (added for the same reason). nthtml renders `<noscript>` content as text, which is right for a script-less renderer and wrong under ntbrowser, which runs scripts: pages would show "enable JavaScript" banners. The `dom` serializer skips `<noscript>` subtrees; the DOM keeps them so scripts still see them.
+20. **Privacy note, not a mechanism**: `ModeAny` lets a page load a tracking pixel from any public host, exactly as a browser would, minus cookies and `Referer`. `ModeOrigin` is the lockdown. The README says so in one sentence next to the flag.
 
 ## 6. Interfaces (signatures the plan will pin)
 
@@ -131,6 +135,8 @@ func (s *Session) Images() map[string]image.Image               // raw src → d
 func (s *Session) Warnings() []string                           // drained by the caller; sanitized by app.clean downstream
 func (s *Session) Close()                                        // cancels in-flight work
 func CountRules(css string) int
+func Imports(css string) (stmts []Import, rest string)   // leading @import statements: URL, media condition, byte range (decision 18)
+func MediaMatches(cond string, width int) bool            // decision 18; mirrors nthtml's evaluator
 
 // package netpolicy
 type Kind int
@@ -143,6 +149,7 @@ func (t *Tree) LinkedStyles() []string            // hrefs of <link rel=styleshe
 func (t *Tree) ImageSources() []string            // raw src of every <img>, document order, deduplicated
 func (t *Tree) SetStyle(href, css string) error   // charges TotalBytes; ErrLimit if it does not fit; replaces
 func (t *Tree) ClearStyles()
+// Serializer: <noscript> subtrees are skipped (decision 19); <link rel=stylesheet> gets its <style> twin (decision 5)
 
 // package loop
 type Config struct { …; Subresources subres.Config; SubresourceTransport func(base string) subres.Transport }
