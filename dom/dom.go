@@ -125,6 +125,9 @@ type Tree struct {
 	// from the serialized HTML so nthtml never sees them (defense in depth;
 	// nthtml also never executes scripts).
 	Scripts []Script
+	// styles holds loaded external stylesheets keyed by the raw <link href>
+	// (see styles.go); the serializer writes each as a <style> twin.
+	styles map[string]*injectedStyle
 }
 
 type Script struct {
@@ -156,7 +159,7 @@ func limits(l Limits) Limits {
 // dependency of nthtml). Script bodies are collected into t.Scripts and are
 // not part of the tree. Input must already be bounded by the caller.
 func Parse(r io.Reader, l Limits) (*Tree, error) {
-	t := &Tree{limits: limits(l), nodes: map[NodeID]*Node{}, detached: map[NodeID]*Node{}}
+	t := &Tree{limits: limits(l), nodes: map[NodeID]*Node{}, detached: map[NodeID]*Node{}, styles: map[string]*injectedStyle{}}
 	t.root = t.newNode(Element, "#document")
 	delete(t.detached, t.root.id)
 	doc, err := html.Parse(r)
@@ -343,6 +346,7 @@ func (t *Tree) SetAttr(n *Node, name, value string) error {
 			}
 			n.attrs[i].Value = value
 			t.dirty = true
+			t.styleMediaDelta(n)
 			return nil
 		}
 	}
@@ -354,6 +358,7 @@ func (t *Tree) SetAttr(n *Node, name, value string) error {
 	}
 	n.attrs = append(n.attrs, Attr{name, value})
 	t.dirty = true
+	t.styleMediaDelta(n)
 	return nil
 }
 
@@ -364,6 +369,7 @@ func (t *Tree) RemoveAttr(n *Node, name string) {
 			t.bytes -= attrCost(n.attrs[i].Name, n.attrs[i].Value)
 			n.attrs = append(n.attrs[:i], n.attrs[i+1:]...)
 			t.dirty = true
+			t.styleMediaDelta(n)
 			return
 		}
 	}
@@ -614,11 +620,13 @@ func hasClass(n *Node, cls string) bool {
 // textContent or setAttribute.
 func (t *Tree) Serialize() string {
 	var b strings.Builder
-	t.write(&b, t.root)
+	seen := map[string]bool{} // hrefs whose <style> twin was written in this call
+	t.write(&b, t.root, seen)
+	t.releaseOrphanStyles(seen)
 	return b.String()
 }
 
-func (t *Tree) write(b *strings.Builder, n *Node) {
+func (t *Tree) write(b *strings.Builder, n *Node, seen map[string]bool) {
 	switch n.kind {
 	case Text:
 		if n.parent != nil && (n.parent.tag == "style") {
@@ -628,6 +636,9 @@ func (t *Tree) write(b *strings.Builder, n *Node) {
 		b.WriteString(html.EscapeString(n.text))
 		return
 	case Element:
+		if n.tag == "noscript" {
+			return // scripting is on: <noscript> content is never shown (decision 18)
+		}
 		if n.tag != "#document" {
 			b.WriteByte('<')
 			b.WriteString(n.tag)
@@ -648,18 +659,22 @@ func (t *Tree) write(b *strings.Builder, n *Node) {
 			b.WriteByte('>')
 		}
 		for _, c := range n.children {
-			t.write(b, c)
+			t.write(b, c, seen)
 		}
 		if n.tag != "#document" && !voidElement(n.tag) {
 			b.WriteString("</")
 			b.WriteString(n.tag)
 			b.WriteByte('>')
 		}
+		if n.tag == "link" {
+			t.writeStyleTwin(b, n, seen)
+		}
 	}
 }
 
-// sanitizeCSS only prevents a </style> break-out; nthtml's own CSS parser
-// enforces rule budgets and ignores url() resources.
+// sanitizeCSS only prevents a </style> break-out, for inline <style> text and
+// for injected external sheets alike; nthtml's own CSS parser enforces rule
+// budgets, and url() resources reach it only through Options.BackgroundImages.
 func sanitizeCSS(s string) string { return strings.ReplaceAll(s, "</", "<\\/") }
 
 const syntheticPrefix = "nt-h-"
