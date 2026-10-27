@@ -2,6 +2,7 @@ package subres
 
 import (
 	"bytes"
+	"net/url"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -555,5 +556,47 @@ func TestCloseCancelsInFlight(t *testing.T) {
 	case <-cancelled:
 	case <-time.After(time.Second):
 		t.Fatal("Close did not cancel the in-flight request")
+	}
+}
+
+func TestSheetsRequestedBeforeQueuedImages(t *testing.T) {
+	var mu sync.Mutex
+	var order []string
+	release := make(chan struct{})
+	ft := newFake(func(_ context.Context, r netpolicy.Request) (netpolicy.Response, error) {
+		mu.Lock()
+		order = append(order, r.URL)
+		mu.Unlock()
+		if strings.HasSuffix(r.URL, ".png") {
+			<-release
+			return img("image/png", pngBytes(t, 2, 2))
+		}
+		return css("p{}")
+	})
+	cfg := testCfg()
+	cfg.MaxInFlight = 1
+	s, r := newTestSession(t, cfg, ft)
+	s.Discover(nil, []string{"1.png", "2.png", "3.png"}, nil)
+	s.Discover([]string{"late.css"}, nil, nil) // a <link> a script added: must not wait behind the images
+	close(release)
+	r.settle(t, func() bool { return !s.StylesPending() })
+	mu.Lock()
+	defer mu.Unlock()
+	if len(order) < 2 || !strings.HasSuffix(order[1], "late.css") {
+		t.Fatalf("stylesheet queued behind images: %v", order)
+	}
+}
+
+func TestPercentEncodedSVGDataURL(t *testing.T) {
+	ft := newFake(func(_ context.Context, r netpolicy.Request) (netpolicy.Response, error) {
+		return netpolicy.Response{}, errors.New("no transport expected")
+	})
+	s, r := newTestSession(t, testCfg(), ft)
+	key := "data:image/svg+xml," + url.PathEscape(`<svg xmlns="http://www.w3.org/2000/svg" width="6" height="6"><rect width="6" height="6" fill="green"/></svg>`)
+	s.Discover(nil, []string{key}, nil)
+	r.settle(t, func() bool { return len(s.Images()) == 1 || len(s.Warnings()) > 0 })
+	im := s.Images()[key]
+	if im == nil || im.Bounds().Size() != image.Pt(6, 6) {
+		t.Fatalf("percent-encoded SVG data URL not decoded: %v", im)
 	}
 }

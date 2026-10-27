@@ -191,11 +191,20 @@ func (s *Session) warn(format string, args ...any) {
 	s.warnings = append(s.warnings, fmt.Sprintf(format, args...))
 }
 
-// pump starts workers up to MaxInFlight.
+// pump starts workers up to MaxInFlight, stylesheets before images:
+// images never block anything (decision 4), so a sheet a script added must
+// not wait behind queued image fetches.
 func (s *Session) pump() {
 	for !s.closed && s.inflight < s.cfg.MaxInFlight && len(s.queue) > 0 {
-		j := s.queue[0]
-		s.queue = s.queue[1:]
+		idx := 0
+		for i, j := range s.queue {
+			if j.sheet {
+				idx = i
+				break
+			}
+		}
+		j := s.queue[idx]
+		s.queue = append(s.queue[:idx], s.queue[idx+1:]...)
 		s.inflight++
 		go s.work(j)
 	}

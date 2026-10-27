@@ -654,3 +654,83 @@ func TestFetchKindIsDocument(t *testing.T) {
 }
 
 var _ tea.Msg = FrameMsg{}
+
+// If nthtml refuses a page because of an injected sheet (the counter and the
+// renderer disagree, or RenderLimit.Rules exceeds nthtml's 4096 ceiling), the
+// sheets are dropped for the page and the next frame renders, never a
+// permanently failed frame (decision 6's guarantee, independent of CountRules).
+func TestRendererRefusalDropsInjectedSheets(t *testing.T) {
+	// A library user lowered nthtml's input cap below the sheet's size: the
+	// rule budget admits the sheet, the renderer refuses the page with it.
+	srv := httptest.NewServer(http.HandlerFunc(serve("text/css", []byte("h1{color:#ff0000}/*"+strings.Repeat("x", 6000)+"*/"))))
+	defer srv.Close()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sink := make(chanSink, 512)
+	l := New(ctx, Config{Width: 400, MinFrame: time.Millisecond, RenderLimit: document.Limits{Bytes: 4096}, Subresources: subres.Config{}, SubresourceTransport: func(base string) subres.Transport {
+		u, _ := url.Parse(base)
+		return netpolicy.New(netpolicy.Policy{Origin: u, AllowPrivate: true, AnyOrigin: true, MaxBody: 1 << 20, MaxInFlight: 6})
+	}}, sink)
+	go l.Run()
+	l.LoadPage(`<link rel="stylesheet" href="/huge.css"><h1>Hi</h1>`, srv.URL+"/", nil)
+	// The drop is reported as a log line (it belongs to no frame) before the
+	// unstyled frame that follows it.
+	var f FrameMsg
+	sawDrop := false
+	deadline := time.After(5 * time.Second)
+	for f.Result == nil {
+		select {
+		case m := <-sink:
+			switch v := m.(type) {
+			case LogMsg:
+				if strings.Contains(v.Line, "huge.css") {
+					sawDrop = true
+				}
+			case FrameMsg:
+				if v.Err == nil {
+					f = v
+				}
+			}
+		case <-deadline:
+			t.Fatal("no successful frame after the renderer refused the sheet")
+		}
+	}
+	if !sawDrop {
+		t.Fatal("no log line reported the dropped stylesheet")
+	}
+	if isRed(boxColor(f.Result, "h1")) {
+		t.Fatal("the refused sheet is still applied")
+	}
+	// and the page keeps rendering afterwards without the sheet creeping back
+	l.Resize(300)
+	g := frameWhere(t, sink, 5*time.Second, func(f FrameMsg) bool { return f.Err == nil && f.Result.Bounds().Dx() == 300 })
+	if isRed(boxColor(g.Result, "h1")) {
+		t.Fatal("the refused sheet was re-injected")
+	}
+}
+
+// The first-frame deadline must not schedule a render of its own once the
+// first frame is out: a quiet page gets exactly one frame.
+func TestStyleDeadlineDoesNotRerender(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(serve("text/css", []byte("h1{color:#ff0000}"))))
+	defer srv.Close()
+	l, sink := newSubresLoop(t, subres.Config{StyleTimeout: 200 * time.Millisecond})
+	l.LoadPage(`<link rel="stylesheet" href="/s.css"><h1>Hi</h1>`, srv.URL+"/", nil)
+	nextFrame(t, sink)
+	frames := 0
+	deadline := time.After(700 * time.Millisecond)
+	for {
+		select {
+		case m := <-sink:
+			if _, ok := m.(FrameMsg); ok {
+				frames++
+			}
+			continue
+		case <-deadline:
+		}
+		break
+	}
+	if frames != 0 {
+		t.Fatalf("%d extra frame(s) after the first on a quiet page (the style deadline re-rendered)", frames)
+	}
+}

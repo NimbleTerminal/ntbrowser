@@ -7,6 +7,7 @@ import (
 	"errors"
 	"image"
 	"mime"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -111,6 +112,8 @@ func decodeDataURL(ctx context.Context, src string) (image.Image, error) {
 				return nil, err
 			}
 			raw = b
+		} else if unescaped, err := url.PathUnescape(payload); err == nil {
+			raw = []byte(unescaped) // bundlers emit percent-encoded SVG payloads
 		} else {
 			raw = []byte(payload)
 		}

@@ -88,6 +88,9 @@ type Page struct {
 	// budgetWarned remembers which hrefs were already reported over the
 	// rule budget, so the status line is not flooded every frame.
 	budgetWarned map[string]bool
+	// refused holds hrefs nthtml would not render with: dropped for the
+	// rest of the page's life (decision 6's belt, independent of CountRules).
+	refused map[string]bool
 }
 
 type Config struct {
@@ -143,8 +146,8 @@ func New(ctx context.Context, cfg Config, sink Sink) *Loop {
 	if cfg.Outbox <= 0 {
 		cfg.Outbox = 1024
 	}
-	if cfg.RenderLimit.Rules <= 0 {
-		cfg.RenderLimit.Rules = 4096 // nthtml's ceiling: every sheet in the measured sample fits (spec decision 6)
+	if cfg.RenderLimit.Rules <= 0 || cfg.RenderLimit.Rules > 4096 {
+		cfg.RenderLimit.Rules = 4096 // nthtml's ceiling (it refuses larger values): every sheet in the measured sample fits (spec decision 6)
 	}
 	cfg.Subresources = cfg.Subresources.WithDefaults()
 	l := &Loop{ctx: ctx, cfg: cfg, sink: sink, inbox: make(chan func(), cfg.Inbox), outbox: make(chan tea.Msg, cfg.Outbox), timerT: stoppedTimer(), frameTimer: stoppedTimer()}
@@ -265,7 +268,7 @@ func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) {
 		}
 		cfg := l.cfg.Script
 		cfg.Location = base
-		page := &Page{Tree: tree, Fetcher: fetcher, Base: base, started: time.Now(), firstFrame: true, budgetWarned: map[string]bool{}}
+		page := &Page{Tree: tree, Fetcher: fetcher, Base: base, started: time.Now(), firstFrame: true, budgetWarned: map[string]bool{}, refused: map[string]bool{}}
 		page.ctx, page.cancel = context.WithCancel(l.ctx)
 		page.Sandbox = jsvm.New(cfg, tree, (*host)(l))
 		l.page = page
@@ -540,6 +543,7 @@ func (l *Loop) startRender() {
 	page := l.page
 	opts := document.Options{Width: l.cfg.Width, Limits: l.cfg.RenderLimit, Fonts: l.cfg.Fonts}
 	var loaderWarnings []string
+	var injected []string // hrefs whose sheet is in this snapshot
 	if page.subres != nil {
 		// Discover before the gate so a <link> a script added is in the
 		// blocking set while the first frame is still unrendered.
@@ -548,7 +552,7 @@ func (l *Loop) startRender() {
 			l.pendingFrame = true // the last settlement or the deadline re-schedules
 			return
 		}
-		loaderWarnings = l.injectStyles(page)
+		loaderWarnings, injected = l.injectStyles(page)
 		opts.Images = page.subres.Images()                     // fresh copies: nothing the
 		opts.BackgroundImages = page.subres.BackgroundImages() // worker reads is written again
 	}
@@ -588,6 +592,18 @@ func (l *Loop) startRender() {
 			l.renderInFlight = false
 			if l.page != page {
 				return // frame for a page we navigated away from
+			}
+			if errors.Is(err, document.ErrLimit) && len(injected) > 0 {
+				// nthtml refused a page that only differs from the one it
+				// would accept by the injected sheets: drop them for good and
+				// render without, rather than show a failed frame forever.
+				page.Tree.ClearStyles()
+				for _, href := range injected {
+					page.refused[href] = true
+				}
+				l.send(LogMsg{"error", fmt.Sprintf("stylesheets dropped, the renderer refused the page with them: %v (%s)", injected, err)})
+				page.Tree.MarkDirty()
+				return
 			}
 			if res != nil {
 				page.boxes = res.Boxes
@@ -629,9 +645,12 @@ func (l *Loop) startSubresources(page *Page) {
 	page.subres.Discover(page.Tree.LinkedStyles(), page.Tree.ImageSources(), nil)
 	time.AfterFunc(cfg.StyleTimeout, func() {
 		l.post(func() {
-			if l.page == page {
-				page.styleDeadline = true
-				l.scheduleFrame()
+			if l.page != page {
+				return
+			}
+			page.styleDeadline = true
+			if page.firstFrame {
+				l.scheduleFrame() // only the frame the gate is holding; a quiet page gets no extra render
 			}
 		})
 	})
@@ -640,13 +659,15 @@ func (l *Loop) startSubresources(page *Page) {
 // injectStyles charges the rule budget in document order at every render
 // (decision 6): inline <style> elements present now count first, then each
 // loaded external sheet is injected if it fits and removed if it does not.
-func (l *Loop) injectStyles(page *Page) []string {
-	var warnings []string
+func (l *Loop) injectStyles(page *Page) (warnings, injected []string) {
 	budget := l.cfg.RenderLimit.Rules
 	for _, text := range page.Tree.StyleTexts() {
 		budget -= subres.CountRules(text)
 	}
 	for _, href := range page.Tree.LinkedStyles() {
+		if page.refused[href] {
+			continue
+		}
 		css, n, ok := page.subres.Style(href)
 		if !ok {
 			continue
@@ -664,8 +685,9 @@ func (l *Loop) injectStyles(page *Page) []string {
 			continue
 		}
 		budget -= n
+		injected = append(injected, href)
 	}
-	return warnings
+	return warnings, injected
 }
 
 type frameCB struct {

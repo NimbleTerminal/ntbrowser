@@ -31,15 +31,25 @@ func policyFor(policy netpolicy.Policy, cfg subres.Config, base string) (netpoli
 	if err != nil {
 		return netpolicy.Policy{}, err
 	}
-	if u.Scheme == "" || u.Host == "" {
-		return netpolicy.Policy{}, fmt.Errorf("subresources: page base %q has no origin", base)
+	if u.Scheme == "" {
+		return netpolicy.Policy{}, fmt.Errorf("subresources: page base %q has no scheme", base)
+	}
+	// A file:// start page (the documented local case) has no origin: under
+	// ModeAny its remote stylesheets and images still load; relative refs
+	// resolve to file: and netpolicy's scheme check refuses them, so nothing
+	// local is ever read. Under ModeOrigin nothing is same-origin, so
+	// nothing loads.
+	origin := u
+	downgrade := u.Scheme
+	if u.Scheme != "http" && u.Scheme != "https" {
+		origin, downgrade = nil, ""
 	}
 	p := netpolicy.Policy{
-		Origin:          u,
+		Origin:          origin,
 		AllowHosts:      append([]string(nil), policy.AllowHosts...),
 		AllowPrivate:    policy.AllowPrivate,
 		AnyOrigin:       cfg.Mode == subres.ModeAny,
-		NoDowngradeFrom: u.Scheme,
+		NoDowngradeFrom: downgrade,
 		MaxBody:         int64(max(cfg.MaxSheetBytes, 1<<20)),
 		Timeout:         cfg.Timeout,
 		MaxInFlight:     cfg.MaxInFlight,

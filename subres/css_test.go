@@ -30,6 +30,11 @@ func TestCountRulesAgreesWithNthtml(t *testing.T) {
 		"supports":    "@supports (display:grid){a{}} b{}",
 		"strings":     "a[title=\"x,y\"]{} b:not(.c,.d){} /* , } */ e{}",
 		"nested":      "@media screen{@media (min-width:1px){a{} b{}} c{}} d{}",
+		// nthtml's prelude scanner stops only at ';' or '{', never at '}'
+		"prelude-brace":  "@media x}y {\na{} b{} c{}\n}\np{}",
+		"fontface-brace": "@font-face{src:url(x)} a{} @media a}b{c{}d{}e{}}",
+		// a string does not end at a newline
+		"string-newline": "a{content:\"\\n\"} b{} c{}",
 	}
 	ctx := context.Background()
 	for name, css := range cases {

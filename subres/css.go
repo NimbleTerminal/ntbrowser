@@ -58,8 +58,8 @@ func (sc *scanner) skipString() {
 			continue
 		}
 		sc.i++
-		if c == q || c == '\n' {
-			return
+		if c == q {
+			return // like nthtml's scanner, a string runs to its closing quote, newlines included
 		}
 	}
 }
@@ -137,6 +137,8 @@ func appendPart(out []string, part string) []string {
 	return out
 }
 
+// stripComments removes /* */ comments exactly as nthtml's parseCSS does
+// (no replacement text, an unterminated comment eats the rest).
 func stripComments(s string) string {
 	for {
 		i := strings.Index(s, "/*")
@@ -147,7 +149,7 @@ func stripComments(s string) string {
 		if j < 0 {
 			return s[:i]
 		}
-		s = s[:i] + " " + s[i+2+j+2:]
+		s = s[:i] + s[i+2+j+2:]
 	}
 }
 
@@ -169,7 +171,7 @@ func isMediaPrelude(prelude string) bool {
 // at-rules, strings and comments skipped. An unparseable group still counts
 // its parts (over-counting is the safe direction).
 func CountRules(css string) int {
-	return countBlock(strings.TrimPrefix(css, "\uFEFF"))
+	return countBlock(stripComments(strings.TrimPrefix(css, "\uFEFF")))
 }
 
 func countBlock(s string) int {
@@ -181,7 +183,12 @@ func countBlock(s string) int {
 			return n
 		}
 		start := sc.i
-		idx := sc.next("{;}")
+		var idx int
+		if s[start] == '@' {
+			idx = sc.next("{;") // nthtml's scanPreludeEnd: an at-rule prelude ends only at ';' or '{'
+		} else {
+			idx = sc.next("{;}")
+		}
 		if idx < 0 {
 			return n
 		}
@@ -195,7 +202,7 @@ func countBlock(s string) int {
 			if close < 0 {
 				return n
 			}
-			prelude := strings.TrimSpace(stripComments(s[start:idx]))
+			prelude := strings.TrimSpace(s[start:idx])
 			body := s[idx+1 : close]
 			switch {
 			case strings.HasPrefix(prelude, "@"):

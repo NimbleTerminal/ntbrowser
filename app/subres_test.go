@@ -49,6 +49,23 @@ func TestSubresourceTransportPolicy(t *testing.T) {
 	if _, err := policyFor(base, subres.Config{}, "::"); err == nil {
 		t.Fatal("unparsable base must error")
 	}
+	// A file:// start page (the documented local case) still loads remote
+	// subresources under ModeAny; relative refs resolve to file: and are
+	// refused by netpolicy's scheme check, so nothing local is ever read.
+	p, err = policyFor(base, subres.Config{Mode: subres.ModeAny}, "file:///tmp/page.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Origin != nil || !p.AnyOrigin || p.NoDowngradeFrom != "" {
+		t.Fatalf("file base: %+v", p)
+	}
+	f := netpolicy.New(p)
+	if err := f.Allowed(mustURL(t, "https://cdn.test/s.css")); err != nil {
+		t.Fatalf("file page must reach a CDN sheet under ModeAny: %v", err)
+	}
+	if err := f.Allowed(mustURL(t, "file:///etc/passwd")); err == nil {
+		t.Fatal("file: refs must stay refused")
+	}
 }
 
 func TestFrameWarningsReachStatus(t *testing.T) {
