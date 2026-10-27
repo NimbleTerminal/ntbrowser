@@ -249,9 +249,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = clean("render: " + v.Err.Error())
 			return m, nil
 		}
+		warnings := append(append([]string(nil), v.Result.Warnings...), v.Warnings...) // nthtml's, then the loader's
 		switch {
-		case len(v.Result.Warnings) > 0:
-			m.status = clean(strings.Join(v.Result.Warnings, "; ")) // warnings replace the status; a log line survives the next frame
+		case len(warnings) > 0:
+			m.status = clean(strings.Join(warnings, "; ")) // warnings replace the status; a log line survives the next frame
 		case m.resetView:
 			m.status = "" // the page's first frame: "loading …" is over
 		}

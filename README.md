@@ -7,7 +7,7 @@ A secure, non-JIT terminal web runtime: a hardened pure-Go JavaScript interprete
 ## Usage
 
 ```
-ntbrowser [-allow host] [-allow-private] [-nav free|allowlist|confirm] [-external-scripts] [-width px] [-slice 50ms] [-seed n] URL
+ntbrowser [-allow host] [-allow-private] [-nav free|allowlist|confirm] [-subresources any|origin|off] [-external-scripts] [-width px] [-slice 50ms] [-seed n] URL
 ```
 
 `URL` is `http(s)://…` or, for the start page only, `file://…`.
@@ -19,10 +19,13 @@ ntbrowser [-allow host] [-allow-private] [-nav free|allowlist|confirm] [-externa
 | `-nav free\|allowlist\|confirm` | `free` | Link navigation: any http(s) origin; confined to the origin plus `-allow`; or ask before leaving the origin |
 | `-allow host[,host]` | | Extra hosts `fetch()` (and allowlist navigation) may reach; a leading dot allows subdomains |
 | `-allow-private` | off | Permit loopback and private addresses (development only) |
+| `-subresources any\|origin\|off` | `any` | Stylesheets, images and CSS backgrounds: any public origin (browser-like); the page origin plus `-allow`; or nothing (v1 behaviour) |
 | `-external-scripts` | off | Fetch `<script src>` through the same policy |
 | `-width px` | 800 | Initial document width; the terminal's pixel geometry takes over once known |
 | `-slice d` | 50ms | JavaScript time budget per entry; three overruns disable the page |
 | `-seed n` | 0 | PRNG seed for `Math.random` (0 = time-based) |
+
+Lockdown pair: `-nav allowlist -subresources origin` confines both navigation and subresources to the origin plus `-allow`. In `any` mode a page can load a tracking pixel from any public host, as a browser would, minus cookies and `Referer`; `origin` is the lockdown.
 
 ## Keys
 
@@ -36,6 +39,10 @@ JavaScript runs in a pure-Go interpreter with no `os`, `net` or environment acce
 | --- | --- | --- |
 | Script reads/writes files | no `os` import; source maps disabled at the `Parse` call (not just on the runtime); `file:` rejected by `Allowed` and `ResolveURL` | `jsvm` (three tests), `netpolicy` |
 | Script opens sockets / SSRF to metadata or LAN | only `fetch` exists; scheme/host allowlist; DNS-resolved IP vetted then dialed (`netip`-based: loopback, RFC1918, link-local, CGNAT, multicast, plus NAT64 `64:ff9b::/96` by embedded address, `64:ff9b:1::/48`, 6to4 by embedded address, Teredo, IPv4-compatible); redirects re-admitted; no proxy env; top-level navigation uses the same dialer with `AnyOrigin` | `netpolicy` (`TestForbiddenIPCoversTransitionPrefixes`) |
+| Subresource SSRF (`<link>`, `<img>`, `@import`, `url()` to metadata or LAN) | the same dialer and address vetting as `fetch()`; loopback and private targets only with `-allow-private`; redirects re-admitted; an `https:` page refuses `http:` subresources | `netpolicy` (`TestKindStyleAcceptAndGate`, `TestNoDowngradeFromHTTPS`), `loop` (`TestMixedContent`) |
+| Soft-404 or interstitial injected as CSS | stylesheets need a 2xx `text/css` (or octet-stream with a `.css` path); images need a 2xx decodable type | `netpolicy` (`TestKindStyleAcceptAndGate`, `TestKindImageAcceptAndGate`) |
+| Pixel bombs and request floods | `DecodeImage` reads the header first and caps 1 MiB / 4096 px / 4 Mpx; 16 Mpx per page; 64 images and 16 stylesheets per page; six in flight | `subres` (`TestImageCapsAndPixelBudget`, `TestMaxInFlightQueue`) |
+| A stylesheet that never arrives holds the first frame | the first frame waits at most 1.5 s for the blocking stylesheets, then paints unstyled and restyles when they land | `loop` (`TestStyleTimeoutUnstyledThenStyled`) |
 | Exfiltrate via DNS/timing | no DNS primitive; 10 ms clock; MaxInFlight 4 | `jsvm`, `netpolicy` |
 | Terminal escape injection via `console.log`, `<title>`, hrefs, warnings or error strings | `jsvm.safeString` for console text; `app.clean` (C0, DEL, C1, U+2028/9) on everything stored for the status and title lines and again in `View`; nthtml strips controls on its own paths | `jsvm`, `app` (`TestViewNeverCarriesTerminalEscapes`) |
 | CPU exhaustion | per-entry slice, strikes → disabled, call-stack cap, interval clamp | `jsvm`, `loop` |

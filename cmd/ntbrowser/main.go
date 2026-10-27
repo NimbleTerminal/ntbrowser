@@ -1,7 +1,7 @@
 // Command ntbrowser runs a sandboxed page in the terminal.
 //
 //	ntbrowser https://example.com/page.html
-//	ntbrowser -allow .example.com -nav confirm -width 800 file:///path/to/page.html
+//	ntbrowser -allow .example.com -nav confirm -subresources origin -width 800 file:///path/to/page.html
 package main
 
 import (
@@ -20,6 +20,7 @@ import (
 	"nimbleterminal.dev/ntbrowser/jsvm"
 	"nimbleterminal.dev/ntbrowser/loop"
 	"nimbleterminal.dev/ntbrowser/netpolicy"
+	"nimbleterminal.dev/ntbrowser/subres"
 )
 
 func main() {
@@ -29,9 +30,15 @@ func main() {
 	slice := flag.Duration("slice", 50*time.Millisecond, "JS time slice per callback")
 	external := flag.Bool("external-scripts", false, "fetch <script src> through the allowlist")
 	navFlag := flag.String("nav", "free", "link navigation: free (any http(s) origin), allowlist (origin + -allow), confirm (ask before leaving the origin)")
+	subresFlag := flag.String("subresources", "any", "stylesheets and images: any (any public origin), origin (page origin + -allow), off")
 	seed := flag.Uint64("seed", 0, "PRNG seed for Math.random, for reproducible runs (0 = time-based); the clock is never fixed, timers depend on it")
 	flag.Parse()
 	nav, err := app.ParseNavMode(*navFlag)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+	mode, err := subres.ParseMode(*subresFlag)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
@@ -60,7 +67,8 @@ func main() {
 	if *seed != 0 {
 		script.Rand = seededRand(*seed)
 	}
-	l := loop.New(ctx, loop.Config{Width: *width, Script: script, ExternalScripts: *external}, sink)
+	subresCfg := subres.Config{Mode: mode}
+	l := loop.New(ctx, loop.Config{Width: *width, Script: script, ExternalScripts: *external, Subresources: subresCfg, SubresourceTransport: app.SubresourceTransport(policy, subresCfg)}, sink)
 	go l.Run()
 
 	m := app.New(l, policy, nav, flag.Arg(0))
