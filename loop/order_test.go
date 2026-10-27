@@ -65,7 +65,7 @@ func TestLinkActivatedMatchesNthtmlLinks(t *testing.T) {
 	l := New(ctx, Config{Width: 400, MinFrame: time.Millisecond}, sink)
 	go l.Run()
 	l.LoadPage(`<!doctype html><body>
-<a href="HTTP://example.test/A"><img alt=""></a>
+<a href="HTTP://example.test/A"><img alt="" width="20" height="20"></a>
 <a href="/dup">one</a> <a href="/dup">two</a>
 <script>
   for (const a of document.querySelectorAll("a")) a.addEventListener("click", e => { e.preventDefault(); console.log("prevented " + a.textContent); });

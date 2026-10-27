@@ -5456,7 +5456,7 @@ require (
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/dop251/goja v0.0.0-20261024144015-2a9269b6b6de
 	golang.org/x/net v0.61.0
-	nimbleterminal.dev/nthtml v0.1.0
+	nimbleterminal.dev/nthtml v0.1.2-0.20261027033600-4123b1775dca
 	nimbleterminal.dev/ntpicture v0.1.1
 )
 

@@ -4,7 +4,7 @@ Project rules for agents and humans. The design document `docs/design/2026-10-25
 
 ## Constraints
 
-- Module path `nimbleterminal.dev/ntbrowser`; `go 1.26.8`; `go.mod` is spec Appendix B verbatim, including `replace charm.land/bubbletea/v2 => github.com/neomantra/bubbletea/v2 v2.0.0-20261009201241-c397c32a5074` and `require nimbleterminal.dev/nthtml v0.1.0`, `github.com/dop251/goja v0.0.0-20261024144015-2a9269b6b6de`, `golang.org/x/net v0.61.0`, `github.com/charmbracelet/x/ansi v0.11.9`.
+- Module path `nimbleterminal.dev/ntbrowser`; `go 1.26.8`; `go.mod` is spec Appendix B verbatim, including `replace charm.land/bubbletea/v2 => github.com/neomantra/bubbletea/v2 v2.0.0-20261009201241-c397c32a5074` and `require nimbleterminal.dev/nthtml v0.1.2-0.20261027033600-4123b1775dca` (the pushed nthtml main; swap for the tag when released), `github.com/dop251/goja v0.0.0-20261024144015-2a9269b6b6de`, `golang.org/x/net v0.61.0`, `github.com/charmbracelet/x/ansi v0.11.9`.
 - Every build and test runs with `GOWORK=off CGO_ENABLED=0` (Taskfile env, as in nthtml).
 - `jsvm` and `dom` non-test files import none of `os`, `os/exec`, `net`, `net/http`, `syscall`, `io/fs`, `plugin`, `unsafe` (spec §6, enforced by `jsvm.TestNoSystemImports`).
 - All Goja compilation goes through `goja.Parse(name, src, sandboxParserOptions()...)` + `goja.CompileAST`; never `goja.Compile`, `MustCompile`, `RunString`, `RunScript` in `jsvm` (spec decision table §6; `jsvm.TestOnlyHardenedCompilePath`).
