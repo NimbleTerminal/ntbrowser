@@ -30,21 +30,38 @@ type Policy struct {
 	AllowPrivate bool
 	// AnyOrigin admits every http(s) host: the policy for top-level
 	// navigation under -nav free/confirm (decision 11), never for a page's
-	// fetch(). Scheme, credentials, local names, literal and resolved
-	// addresses (isForbiddenIP), cookies, redirects and body caps are
-	// enforced exactly as without it.
-	AnyOrigin    bool
-	MaxBody      int64         // response bytes (default 2 MiB)
-	Timeout      time.Duration // whole request (default 10s)
-	MaxInFlight  int           // concurrent requests per page (default 4)
-	MaxRedirects int           // default 3
+	// fetch(); the subresource fetcher may carry it under subres.ModeAny.
+	// Scheme, credentials, local names, literal and resolved addresses
+	// (isForbiddenIP), cookies, redirects and body caps are enforced
+	// exactly as without it.
+	AnyOrigin bool
+	// NoDowngradeFrom is the page's scheme. "https" refuses http: targets,
+	// redirects included (no mixed content, subresources decision 14);
+	// "" or "http" refuse nothing.
+	NoDowngradeFrom string
+	MaxBody         int64         // response bytes (default 2 MiB)
+	Timeout         time.Duration // whole request (default 10s)
+	MaxInFlight     int           // concurrent requests per page (default 4)
+	MaxRedirects    int           // default 3
 }
+
+// Kind says what a request is for. It selects the Accept header, the
+// admitted content types and, for everything but a document, a 2xx status
+// gate. The zero value is KindDocument, so a page's fetch() is unchanged.
+type Kind int
+
+const (
+	KindDocument Kind = iota // fetch() and top-level navigation: today's behaviour
+	KindStyle                // a stylesheet: text/css (or octet-stream with a .css path), 2xx only
+	KindImage                // an image: png, jpeg, gif, webp or svg+xml, 2xx only
+)
 
 type Request struct {
 	Method  string
 	URL     string
 	Headers map[string]string // filtered against requestHeaderAllow
 	Body    string
+	Kind    Kind
 }
 
 type Response struct {
@@ -133,6 +150,9 @@ func (f *Fetcher) Allowed(u *url.URL) error {
 	if u.User != nil {
 		return fmt.Errorf("%w: credentials in URL", ErrDenied)
 	}
+	if f.p.NoDowngradeFrom == "https" && u.Scheme == "http" {
+		return fmt.Errorf("%w: mixed content %s", ErrDenied, u)
+	}
 	host := strings.ToLower(u.Hostname())
 	if host == "" || host == "localhost" || strings.HasSuffix(host, ".local") || strings.HasSuffix(host, ".internal") {
 		if !f.p.AllowPrivate {
@@ -207,7 +227,7 @@ func (f *Fetcher) Do(ctx context.Context, r Request) (Response, error) {
 		return Response{}, err
 	}
 	req.Header.Set("User-Agent", "ntbrowser/0.1 (+https://nimbleterminal.dev)")
-	req.Header.Set("Accept", "text/*, application/json;q=0.9")
+	req.Header.Set("Accept", acceptFor(r.Kind))
 	for k, v := range r.Headers {
 		if requestHeaderAllow[strings.ToLower(k)] && len(v) <= 1024 && !strings.ContainsAny(v, "\r\n") {
 			req.Header.Set(k, v)
@@ -218,7 +238,10 @@ func (f *Fetcher) Do(ctx context.Context, r Request) (Response, error) {
 		return Response{}, err
 	}
 	defer resp.Body.Close()
-	if err := acceptableContentType(resp.Header.Get("Content-Type")); err != nil {
+	if r.Kind != KindDocument && (resp.StatusCode < 200 || resp.StatusCode > 299) {
+		return Response{}, fmt.Errorf("%w: status %d", ErrDenied, resp.StatusCode)
+	}
+	if err := acceptableFor(r.Kind, resp.Request.URL.Path, resp.Header.Get("Content-Type")); err != nil {
 		return Response{}, err
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, f.p.MaxBody+1))
@@ -235,6 +258,44 @@ func (f *Fetcher) Do(ctx context.Context, r Request) (Response, error) {
 		}
 	}
 	return out, nil
+}
+
+func acceptFor(k Kind) string {
+	switch k {
+	case KindStyle:
+		return "text/css"
+	case KindImage:
+		return "image/png, image/jpeg, image/gif, image/webp, image/svg+xml"
+	}
+	return "text/*, application/json;q=0.9"
+}
+
+// acceptableFor gates the response content type per kind. Every branch
+// parses the header with mime.ParseMediaType, so parameters such as
+// "charset=utf-8" never take part in the comparison.
+func acceptableFor(k Kind, path, ct string) error {
+	switch k {
+	case KindStyle:
+		mt, _, err := mime.ParseMediaType(ct)
+		if err != nil {
+			return fmt.Errorf("%w: unreadable content type", ErrDenied)
+		}
+		if mt == "text/css" || (mt == "application/octet-stream" && strings.HasSuffix(strings.ToLower(path), ".css")) {
+			return nil
+		}
+		return fmt.Errorf("%w: content type %q is not a stylesheet", ErrDenied, mt)
+	case KindImage:
+		mt, _, err := mime.ParseMediaType(ct)
+		if err != nil {
+			return fmt.Errorf("%w: unreadable content type", ErrDenied)
+		}
+		switch mt {
+		case "image/png", "image/jpeg", "image/gif", "image/webp", "image/svg+xml":
+			return nil
+		}
+		return fmt.Errorf("%w: content type %q is not a decodable image", ErrDenied, mt)
+	}
+	return acceptableContentType(ct)
 }
 
 func acceptableContentType(ct string) error {
