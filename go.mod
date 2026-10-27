@@ -6,6 +6,7 @@ require (
 	charm.land/bubbletea/v2 v2.1.0
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/dop251/goja v0.0.0-20261024144015-2a9269b6b6de
+	golang.org/x/image v0.47.0
 	golang.org/x/net v0.61.0
 	nimbleterminal.dev/nthtml v0.1.2-0.20261027033600-4123b1775dca
 	nimbleterminal.dev/ntpicture v0.1.1
@@ -32,7 +33,6 @@ require (
 	github.com/srwiley/rasterx v0.0.0-20220730225603-2ab79fcdd4ef // indirect
 	github.com/xo/terminfo v1.2.0 // indirect
 	github.com/zkrebbekx/go-mermaid v0.1.6 // indirect
-	golang.org/x/image v0.47.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
