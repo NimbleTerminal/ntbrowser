@@ -1,0 +1,10 @@
+@charset "utf-8";
+@font-face { font-family: "X"; src: url(x.woff); }
+@media print { .a{color:red} .b, .c{color:blue} }
+@supports (display:grid) { .d{display:grid} }
+@media screen { @media
+	(min-width:1px) { .e{color:green} } }
+a[href="x,y"]{color:black}
+/* a comment with } and , inside */
+p{margin:0}
+h1{font-size:2em}
