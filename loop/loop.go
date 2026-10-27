@@ -34,6 +34,7 @@ import (
 	"nimbleterminal.dev/ntbrowser/dom"
 	"nimbleterminal.dev/ntbrowser/jsvm"
 	"nimbleterminal.dev/ntbrowser/netpolicy"
+	"nimbleterminal.dev/ntbrowser/subres"
 )
 
 // Sink is satisfied by *tea.Program. It may block; the loop never calls it
@@ -46,6 +47,10 @@ type (
 		Gen    uint64 // monotonically increasing; stale frames are dropped by the host
 		Result *document.Result
 		Err    error
+		// Warnings are the loader's (a refused stylesheet, an oversize
+		// image); Result.Warnings stay nthtml's. Page-controlled text:
+		// the host passes them through app.clean.
+		Warnings []string
 	}
 	// NavigateMsg carries an absolute URL already resolved against the page
 	// base. Admission (scheme, host) is the host's decision.
@@ -71,6 +76,18 @@ type Page struct {
 	// boxes are the painted boxes of the last frame shown for this page,
 	// used to map a document-pixel hit back to an element (Box.Anchor = id).
 	boxes []document.Box
+	// subres loads the page's stylesheets and images (nil when off).
+	subres *subres.Session
+	// firstFrame is true until the first frame of this page has rendered;
+	// stylesheets discovered while it is true block that frame (decision 3)
+	// until styleDeadline (StyleTimeout elapsed) releases it.
+	firstFrame    bool
+	styleDeadline bool
+	// backgrounds are the CSS background sources the last frame reported.
+	backgrounds []string
+	// budgetWarned remembers which hrefs were already reported over the
+	// rule budget, so the status line is not flooded every frame.
+	budgetWarned map[string]bool
 }
 
 type Config struct {
@@ -84,6 +101,11 @@ type Config struct {
 	// ExternalScripts fetches <script src> through the page's Fetcher. Off
 	// by default: reader mode runs inline scripts only.
 	ExternalScripts bool
+	// Subresources bounds stylesheet and image loading; zero fields take
+	// subres defaults. SubresourceTransport builds the transport for a page
+	// base (nil, or Subresources.Mode == subres.ModeOff, loads nothing).
+	Subresources         subres.Config
+	SubresourceTransport func(base string) subres.Transport
 }
 
 type Loop struct {
@@ -121,6 +143,10 @@ func New(ctx context.Context, cfg Config, sink Sink) *Loop {
 	if cfg.Outbox <= 0 {
 		cfg.Outbox = 1024
 	}
+	if cfg.RenderLimit.Rules <= 0 {
+		cfg.RenderLimit.Rules = 4096 // nthtml's ceiling: every sheet in the measured sample fits (spec decision 6)
+	}
+	cfg.Subresources = cfg.Subresources.WithDefaults()
 	l := &Loop{ctx: ctx, cfg: cfg, sink: sink, inbox: make(chan func(), cfg.Inbox), outbox: make(chan tea.Msg, cfg.Outbox), timerT: stoppedTimer(), frameTimer: stoppedTimer()}
 	go l.forward()
 	return l
@@ -239,10 +265,11 @@ func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) {
 		}
 		cfg := l.cfg.Script
 		cfg.Location = base
-		page := &Page{Tree: tree, Fetcher: fetcher, Base: base, started: time.Now()}
+		page := &Page{Tree: tree, Fetcher: fetcher, Base: base, started: time.Now(), firstFrame: true, budgetWarned: map[string]bool{}}
 		page.ctx, page.cancel = context.WithCancel(l.ctx)
 		page.Sandbox = jsvm.New(cfg, tree, (*host)(l))
 		l.page = page
+		l.startSubresources(page)
 		l.send(TitleMsg{tree.Title()})
 		l.runScripts(page, 0)
 		l.scheduleFrame()
@@ -265,6 +292,9 @@ func (l *Loop) dropPage(page *Page) {
 		return
 	}
 	page.killed = true
+	if page.subres != nil {
+		page.subres.Close()
+	}
 	page.Sandbox.Close()
 	if page.cancel != nil {
 		page.cancel()
@@ -508,19 +538,52 @@ func (l *Loop) startRender() {
 		return
 	}
 	page := l.page
-	html := page.Tree.Serialize() // immutable snapshot; safe to hand off
+	opts := document.Options{Width: l.cfg.Width, Limits: l.cfg.RenderLimit, Fonts: l.cfg.Fonts}
+	var loaderWarnings []string
+	if page.subres != nil {
+		// Discover before the gate so a <link> a script added is in the
+		// blocking set while the first frame is still unrendered.
+		page.subres.Discover(page.Tree.LinkedStyles(), page.Tree.ImageSources(), page.backgrounds)
+		if page.firstFrame && page.subres.StylesPending() && !page.styleDeadline {
+			l.pendingFrame = true // the last settlement or the deadline re-schedules
+			return
+		}
+		loaderWarnings = l.injectStyles(page)
+		opts.Images = page.subres.Images()                     // fresh copies: nothing the
+		opts.BackgroundImages = page.subres.BackgroundImages() // worker reads is written again
+	}
+	html := page.Tree.Serialize() // immutable snapshot, after injection; safe to hand off
 	page.Tree.ClearDirty()
 	l.pendingFrame = false
 	l.renderInFlight = true
 	l.lastFrame = time.Now()
 	gen := l.gen.Add(1)
-	opts := document.Options{Width: l.cfg.Width, Limits: l.cfg.RenderLimit, Fonts: l.cfg.Fonts}
 	go func() {
 		ctx, cancel := context.WithTimeout(l.ctx, 2*time.Second)
 		defer cancel()
-		// Render enforces nthtml's own byte/node/pixel budgets; a hostile tree
-		// fails here with document.ErrLimit instead of exhausting memory.
-		res, err := document.Render(ctx, strings.NewReader(html), opts)
+		// Parse and Render enforce nthtml's own byte/node/pixel budgets; a
+		// hostile tree fails here with document.ErrLimit instead of
+		// exhausting memory. One parse per frame also yields the CSS
+		// background sources (decision 21).
+		var res *document.Result
+		var backgrounds []string
+		doc, err := document.Parse(ctx, strings.NewReader(html), opts.Limits)
+		if err == nil && doc != nil {
+			for _, src := range doc.ImageSourceList() {
+				if src.Kind == "background" && !strings.HasPrefix(strings.ToLower(src.Src), "data:") {
+					backgrounds = append(backgrounds, src.Src)
+				}
+			}
+			res, err = doc.Render(ctx, opts)
+			if errors.Is(err, document.ErrLimit) && (opts.Images != nil || opts.BackgroundImages != nil) {
+				// Images are the only thing the host added: drop them and
+				// retry once so an image-heavy page degrades to placeholders
+				// instead of a blank viewer (decision 16).
+				opts.Images, opts.BackgroundImages = nil, nil
+				res, err = doc.Render(ctx, opts)
+				loaderWarnings = append(loaderWarnings, "page too large with images; rendered without them")
+			}
+		}
 		l.post(func() {
 			l.renderInFlight = false
 			if l.page != page {
@@ -529,10 +592,80 @@ func (l *Loop) startRender() {
 			if res != nil {
 				page.boxes = res.Boxes
 			}
-			l.send(FrameMsg{Gen: gen, Result: res, Err: err})
+			if page.subres != nil {
+				page.backgrounds = backgrounds
+				page.subres.Discover(nil, nil, backgrounds)
+				if page.firstFrame {
+					page.firstFrame = false
+					page.subres.FirstFrameRendered()
+				}
+				loaderWarnings = append(loaderWarnings, page.subres.Warnings()...)
+			}
+			l.send(FrameMsg{Gen: gen, Result: res, Err: err, Warnings: loaderWarnings})
 			l.runFrameCallbacks()
 		})
 	}()
+}
+
+// startSubresources opens the page's subresource session and arms the
+// first-frame deadline. Completions are posted through a wrapper that drops
+// them after navigation and marks the tree dirty so a frame shows them
+// (spec §7.5).
+func (l *Loop) startSubresources(page *Page) {
+	cfg := l.cfg.Subresources
+	if l.cfg.SubresourceTransport == nil || cfg.Mode == subres.ModeOff {
+		return
+	}
+	post := func(fn func()) {
+		l.post(func() {
+			if l.page != page {
+				return
+			}
+			fn()
+			page.Tree.MarkDirty()
+		})
+	}
+	page.subres = subres.NewSession(page.ctx, cfg, l.cfg.SubresourceTransport(page.Base), page.Base, post)
+	page.subres.Discover(page.Tree.LinkedStyles(), page.Tree.ImageSources(), nil)
+	time.AfterFunc(cfg.StyleTimeout, func() {
+		l.post(func() {
+			if l.page == page {
+				page.styleDeadline = true
+				l.scheduleFrame()
+			}
+		})
+	})
+}
+
+// injectStyles charges the rule budget in document order at every render
+// (decision 6): inline <style> elements present now count first, then each
+// loaded external sheet is injected if it fits and removed if it does not.
+func (l *Loop) injectStyles(page *Page) []string {
+	var warnings []string
+	budget := l.cfg.RenderLimit.Rules
+	for _, text := range page.Tree.StyleTexts() {
+		budget -= subres.CountRules(text)
+	}
+	for _, href := range page.Tree.LinkedStyles() {
+		css, n, ok := page.subres.Style(href)
+		if !ok {
+			continue
+		}
+		if n > budget {
+			_ = page.Tree.SetStyle(href, "")
+			if !page.budgetWarned[href] {
+				page.budgetWarned[href] = true
+				warnings = append(warnings, fmt.Sprintf("stylesheet %q dropped: over the rule budget", href))
+			}
+			continue
+		}
+		if err := page.Tree.SetStyle(href, css); err != nil {
+			warnings = append(warnings, fmt.Sprintf("stylesheet %q dropped: %v", href, err))
+			continue
+		}
+		budget -= n
+	}
+	return warnings
 }
 
 type frameCB struct {
