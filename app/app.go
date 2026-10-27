@@ -15,6 +15,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"nimbleterminal.dev/nthtml"
+	"nimbleterminal.dev/ntpicture"
 	"nimbleterminal.dev/nthtml/document"
 
 	"nimbleterminal.dev/ntbrowser/loop"
@@ -90,6 +91,20 @@ type Model struct {
 	// sequence is a slower, superseded load and is dropped. History is only
 	// touched when a load succeeds (decision 20).
 	navSeq uint64
+}
+
+// viewerOptions tunes the nthtml viewer for a page that re-flows often and
+// scrolls by keypress (perf analysis 2026-10-27, HN front page). StableID
+// keeps the Kitty image id across frames while geometry is unchanged, so a
+// re-flow or scroll step changes pixels but not the placeholder grid and
+// Bubble Tea has nothing to repaint; without it every keypress redrew all
+// cells. Zlib frames encode about three times faster than PNG and are
+// cheaper for the terminal to decode. ReflowTypeset stays off (decision 19).
+var viewerOptions = nthtml.ModelOptions{
+	Picture: ntpicture.Options{
+		StableID: true,
+		Render:   ntpicture.Config{KittyFormat: ntpicture.KittyFormatZlib},
+	},
 }
 
 func New(l *loop.Loop, policy netpolicy.Policy, nav NavMode, start string) *Model {
@@ -241,10 +256,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = "" // the page's first frame: "loading …" is over
 		}
 		if m.viewer == nil {
-			// nthtml.New leaves ReflowTypeset off, which is what the host
+			// viewerOptions leaves ReflowTypeset off, which is what the host
 			// wants: the loop re-flows on Resize, at its own width, off the
 			// UI goroutine; the viewer must never re-render on its own.
-			m.viewer = nthtml.New(v.Result)
+			m.viewer = nthtml.NewWithOptions(v.Result, viewerOptions)
 			m.resetView = false
 			cmd := tea.Batch(m.viewer.Init(), m.viewer.SetBounds(0, 0, m.cols, m.viewRows()))
 			m.loop.Resize(documentWidth(m.viewer))

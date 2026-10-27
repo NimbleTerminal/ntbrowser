@@ -5457,6 +5457,7 @@ require (
 	github.com/dop251/goja v0.0.0-20261024144015-2a9269b6b6de
 	golang.org/x/net v0.61.0
 	nimbleterminal.dev/nthtml v0.1.0
+	nimbleterminal.dev/ntpicture v0.1.1
 )
 
 require (
@@ -5485,7 +5486,6 @@ require (
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	nimbleterminal.dev/ntfonts v0.1.0 // indirect
-	nimbleterminal.dev/ntpicture v0.1.1 // indirect
 	nimbleterminal.dev/ntsvg v0.5.2 // indirect
 )
 
