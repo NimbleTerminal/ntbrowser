@@ -5454,10 +5454,10 @@ go 1.26.8
 require (
 	charm.land/bubbletea/v2 v2.1.1
 	github.com/charmbracelet/x/ansi v0.11.9
-	github.com/dop251/goja v0.0.0-20261024144015-2a9269b6b6de
+	github.com/dop251/goja v0.0.0-20261027234916-5f913d1693d9
 	golang.org/x/image v0.47.0
 	golang.org/x/net v0.62.0
-	nimbleterminal.dev/nthtml v0.1.2-0.20261028182420-68c61ae6c569
+	nimbleterminal.dev/nthtml v0.1.2
 	nimbleterminal.dev/ntpicture v0.1.2
 )
 
