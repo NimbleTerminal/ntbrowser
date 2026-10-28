@@ -621,12 +621,14 @@ func hasClass(n *Node, cls string) bool {
 func (t *Tree) Serialize() string {
 	var b strings.Builder
 	seen := map[string]bool{} // hrefs whose <style> twin was written in this call
-	t.write(&b, t.root, seen)
+	t.write(&b, t.root, seen, false)
 	t.releaseOrphanStyles(seen)
 	return b.String()
 }
 
-func (t *Tree) write(b *strings.Builder, n *Node, seen map[string]bool) {
+// inSVG is true inside an <svg> subtree (SVG namespace), where names are
+// written with their SVG spelling (svgcase.go).
+func (t *Tree) write(b *strings.Builder, n *Node, seen map[string]bool, inSVG bool) {
 	switch n.kind {
 	case Text:
 		if n.parent != nil && (n.parent.tag == "style") {
@@ -639,16 +641,18 @@ func (t *Tree) write(b *strings.Builder, n *Node, seen map[string]bool) {
 		if n.tag == "noscript" {
 			return // scripting is on: <noscript> content is never shown (decision 18)
 		}
+		inSVG = inSVG || n.tag == "svg"
+		tag := svgName(svgTagNames, n.tag, inSVG)
 		if n.tag != "#document" {
 			b.WriteByte('<')
-			b.WriteString(n.tag)
+			b.WriteString(tag)
 			hasID := false
 			for _, a := range n.attrs {
 				if a.Name == "id" {
 					hasID = true
 				}
 				b.WriteByte(' ')
-				b.WriteString(a.Name)
+				b.WriteString(svgName(svgAttrNames, a.Name, inSVG))
 				b.WriteString(`="`)
 				b.WriteString(html.EscapeString(a.Value))
 				b.WriteByte('"')
@@ -658,12 +662,13 @@ func (t *Tree) write(b *strings.Builder, n *Node, seen map[string]bool) {
 			}
 			b.WriteByte('>')
 		}
+		childSVG := inSVG && n.tag != "foreignobject" // foreignObject content is HTML again
 		for _, c := range n.children {
-			t.write(b, c, seen)
+			t.write(b, c, seen, childSVG)
 		}
 		if n.tag != "#document" && !voidElement(n.tag) {
 			b.WriteString("</")
-			b.WriteString(n.tag)
+			b.WriteString(tag)
 			b.WriteByte('>')
 		}
 		if n.tag == "link" {
