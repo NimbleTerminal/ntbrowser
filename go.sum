@@ -74,7 +74,7 @@ nimbleterminal.dev/ntfonts v0.1.0 h1:D8PxpASojALkYPV381GQBidooRJarueUfKQoC4srgYk
 nimbleterminal.dev/ntfonts v0.1.0/go.mod h1:G8a7vDkY3uYxrydtdTlJ7KbZpxtL4MTimyMhkwdPr2Q=
 nimbleterminal.dev/nthtml v0.1.2 h1:CjDpju/havl3KEhYOu7xL9/gL1NPB/FMLYFq1FLIX8o=
 nimbleterminal.dev/nthtml v0.1.2/go.mod h1:Dp33Onzt6Omz4tVs3AkZpZf64l4WYcde0wLZTs3ec8A=
-nimbleterminal.dev/ntpicture v0.1.3-0.20261028191824-58c41671ddab h1:PxN8Eigov9ZyvpLQzUYx0mWRVP5dHiRIEtJ2nJprD8Q=
-nimbleterminal.dev/ntpicture v0.1.3-0.20261028191824-58c41671ddab/go.mod h1:mwbOLl1CRKaPDXmsiv/GLfeSwIpTqCt9FzdI6L/VnIY=
+nimbleterminal.dev/ntpicture v0.1.3 h1:R2HJDMRnUs29rXXYzGsZFaFPDDTlvdSxmm5DM4Ym+VY=
+nimbleterminal.dev/ntpicture v0.1.3/go.mod h1:mwbOLl1CRKaPDXmsiv/GLfeSwIpTqCt9FzdI6L/VnIY=
 nimbleterminal.dev/ntsvg v0.5.3 h1:rqGUzn8wyopRATx7glB363js74Fkuz1oUX1KBJu6PX8=
 nimbleterminal.dev/ntsvg v0.5.3/go.mod h1:YF2Uba2/u6IGPN3/hKaE4Vvf76kOXa/BkYajeqfiwzI=

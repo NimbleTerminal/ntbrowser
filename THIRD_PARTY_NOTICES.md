@@ -9,7 +9,7 @@ ntbrowser links the following modules. Their license texts are in `licenses/`.
 | github.com/charmbracelet/x/ansi | v0.11.9 | MIT | [licenses/charmbracelet-x-ansi.LICENSE](licenses/charmbracelet-x-ansi.LICENSE) |
 | charm.land/bubbletea/v2 (replaced by github.com/neomantra/bubbletea/v2) | v2.0.0-20261020122444-536722b0bdb6 | MIT | [licenses/bubbletea.LICENSE](licenses/bubbletea.LICENSE) |
 | nimbleterminal.dev/nthtml | v0.1.2 | MIT | [licenses/nthtml.LICENSE](licenses/nthtml.LICENSE) |
-| nimbleterminal.dev/ntpicture | v0.1.3-0.20261028191824-58c41671ddab | MIT | [licenses/ntpicture.LICENSE](licenses/ntpicture.LICENSE) |
+| nimbleterminal.dev/ntpicture | v0.1.3 | MIT | [licenses/ntpicture.LICENSE](licenses/ntpicture.LICENSE) |
 | golang.org/x/image | v0.47.0 | BSD-3-Clause | [licenses/golang-x-image.LICENSE](licenses/golang-x-image.LICENSE) |
 
 Transitive dependencies carry their own licenses in the Go module cache; see `go.mod`.
