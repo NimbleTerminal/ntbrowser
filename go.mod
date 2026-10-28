@@ -8,14 +8,14 @@ require (
 	github.com/dop251/goja v0.0.0-20261027234916-5f913d1693d9
 	golang.org/x/image v0.47.0
 	golang.org/x/net v0.62.0
-	nimbleterminal.dev/nthtml v0.1.2
+	nimbleterminal.dev/nthtml v0.1.3-0.20261028214548-be7e6dfeafd9
 	nimbleterminal.dev/ntpicture v0.1.3
 )
 
 require (
 	charm.land/bubbles/v2 v2.2.1 // indirect
 	charm.land/lipgloss/v2 v2.0.6 // indirect
-	github.com/NimbleMarkets/oksvg v0.1.4-0.20261028204714-7ff6358034d2 // indirect
+	github.com/NimbleMarkets/oksvg v0.1.4 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
 	github.com/charmbracelet/ultraviolet v0.0.0-20261023060817-a45b7c86333f // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect
