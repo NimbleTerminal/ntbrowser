@@ -9,7 +9,7 @@ require (
 	golang.org/x/image v0.47.0
 	golang.org/x/net v0.62.0
 	nimbleterminal.dev/nthtml v0.1.2
-	nimbleterminal.dev/ntpicture v0.1.2
+	nimbleterminal.dev/ntpicture v0.1.3-0.20261028191824-58c41671ddab
 )
 
 require (
