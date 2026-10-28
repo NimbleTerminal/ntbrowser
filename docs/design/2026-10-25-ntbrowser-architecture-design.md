@@ -5464,7 +5464,7 @@ require (
 require (
 	charm.land/bubbles/v2 v2.2.1 // indirect
 	charm.land/lipgloss/v2 v2.0.6 // indirect
-	github.com/NimbleMarkets/oksvg v0.1.3 // indirect
+	github.com/NimbleMarkets/oksvg v0.1.4-0.20261028204714-7ff6358034d2 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
 	github.com/charmbracelet/ultraviolet v0.0.0-20261023060817-a45b7c86333f // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect
@@ -5486,7 +5486,7 @@ require (
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	nimbleterminal.dev/ntfonts v0.1.0 // indirect
-	nimbleterminal.dev/ntsvg v0.5.3 // indirect
+	nimbleterminal.dev/ntsvg v0.5.4 // indirect
 )
 
 // Same WASM-capable Bubble Tea pin as nthtml/ntpicture/nttypeset/ntsvg.
