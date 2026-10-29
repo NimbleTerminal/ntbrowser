@@ -305,7 +305,9 @@ func TestMixedContent(t *testing.T) {
 		t.Fatalf("want two mixed-content warnings, got %q", joined)
 	}
 	l.LoadPage(page, srv.URL+"/", nil)
-	frameWhere(t, sink, 5*time.Second, func(f FrameMsg) bool { return isRed(boxColor(f.Result, "h1")) && len(imgBoxes(f.Result)) == 1 && imgBoxes(f.Result)[0] == image.Pt(2, 2) })
+	frameWhere(t, sink, 5*time.Second, func(f FrameMsg) bool {
+		return isRed(boxColor(f.Result, "h1")) && len(imgBoxes(f.Result)) == 1 && imgBoxes(f.Result)[0] == image.Pt(2, 2)
+	})
 	if h.get("/s.css") != 1 || h.get("/p.png") != 1 {
 		t.Fatalf("http page: hits %v", h.m)
 	}
