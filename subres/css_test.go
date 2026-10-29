@@ -93,12 +93,12 @@ func TestImportsSkipBOMAndCharset(t *testing.T) {
 func TestAbsolutizeBasic(t *testing.T) {
 	const sheet = "https://cdn.test/css/t.css"
 	cases := map[string]string{
-		"a{background:url(arrow.png)}":              `a{background:url("https://cdn.test/css/arrow.png")}`,
-		"a{background:url('../img/a.png')}":         `a{background:url("https://cdn.test/img/a.png")}`,
-		"a{background:url(/root.png)}":              `a{background:url("https://cdn.test/root.png")}`,
+		"a{background:url(arrow.png)}":                `a{background:url("https://cdn.test/css/arrow.png")}`,
+		"a{background:url('../img/a.png')}":           `a{background:url("https://cdn.test/img/a.png")}`,
+		"a{background:url(/root.png)}":                `a{background:url("https://cdn.test/root.png")}`,
 		"a{background:url(data:image/png;base64,AA)}": "a{background:url(data:image/png;base64,AA)}",
-		"a{background:url(https://x.test/a.png)}":   "a{background:url(https://x.test/a.png)}",
-		"a{mask:url(#frag)}":                        "a{mask:url(#frag)}",
+		"a{background:url(https://x.test/a.png)}":     "a{background:url(https://x.test/a.png)}",
+		"a{mask:url(#frag)}":                          "a{mask:url(#frag)}",
 	}
 	for in, want := range cases {
 		if got := Absolutize(in, sheet); got != want {

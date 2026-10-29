@@ -15,8 +15,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"nimbleterminal.dev/nthtml"
-	"nimbleterminal.dev/ntpicture"
 	"nimbleterminal.dev/nthtml/document"
+	"nimbleterminal.dev/ntpicture"
 
 	"nimbleterminal.dev/ntbrowser/loop"
 	"nimbleterminal.dev/ntbrowser/netpolicy"

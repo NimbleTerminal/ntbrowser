@@ -70,7 +70,10 @@ func TestSerializeInjectsStyleAfterLink(t *testing.T) {
 }
 
 func TestSerializeWrapsMedia(t *testing.T) {
-	cases := []struct{ media, want string; none bool }{
+	cases := []struct {
+		media, want string
+		none        bool
+	}{
 		{"print", `<style>@media print {h1{color:red}}</style>`, false},
 		{"all", `<style>h1{color:red}</style>`, false},
 		{strings.Repeat("s", 1025), "", true},

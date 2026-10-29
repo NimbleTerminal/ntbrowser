@@ -2,7 +2,6 @@ package subres
 
 import (
 	"bytes"
-	"net/url"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -10,6 +9,7 @@ import (
 	"image/color"
 	"image/gif"
 	"image/png"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
