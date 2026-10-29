@@ -541,7 +541,7 @@ func (l *Loop) startRender() {
 		return
 	}
 	page := l.page
-	opts := document.Options{Width: l.cfg.Width, Limits: l.cfg.RenderLimit, Fonts: l.cfg.Fonts}
+	opts := document.Options{Width: l.cfg.Width, Limits: l.cfg.RenderLimit, Fonts: l.cfg.Fonts, FallbackFaces: fallbackFaces}
 	var loaderWarnings []string
 	var injected []string // hrefs whose sheet is in this snapshot
 	if page.subres != nil {

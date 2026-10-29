@@ -32,6 +32,16 @@ tasks:
     cmds:
       - go test -race -count=1 ./...
 
+  build-nocjk:
+    desc: Build the binary without the CJK fallback face (about 4 MB smaller)
+    cmds:
+      - go build -mod=readonly -tags nocjk -o bin/ntbrowser-nocjk{{.EXE}} ./cmd/ntbrowser
+
+  test-nocjk:
+    desc: Run the loop tests with -tags nocjk
+    cmds:
+      - go test -count=1 -tags nocjk ./loop
+
   vet:
     desc: go vet
     cmds:
@@ -50,6 +60,7 @@ tasks:
     cmds:
       - task: vet
       - task: test
+      - task: test-nocjk
       - task: wasm
 
   run:
