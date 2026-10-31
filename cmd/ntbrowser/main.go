@@ -160,7 +160,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	_, _ = strengths, conn // the status line reports them (app)
+	_ = strengths // reported by -show-profile (sandbox.Probe)
 	// Process-wide soft heap cap: Goja has no per-runtime memory limit, so
 	// the GC is told to work harder past this point and dom/nthtml limits
 	// keep individual allocations bounded.
@@ -190,7 +190,17 @@ func main() {
 
 	m := app.New(l, c.Profile, c.Start)
 	program = tea.NewProgram(m)
-	if _, err := program.Run(); err != nil {
+	if conn != nil {
+		bridge, err := app.NewMediaBridge(conn, program.Send)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		m.SetMedia(bridge, tempDir)
+	}
+	_, err = program.Run()
+	m.Cleanup()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}

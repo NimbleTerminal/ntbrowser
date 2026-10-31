@@ -80,6 +80,7 @@ type Node struct {
 	// Box.Anchor / Result.Anchors can be mapped back to a NodeID on hit test.
 	listeners map[string]struct{}
 	form      *formState // nil until a control's state changes (forms.go)
+	playable  bool       // a <video> the profile lets the reader focus (MarkVideos)
 }
 
 type Attr struct{ Name, Value string }

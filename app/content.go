@@ -29,14 +29,15 @@ const (
 	navTimeout      = 60 * time.Second // the whole response, media downloads included
 )
 
-// termSurface presents content in the terminal.
-type termSurface struct{}
+// termSurface presents content in the terminal. player says whether a media
+// helper is connected.
+type termSurface struct{ player bool }
 
 func (termSurface) Capabilities() content.Capabilities {
 	return content.Capabilities{KittyGraphics: true}
 }
 
-func (termSurface) Present(n *content.Node) content.Presentation {
+func (s termSurface) Present(n *content.Node) content.Presentation {
 	switch n.Kind {
 	case content.Page, content.Text:
 		return content.PresentPage
@@ -45,7 +46,9 @@ func (termSurface) Present(n *content.Node) content.Presentation {
 	case content.Animation:
 		return content.PresentAnimation
 	case content.Video:
-		return content.PresentLine // Task 9: the player
+		if s.player {
+			return content.PresentPlayer
+		}
 	}
 	return content.PresentLine
 }
@@ -74,7 +77,7 @@ func humanSize(n int64) string {
 
 // load fetches u and turns the response into a pageLoadedMsg: classified from
 // its headers, checked against the profile, and only then read, by kind.
-func load(ctx context.Context, f *netpolicy.Fetcher, u string, p profile.Profile, msg pageLoadedMsg) pageLoadedMsg {
+func load(ctx context.Context, f *netpolicy.Fetcher, u string, p profile.Profile, video *videoTarget, msg pageLoadedMsg) pageLoadedMsg {
 	o, err := f.Open(ctx, netpolicy.Request{Method: "GET", URL: u, Kind: netpolicy.KindNavigate})
 	if err != nil {
 		msg.err = err
@@ -83,7 +86,9 @@ func load(ctx context.Context, f *netpolicy.Fetcher, u string, p profile.Profile
 	defer o.Body.Close()
 	n := &content.Node{Kind: content.Classify(o.ContentType, o.URL), MIME: o.ContentType, URL: o.URL, Size: o.Length}
 	msg.finalURL = o.URL
-	switch pres := content.Decide(termSurface{}, n, p.Media); pres {
+	switch pres := content.Decide(termSurface{player: video != nil}, n, p.Media); pres {
+	case content.PresentPlayer:
+		download(ctx, o.Body, n, video, &msg)
 	case content.PresentRefused:
 		msg.line = n.Kind.String() + " is off in this profile"
 	case content.PresentLine:

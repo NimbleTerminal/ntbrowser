@@ -5,11 +5,13 @@ package app
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"image"
 	"io"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"charm.land/bubbles/v2/textarea"
@@ -49,6 +51,7 @@ type pageLoadedMsg struct {
 	line     string
 	img      image.Image
 	player   *animation.Player
+	video    string // a downloaded video's name in the media directory
 }
 
 // pushNew means "truncate forward history and append" (a link, the start
@@ -92,13 +95,21 @@ type Model struct {
 
 	// Forms (forms.go): the input mode, the last focus report, and the
 	// editor and chooser state.
-	mode   inputMode
-	focus  loop.FocusMsg
-	ring   string     // the element the viewer's focus ring is on ("" = none)
-	media  *mediaView // a picture shown in the page's place (content.go)
-	input  textinput.Model
-	area   textarea.Model
-	choice int
+	mode  inputMode
+	focus loop.FocusMsg
+	ring  string     // the element the viewer's focus ring is on ("" = none)
+	media *mediaView // a picture shown in the page's place (content.go)
+
+	// Video (player.go): the helper, the media directory, the player, and
+	// the navigation that may be downloading.
+	bridge      *MediaBridge
+	mediaDir    string
+	player      *player
+	navCancel   context.CancelFunc
+	downloading atomic.Bool
+	input       textinput.Model
+	area        textarea.Model
+	choice      int
 }
 
 // viewerOptions tunes the nthtml viewer for a page that re-flows often and
@@ -155,6 +166,15 @@ func (m *Model) navigate(href string, hist int, anyOrigin bool) tea.Cmd {
 	policy.Origin, policy.AnyOrigin, policy.MaxBody = m.current, anyOrigin, 1<<20
 	policy.Timeout = navTimeout
 	gates := m.profile
+	if m.navCancel != nil {
+		m.navCancel() // a newer navigation wins; an unfinished download stops
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), navTimeout)
+	m.navCancel = cancel
+	var video *videoTarget
+	if m.bridge != nil {
+		video = &videoTarget{dir: m.mediaDir, cap: m.profile.MaxMediaBytes, active: &m.downloading, dead: m.bridge.dead.Load(), progress: func(n int64) { m.bridge.send(videoProgressMsg{n}) }}
+	}
 	return func() tea.Msg {
 		u, err := url.Parse(href)
 		if err != nil {
@@ -175,9 +195,8 @@ func (m *Model) navigate(href string, hist int, anyOrigin bool) tea.Cmd {
 			policy.Origin = u // first page: nothing to be same-origin with but itself
 		}
 		f := netpolicy.New(policy)
-		ctx, cancel := context.WithTimeout(context.Background(), navTimeout)
 		defer cancel()
-		msg := load(ctx, f, u.String(), gates, pageLoadedMsg{seq: seq, hist: hist})
+		msg := load(ctx, f, u.String(), gates, video, pageLoadedMsg{seq: seq, hist: hist})
 		msg.base, _ = url.Parse(msg.finalURL)
 		return msg
 	}
@@ -190,6 +209,9 @@ func (m *Model) anyOriginFor() bool { return m.nav != NavAllowlist }
 // admit applies the NavMode to a link the page did not prevent, or to a form
 // submission (same gate, its own confirmation wording).
 func (m *Model) admit(href string, form bool) tea.Cmd {
+	if m.downloading.Load() {
+		return nil // one video at a time
+	}
 	u, err := url.Parse(href)
 	if err != nil {
 		m.status = clean("bad link: " + err.Error())
@@ -238,6 +260,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if v.seq != m.navSeq {
 			return m, nil // superseded by a later navigation
 		}
+		if errors.Is(v.err, context.Canceled) {
+			return m, nil // cancelled by the reader
+		}
 		if v.err != nil {
 			m.status = clean("load failed: " + v.err.Error()) // errors echo page-controlled input
 			return m, nil
@@ -245,6 +270,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if v.line != "" {
 			m.status = clean(v.line) // not presented; the current page stays
 			return m, nil
+		}
+		if v.video != "" {
+			return m, m.startPlayer(v.video) // an overlay: history and the page stay
 		}
 		m.current = v.base
 		m.resetView = true
@@ -321,6 +349,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case loop.NavigateMsg:
 		return m, m.admit(v.Href, v.Form)
+	case videoFrameMsg, videoStatusMsg, videoDeadMsg, videoProgressMsg:
+		return m, m.onVideo(msg)
 	case loop.FocusMsg:
 		return m, m.onFocus(v)
 	case tea.PasteMsg:
@@ -368,6 +398,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyPressMsg:
+		if m.downloading.Load() && v.String() == "esc" {
+			m.navCancel()
+			m.status = "download cancelled"
+			return m, nil
+		}
+		if m.player != nil {
+			if handled, cmd := m.playerKey(v); handled {
+				return m, cmd
+			}
+		}
 		searching := m.viewer != nil && m.viewer.SearchInputActive()
 		if m.pendingNav != "" && !searching {
 			switch v.String() {
@@ -391,12 +431,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			switch v.String() {
 			case "q", "ctrl+c":
-				m.closing = true
-				var closeCmd tea.Cmd
-				if m.viewer != nil {
-					closeCmd = m.viewer.Close()
-				}
-				return m, tea.Sequence(closeCmd, tea.Tick(shutdownGrace, func(time.Time) tea.Msg { return shutdownReadyMsg{} }))
+				return m, m.quit()
 			case "backspace", "alt+left":
 				return m, m.step(-1)
 			case "alt+right":
@@ -419,12 +454,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.media != nil {
 			media = m.media.setSize(v.Width, m.viewRows())
 		}
+		if m.player != nil {
+			media = m.player.pic.SetSize(v.Width, m.viewRows())
+			m.sendSize()
+		}
 		if m.viewer != nil {
 			cmd := tea.Batch(media, m.viewer.SetBounds(0, 0, v.Width, m.viewRows()), m.viewer.Update(msg))
 			m.loop.Resize(documentWidth(m.viewer)) // re-flow at the terminal's real pixel width
 			return m, cmd
 		}
 		return m, media
+	}
+	if m.player != nil {
+		return m, m.player.pic.Update(msg)
 	}
 	if m.media != nil {
 		return m, m.media.update(msg) // the picture shown in the page's place
@@ -433,6 +475,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.viewer.Update(msg)
 	}
 	return m, nil
+}
+
+// quit starts shutdown: graphics are cleaned up, then the program ends.
+func (m *Model) quit() tea.Cmd {
+	m.closing = true
+	var closeCmd tea.Cmd
+	if m.viewer != nil {
+		closeCmd = m.viewer.Close()
+	}
+	return tea.Sequence(closeCmd, tea.Tick(shutdownGrace, func(time.Time) tea.Msg { return shutdownReadyMsg{} }))
 }
 
 // viewRows is the viewer's height: the terminal minus the two status lines
@@ -451,7 +503,9 @@ func (m *Model) step(delta int) tea.Cmd {
 
 func (m *Model) View() tea.View {
 	body := ""
-	if m.media != nil {
+	if m.player != nil {
+		body = m.player.pic.View()
+	} else if m.media != nil {
 		body = m.media.view()
 	} else if m.viewer != nil {
 		body = m.viewer.View()
@@ -462,6 +516,9 @@ func (m *Model) View() tea.View {
 	if line, ok := m.formStatus(); ok && m.pendingNav == "" {
 		status = line // the editor or chooser; a confirm prompt always wins (pendingNav)
 	}
+	if m.player != nil {
+		status = ansi.Truncate(m.playerStatus(), max(1, m.cols), "…")
+	}
 	pos := ""
 	if len(m.history) > 1 {
 		pos = fmt.Sprintf(" · %d/%d", m.hIndex+1, len(m.history))
@@ -469,6 +526,9 @@ func (m *Model) View() tea.View {
 	help := "\n ntbrowser · " + ansi.Truncate(clean(m.title), 40, "…") + pos + " · profile " + clean(m.profile.Name) + " · Tab focus · Enter open · ⌫ back · ⌥→ fwd · ^R reload · / search · q quit"
 	if h := m.helpLine(); h != "" {
 		help = "\n" + h
+	}
+	if m.player != nil {
+		help = "\n Space pause · ←→ seek · Esc back · ^C quit"
 	}
 	v := tea.NewView(body + "\n" + status + help)
 	v.AltScreen = true

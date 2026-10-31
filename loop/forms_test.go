@@ -443,3 +443,62 @@ func TestChangeFiresOnBlur(t *testing.T) {
 	l.ClickAt(centre(boxOf(t, frame.Result, "j")))
 	waitLog(t, sink, "change ab")
 }
+
+func videoProfileLoop(t *testing.T, video bool, page string) (*Loop, chanSink, FrameMsg) {
+	t.Helper()
+	p := testProfile
+	if video {
+		p = p.WithVideo()
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	sink := make(chanSink, 256)
+	l := New(ctx, Config{Profile: p, Width: 400, MinFrame: 5 * time.Millisecond}, sink)
+	go l.Run()
+	l.LoadPage(page, "https://example.test/dir/page", nil)
+	f := waitFor(t, sink, func(m tea.Msg) bool { f, ok := m.(FrameMsg); return ok && f.Err == nil && f.Result != nil })
+	return l, sink, f.(FrameMsg)
+}
+
+const videoPage = `<p><video id=v width=100 height=50 src="clip.mp4" autoplay></video></p><script>console.log("play " + typeof document.getElementById("v").play)</script>`
+
+func TestVideoElementFocusableOnlyWhenOn(t *testing.T) {
+	l, sink, _ := videoProfileLoop(t, true, videoPage)
+	l.FocusNext(false)
+	f := waitFocus(t, sink)
+	if f.Source != "v" || f.Control.Kind != "video" {
+		t.Fatalf("%+v", f)
+	}
+	l.Activate()
+	if nav := waitNavigate(t, sink); nav.Href != "https://example.test/dir/clip.mp4" {
+		t.Fatalf("%+v", nav)
+	}
+	l2, sink2, _ := videoProfileLoop(t, false, videoPage)
+	l2.FocusNext(false)
+	noMessage(t, sink2, 200*time.Millisecond, func(m tea.Msg) bool { _, ok := m.(FocusMsg); return ok })
+}
+
+func TestVideoSourceChild(t *testing.T) {
+	l, sink, _ := videoProfileLoop(t, true, `<p><video id=v width=100 height=50><source src="a.ogg" type="audio/ogg"><source src="b.webm" type="video/webm"></video></p>`)
+	l.FocusNext(false)
+	waitFocus(t, sink)
+	l.Activate()
+	if nav := waitNavigate(t, sink); nav.Href != "https://example.test/dir/b.webm" {
+		t.Fatalf("%+v", nav)
+	}
+}
+
+func TestAutoplayIgnored(t *testing.T) {
+	_, sink, _ := videoProfileLoop(t, true, videoPage)
+	noMessage(t, sink, 300*time.Millisecond, isNavigate)
+}
+
+func TestScriptCannotStartVideo(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sink := make(chanSink, 256)
+	l := New(ctx, Config{Profile: testProfile.WithVideo(), Width: 400, MinFrame: 5 * time.Millisecond}, sink)
+	go l.Run()
+	l.LoadPage(videoPage, "https://example.test/", nil)
+	waitLog(t, sink, "play undefined")
+}

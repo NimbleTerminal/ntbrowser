@@ -11,6 +11,7 @@ import (
 
 	"nimbleterminal.dev/nthtml/document"
 
+	"nimbleterminal.dev/ntbrowser/content"
 	"nimbleterminal.dev/ntbrowser/dom"
 	"nimbleterminal.dev/ntbrowser/jsvm"
 )
@@ -173,12 +174,31 @@ func (l *Loop) clickControl(page *Page, target *dom.Node) bool {
 		return true
 	}
 	switch controlKind(target) {
-	case "checkbox", "radio", "button":
+	case "checkbox", "radio", "button", "video":
 		l.userFocus(page, target)
 		l.activate(page, target)
 		return true
 	}
 	return false
+}
+
+// videoSource is a <video>'s src, else its first <source> that is a video.
+func videoSource(page *Page, n *dom.Node) string {
+	if raw, ok := n.Attr("src"); ok {
+		return document.ResolveURL(page.Base, raw)
+	}
+	for _, c := range n.Children() {
+		if c.Tag() != "source" {
+			continue
+		}
+		raw, _ := c.Attr("src")
+		typ, _ := c.Attr("type")
+		href := document.ResolveURL(page.Base, raw)
+		if href != "" && content.Classify(typ, href) == content.Video {
+			return href
+		}
+	}
+	return ""
 }
 
 // sendFocus reports the current focus; moved (focus changed element) resets
@@ -285,6 +305,11 @@ func (l *Loop) activate(page *Page, n *dom.Node) {
 		l.report(ignoreDisabled(err))
 		if !prevented {
 			l.buttonDefault(page, n)
+		}
+	case "video":
+		// Only a reader action gets here; script has no play().
+		if href := videoSource(page, n); href != "" {
+			l.send(NavigateMsg{Href: href})
 		}
 	case "text", "password", "textarea", "select":
 		// The host edits or chooses; nothing happens in the page.
@@ -616,6 +641,8 @@ func (l *Loop) clickTarget(page *Page, area image.Rectangle) *dom.Node {
 
 func controlKind(n *dom.Node) string {
 	switch n.Tag() {
+	case "video":
+		return "video"
 	case "a":
 		if _, ok := n.Attr("href"); ok {
 			return "link"

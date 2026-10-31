@@ -294,8 +294,25 @@ func Focusable(n *Node) bool {
 		return ok
 	case "button", "input", "select", "textarea", "summary":
 		return true
+	case "video":
+		return n.playable
 	}
 	return false
+}
+
+// MarkVideos makes the document's <video> elements with a source focusable.
+// The loop calls it only when the profile opened video.
+func (t *Tree) MarkVideos() {
+	Walk(t.root, func(n *Node) {
+		if n.tag != "video" {
+			return
+		}
+		_, ok := n.Attr("src")
+		for _, c := range n.children {
+			ok = ok || c.tag == "source"
+		}
+		n.playable = ok
+	})
 }
 
 // InputType is an input's type attribute, lower-cased, "text" when missing.

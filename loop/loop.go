@@ -291,6 +291,9 @@ func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) {
 			res := time.Duration(ms) * time.Millisecond
 			cfg.Clock = func() time.Time { return time.Now().Truncate(res) }
 		}
+		if l.cfg.Profile.Media == profile.MediaVideo {
+			tree.MarkVideos()
+		}
 		page := &Page{Tree: tree, Fetcher: fetcher, Base: base, started: time.Now(), firstFrame: true, budgetWarned: map[string]bool{}, refused: map[string]bool{}, firing: map[dom.NodeID]bool{}, resetting: map[dom.NodeID]bool{}}
 		page.ctx, page.cancel = context.WithCancel(l.ctx)
 		page.Sandbox = jsvm.New(cfg, tree, (*host)(l))
