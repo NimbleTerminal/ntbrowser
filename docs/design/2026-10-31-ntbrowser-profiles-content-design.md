@@ -70,7 +70,7 @@ New packages: `profile` (data, validation, printing; no system imports) and `con
 
    | Gate | Values | Covers |
    |---|---|---|
-   | `navigate` | `off`, `allowlist`, `confirm`, `free` | top-level navigation (`off`: the start page only) |
+   | `navigate` | `off`, `allowlist`, `confirm`, `free` | top-level navigation. `off`: only the start URL given at launch is fetched, and nothing after it |
    | `subresources` | `off`, `origin`, `any` | stylesheets, images |
    | `fetch` | `off`, `origin`, `allowlist` | `fetch()` from page script |
    | `hosts` | list | what `allowlist` means |
@@ -79,7 +79,7 @@ New packages: `profile` (data, validation, printing; no system imports) and `con
    | `clock` | milliseconds | script clock resolution (speculation timing) |
    | `files` | `off`, `start-page`, `temp` | `start-page` reads the one `file:` URL given at launch; `temp` adds the private media directory |
    | `native-code` | `off`, `on` | any native code loaded at runtime (today: libmpv) |
-   | `media` | `off`, `image`, `animation`, `video` | the most a response may be presented as (cumulative) |
+   | `media` | `off`, `image`, `animation`, `video` | the most a top-level response may be presented as (cumulative). Images inside a page are the `subresources` gate; the printed table says so |
    | `max-media-bytes` | bytes | download cap for media |
    | `clipboard` | `off`, `copy` | selected-text copy to the terminal clipboard |
    | `environment` | `off` | reserved: nothing in the sandbox reads the environment |
@@ -101,9 +101,9 @@ New packages: `profile` (data, validation, printing; no system imports) and `con
    | `clipboard` | `off` | `copy` | `copy` |
    | enforcement | `required` | `best-effort` | `best-effort` |
 
-   `locked` still shows the start page. `browse` is exactly today's behaviour and is the default, so nothing changes for an existing command line. Video is never in a built-in: it takes `-media video` or a profile file, because it opens `native-code` and `files=temp`.
-4. **Choosing a profile.** `-profile name` picks a built-in; `-profile-file path` reads a JSON file with the same fields plus an optional `base` built-in. Unknown fields are errors. Existing flags remain and apply on top, and new flags exist for the remaining gates. The result is the *effective profile*.
-5. **Validation fails at startup, never later.** Dependencies are checked: `media=video` requires `native-code=on` and `files=temp`. A violation is an error naming the gate, and the program does not run.
+   `locked` still fetches and shows the one start URL, so its OS policy allows network to that host (decision 10). `browse` is exactly today's behaviour and is the default, so nothing changes for an existing command line. Video is never in a built-in.
+4. **Choosing a profile.** `-profile name` picks a built-in; `-profile-file path` reads a JSON file with the same fields plus an optional `base` built-in. Unknown fields are errors. Existing flags remain and apply on top, and new flags exist for the remaining gates. The result is the *effective profile*. The `-media video` flag is the one shorthand: it also sets `native-code=on` and `files=temp`, because a person typing it has asked for video, and `-show-profile` prints all three. A profile file gets no shorthand: it lists them or fails validation (decision 5).
+5. **Validation fails at startup, never later.** Dependencies are checked: `media=video` requires `native-code=on` and `files=temp`. So is the start URL (`ValidateStart`): a `file:` start URL under `files=off` is an error, so `ntbrowser -profile locked file:///x.html` does not run. A violation is an error naming the gate, and the program does not run.
 6. **`-show-profile` prints the effective profile as a table and exits**, including each gate's strength on this machine. The running app shows the profile's name in the help line.
 7. **Frozen and private** (**Evan**). The profile is built before the loop starts and passed by value. No binding exposes it, and nothing in `jsvm` can reach it. A page sees only that things fail, as it does for an unreachable host.
 8. **Each gate has a strength** (**Evan**), and the table reports the strongest that applies:
@@ -129,7 +129,7 @@ New packages: `profile` (data, validation, printing; no system imports) and `con
     - other `text/*`, JSON → `Text`
     - anything else, or an unreadable type → `Unknown`
     
-    The server's type is believed; a missing type or `application/octet-stream` goes by the URL's extension for media only, never to `Page`.
+    The server's type is believed; a missing type or `application/octet-stream` goes by the URL's extension for media only, never to `Page`. A `file:` start page has no type and is always `Page`, as today; local media files are not a feature of this round.
 14. **The body is read by kind, after the profile check.** `Page` and `Text`: 1 MiB, as today. `Image`, `Animation`, `Video`: up to `max-media-bytes` (default 64 MiB), read to memory for images and animations and to the temp directory for video. A kind the profile does not allow reads nothing: the connection is closed and the status line says why. `Content-Length` over the cap refuses before reading; a body that runs over it is cut off and the file deleted.
 15. **Unknown content is never interpreted.** The status line shows `video/x-foo · 362 KB · can't display`, and the current page stays. There is no download.
 16. **Plain text** is shown as a page of preformatted text: the loop escapes it into a `<pre>` document, without scripts.
@@ -148,7 +148,7 @@ New packages: `profile` (data, validation, printing; no system imports) and `con
 
 ### Video
 
-20. **Only a reader action starts video** (**Evan**: opt-in, click-to-play). Activating a link that resolves to a video, or a focused `<video>` element, starts it. Script cannot: there is no `play()` binding, and `autoplay` is ignored. A `<video>` with a `src` or a `<source>` child becomes focusable only when `media=video`; the first `<source>` whose `type` classifies as `Video` wins. With video off, activating one shows the status line `video is off in this profile`.
+20. **Only a reader action starts video** (**Evan**: opt-in, click-to-play). Activating a link that resolves to a video, or a focused `<video>` element, starts it. Script cannot: there is no `play()` binding, and `autoplay` is ignored. A `<video>` with a `src` or a `<source>` child becomes focusable only when `media=video`; the first `<source>` whose `type` classifies as `Video` wins. This is best-effort: nthtml gives `<video>` a box only with a known `width` or `height`, so one without has no box and cannot be reached, and nothing is synthesized for it. `poster` is not fetched this round. A poster image inside a link, the nimbleterminal.com case, is an ordinary `<img>` and works; that is the case this round must get right. With video off, activating one shows the status line `video is off in this profile`.
 21. **The player** is an `ntvideo.Model` filling the viewer's area, with `WithScrubber(true)`, in the app. Keys: Space pause, ←/→ seek 5 s, `m` mute, Esc back, Ctrl+C quit. All messages are forwarded to it while open. A page keeps running beneath it, and frames are not shown. Without libmpv, ntvideo's own message shows and Esc still returns.
 22. **Download first, then play.** The file comes through netpolicy, the page's own origin rules and the `navigate` gate, into a private directory (`os.MkdirTemp`, mode 0700, random file name, no extension from the URL), and ntvideo gets that local path. mpv never sees a URL, so every network request stays under netpolicy. The status line shows progress. The file is deleted when the player closes and the directory at exit; a crash leaves it in the OS temp area (accepted).
 23. **ntvideo is compiled in by default and removed with `-tags nomedia`,** as CJK is with `nocjk`. Its only import is in a build-tagged file in `app`. With `nomedia`, `media=video` fails validation, and `-show-profile` reports `compiled-out`. libmpv is loaded only when a video first plays, never at startup, and never when `native-code=off`.
@@ -169,6 +169,7 @@ type Profile struct {
 func Builtin(name string) (Profile, bool)
 func Parse(jsonBytes []byte) (Profile, error) // unknown fields are errors; base resolved
 func (p Profile) Validate() error
+func (p Profile) ValidateStart(rawURL string) error
 func (p Profile) Table(s Strengths) string
 
 // netpolicy
