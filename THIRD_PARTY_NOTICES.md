@@ -358,7 +358,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## github.com/dop251/goja v0.0.0-20261030192516-032d024709ca
+## github.com/dop251/goja v0.0.0-20261031103838-cf2ff0ec0b31
 
 ```
 Copyright (c) 2016 Dmitry Panov
@@ -1019,7 +1019,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## nimbleterminal.dev/ntfonts v0.2.0
+## nimbleterminal.dev/ntfonts v0.2.1
 
 The embedded font subsets are SIL OFL-1.1, renamed internally to Gloss Text; the module source is MIT.
 
@@ -2088,7 +2088,7 @@ FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
 ```
 
-## nimbleterminal.dev/nthtml v0.2.0
+## nimbleterminal.dev/nthtml v0.2.2
 
 ```
 MIT License
