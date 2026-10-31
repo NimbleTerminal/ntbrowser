@@ -9,7 +9,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"nimbleterminal.dev/ntbrowser/loop"
-	"nimbleterminal.dev/ntbrowser/netpolicy"
 )
 
 // drive runs a Cmd the way Bubble Tea would, feeding every message back into
@@ -51,9 +50,9 @@ func drive(m *Model, cmd tea.Cmd) string {
 func TestViewerKeepsKittyIDAndSendsZlib(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	l := loop.New(ctx, loop.Config{Width: 400}, dropSink{})
+	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400}, dropSink{})
 	go l.Run()
-	m := New(l, netpolicy.Policy{}, NavFree, "")
+	m := New(l, testProfile(nil, false, NavFree), "")
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 26})
 	_, cmd := m.Update(loop.FrameMsg{Gen: 1, Result: renderTall(t, `<p>v1</p>`)})
 	drive(m, cmd)

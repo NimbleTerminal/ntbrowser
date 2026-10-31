@@ -18,7 +18,7 @@ func formLoop(t *testing.T, page string) (*Loop, chanSink, FrameMsg) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	sink := make(chanSink, 256)
-	l := New(ctx, Config{Width: 400, MinFrame: 5 * time.Millisecond}, sink)
+	l := New(ctx, Config{Profile: testProfile, Width: 400, MinFrame: 5 * time.Millisecond}, sink)
 	go l.Run()
 	l.LoadPage(page, "https://example.test/form", nil)
 	f := waitFor(t, sink, func(m tea.Msg) bool { f, ok := m.(FrameMsg); return ok && f.Err == nil && f.Result != nil })
@@ -95,7 +95,7 @@ func TestScriptFocusIsNotUser(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	sink := make(chanSink, 256)
-	l := New(ctx, Config{Width: 400, MinFrame: 5 * time.Millisecond}, sink)
+	l := New(ctx, Config{Profile: testProfile, Width: 400, MinFrame: 5 * time.Millisecond}, sink)
 	go l.Run()
 	l.LoadPage(`<input id=a><input id=b><script>
 		document.getElementById("a").focus();

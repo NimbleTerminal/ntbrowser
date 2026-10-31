@@ -25,7 +25,7 @@ func loadExample(t *testing.T, name string, srv *httptest.Server) (*Loop, chanSi
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	sink := make(chanSink, 4096)
-	l := New(ctx, Config{Width: 400, MinFrame: time.Millisecond}, sink)
+	l := New(ctx, Config{Profile: testProfile, Width: 400, MinFrame: time.Millisecond}, sink)
 	go l.Run()
 	var f *netpolicy.Fetcher
 	base := "https://example.test/"

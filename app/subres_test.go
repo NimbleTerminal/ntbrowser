@@ -75,9 +75,9 @@ func TestFrameWarningsReachStatus(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	l := loop.New(ctx, loop.Config{Width: 400}, dropSink{})
+	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400}, dropSink{})
 	go l.Run()
-	m := New(l, netpolicy.Policy{}, NavFree, "")
+	m := New(l, testProfile(nil, false, NavFree), "")
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m.Update(loop.FrameMsg{Gen: 1, Result: res, Warnings: []string{"stylesheet \"x.css\": denied"}})
 	if !strings.Contains(m.status, `stylesheet "x.css"`) {
@@ -99,9 +99,9 @@ func TestSkippedSVGElementsStayOutOfStatus(t *testing.T) {
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	l := loop.New(ctx, loop.Config{Width: 400}, dropSink{})
+	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400}, dropSink{})
 	go l.Run()
-	m := New(l, netpolicy.Policy{}, NavFree, "")
+	m := New(l, testProfile(nil, false, NavFree), "")
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m.Update(loop.LogMsg{Level: "log", Line: "hello from the page"})
 	m.Update(loop.FrameMsg{Gen: 1, Result: res})

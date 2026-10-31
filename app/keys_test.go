@@ -10,16 +10,15 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"nimbleterminal.dev/ntbrowser/loop"
-	"nimbleterminal.dev/ntbrowser/netpolicy"
 )
 
 func newModel(t *testing.T, nav NavMode) *Model {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
-	l := loop.New(ctx, loop.Config{Width: 400}, dropSink{})
+	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400}, dropSink{})
 	go l.Run()
-	m := New(l, netpolicy.Policy{AllowHosts: []string{"cdn.test"}}, nav, "")
+	m := New(l, testProfile([]string{"cdn.test"}, false, nav), "")
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m.Update(loop.FrameMsg{Gen: 1, Result: renderTall(t, `<p>x</p>`)})
 	m.current = mustURL(t, "https://page.test/a")

@@ -10,7 +10,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"nimbleterminal.dev/ntbrowser/loop"
-	"nimbleterminal.dev/ntbrowser/netpolicy"
 )
 
 func hasTerminalControls(s string) bool {
@@ -30,9 +29,9 @@ func hasTerminalControls(s string) bool {
 func TestViewNeverCarriesTerminalEscapes(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	l := loop.New(ctx, loop.Config{Width: 400}, dropSink{})
+	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400}, dropSink{})
 	go l.Run()
-	m := New(l, netpolicy.Policy{}, NavConfirm, "")
+	m := New(l, testProfile(nil, false, NavConfirm), "")
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	osc52 := "\x1b]52;c;SGVsbG8=\x07"
 	m.Update(loop.TitleMsg{Title: "Owned" + osc52 + "\x9d title   line"})
@@ -65,9 +64,9 @@ func TestViewNeverCarriesTerminalEscapes(t *testing.T) {
 func TestHistoryMovesOnlyOnSuccessAndLatestNavigationWins(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	l := loop.New(ctx, loop.Config{Width: 400}, dropSink{})
+	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400}, dropSink{})
 	go l.Run()
-	m := New(l, netpolicy.Policy{}, NavFree, "")
+	m := New(l, testProfile(nil, false, NavFree), "")
 	m.history, m.hIndex = []string{"https://a.test/", "https://b.test/"}, 1
 	m.current = mustURL(t, "https://b.test/")
 
@@ -105,9 +104,9 @@ func TestFirstFrameReflowsAtTerminalWidth(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	sink := make(chan tea.Msg, 256)
-	l := loop.New(ctx, loop.Config{Width: 800, MinFrame: time.Millisecond}, chanSink(sink))
+	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 800, MinFrame: time.Millisecond}, chanSink(sink))
 	go l.Run()
-	m := New(l, netpolicy.Policy{}, NavFree, "")
+	m := New(l, testProfile(nil, false, NavFree), "")
 	m.Update(tea.WindowSizeMsg{Width: 200, Height: 50})
 	l.LoadPage(`<p>hello</p>`, "https://example.test/", nil)
 
@@ -148,9 +147,9 @@ func (c chanSink) Send(m tea.Msg) { c <- m }
 func TestFrameWithoutWarningsKeepsStatus(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	l := loop.New(ctx, loop.Config{Width: 400}, dropSink{})
+	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400}, dropSink{})
 	go l.Run()
-	m := New(l, netpolicy.Policy{}, NavFree, "")
+	m := New(l, testProfile(nil, false, NavFree), "")
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m.Update(loop.FrameMsg{Gen: 1, Result: renderTall(t, `<p>x</p>`)})
 	m.Update(loop.LogMsg{Level: "log", Line: "hello from the page"})
@@ -165,9 +164,9 @@ func TestFrameWithoutWarningsKeepsStatus(t *testing.T) {
 func TestFirstFrameClearsLoadingStatus(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	l := loop.New(ctx, loop.Config{Width: 400}, dropSink{})
+	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400}, dropSink{})
 	go l.Run()
-	m := New(l, netpolicy.Policy{}, NavFree, "")
+	m := New(l, testProfile(nil, false, NavFree), "")
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m.Update(pageLoadedMsg{html: "<p>x</p>", base: mustURL(t, "https://example.test/"), seq: m.navSeq, hist: pushNew})
 	if !strings.HasPrefix(m.status, "loading ") {

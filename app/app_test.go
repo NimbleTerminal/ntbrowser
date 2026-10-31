@@ -10,7 +10,6 @@ import (
 	"nimbleterminal.dev/nthtml/document"
 
 	"nimbleterminal.dev/ntbrowser/loop"
-	"nimbleterminal.dev/ntbrowser/netpolicy"
 )
 
 type dropSink struct{}
@@ -33,9 +32,9 @@ func renderTall(t *testing.T, body string) *document.Result {
 func TestReflowKeepsScrollAndNewPageResetsIt(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	l := loop.New(ctx, loop.Config{Width: 400}, dropSink{})
+	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400}, dropSink{})
 	go l.Run()
-	m := New(l, netpolicy.Policy{}, NavFree, "")
+	m := New(l, testProfile(nil, false, NavFree), "")
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 26})
 
 	first := renderTall(t, `<p>v1</p>`)

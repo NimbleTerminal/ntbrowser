@@ -14,7 +14,7 @@ func TestTimerFloodIsCappedAndLoopStaysResponsive(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	sink := make(chanSink, 4096)
-	l := New(ctx, Config{Width: 200, MinFrame: time.Millisecond}, sink)
+	l := New(ctx, Config{Profile: testProfile, Width: 200, MinFrame: time.Millisecond}, sink)
 	go l.Run()
 	l.LoadPage(`<body><p id="p">0</p><script>
 	  setTimeout(() => { document.getElementById("p").textContent = "alive"; }, 1); // registered before the flood: once saturated, nothing else gets a slot

@@ -16,7 +16,7 @@ func TestCJKFallbackFace(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	sink := make(chanSink, 64)
-	l := New(ctx, Config{Width: 400, MinFrame: 5 * time.Millisecond}, sink)
+	l := New(ctx, Config{Profile: testProfile, Width: 400, MinFrame: 5 * time.Millisecond}, sink)
 	go l.Run()
 	l.LoadPage(`<p>漢字かな한글 Tiếng ₹</p>`, origin.String(), netpolicy.New(netpolicy.Policy{Origin: origin}))
 	want := 6 // 漢字かな한글

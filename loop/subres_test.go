@@ -66,7 +66,7 @@ func newSubresLoop(t *testing.T, cfg subres.Config) (*Loop, chanSink) {
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	sink := make(chanSink, 512)
-	l := New(ctx, Config{Width: 400, MinFrame: time.Millisecond, Subresources: cfg, SubresourceTransport: func(base string) subres.Transport {
+	l := New(ctx, Config{Profile: testProfile, Width: 400, MinFrame: time.Millisecond, Subresources: cfg, SubresourceTransport: func(base string) subres.Transport {
 		u, _ := url.Parse(base)
 		return netpolicy.New(netpolicy.Policy{Origin: u, AllowPrivate: true, AnyOrigin: cfg.Mode == subres.ModeAny, NoDowngradeFrom: u.Scheme, MaxBody: 1 << 20, MaxInFlight: 6})
 	}}, sink)
@@ -669,7 +669,7 @@ func TestRendererRefusalDropsInjectedSheets(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	sink := make(chanSink, 512)
-	l := New(ctx, Config{Width: 400, MinFrame: time.Millisecond, RenderLimit: document.Limits{Bytes: 4096}, Subresources: subres.Config{}, SubresourceTransport: func(base string) subres.Transport {
+	l := New(ctx, Config{Profile: testProfile, Width: 400, MinFrame: time.Millisecond, RenderLimit: document.Limits{Bytes: 4096}, Subresources: subres.Config{}, SubresourceTransport: func(base string) subres.Transport {
 		u, _ := url.Parse(base)
 		return netpolicy.New(netpolicy.Policy{Origin: u, AllowPrivate: true, AnyOrigin: true, MaxBody: 1 << 20, MaxInFlight: 6})
 	}}, sink)

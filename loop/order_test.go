@@ -31,7 +31,7 @@ func pageState(t *testing.T, l *Loop) (base string, killed, disabled bool) {
 func TestLatestLoadPageWins(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	l := New(ctx, Config{Width: 200, Inbox: 1}, make(chanSink, 4096)) // tiny inbox forces the goroutine handoff path
+	l := New(ctx, Config{Profile: testProfile, Width: 200, Inbox: 1}, make(chanSink, 4096)) // tiny inbox forces the goroutine handoff path
 	go l.Run()
 	for i := 0; i < 50; i++ {
 		l.LoadPage(`<title>A</title><p>a</p>`, "https://a.test/", nil)
@@ -62,7 +62,7 @@ func TestLinkActivatedMatchesNthtmlLinks(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	sink := make(chanSink, 256)
-	l := New(ctx, Config{Width: 400, MinFrame: time.Millisecond}, sink)
+	l := New(ctx, Config{Profile: testProfile, Width: 400, MinFrame: time.Millisecond}, sink)
 	go l.Run()
 	l.LoadPage(`<!doctype html><body>
 <a href="HTTP://example.test/A"><img alt="" width="20" height="20"></a>
@@ -134,7 +134,7 @@ func TestDisabledPageIsDropped(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	sink := make(chanSink, 256)
-	l := New(ctx, Config{Width: 200, Script: jsvm.Config{Slice: 5 * time.Millisecond, Strikes: 1}}, sink)
+	l := New(ctx, Config{Profile: testProfile, Width: 200, Script: jsvm.Config{Slice: 5 * time.Millisecond, Strikes: 1}}, sink)
 	go l.Run()
 	l.LoadPage(`<body><a href="/go">go</a><script>
 	  document.querySelector("a").addEventListener("click", e => e.preventDefault());
@@ -186,7 +186,7 @@ func TestNilFetcherDeniesInsteadOfPanicking(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	sink := make(chanSink, 256)
-	l := New(ctx, Config{Width: 200, ExternalScripts: true}, sink)
+	l := New(ctx, Config{Profile: externalProfile, Width: 200}, sink)
 	go l.Run()
 	l.LoadPage(`<body><script src="https://x.test/a.js"></script><script>
 	  fetch("https://x.test/d").catch(e => console.log("fetch refused " + (e instanceof Error)));

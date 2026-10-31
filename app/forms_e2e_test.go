@@ -11,7 +11,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"nimbleterminal.dev/ntbrowser/loop"
-	"nimbleterminal.dev/ntbrowser/netpolicy"
 )
 
 // TestSearchFormEndToEnd drives the whole path a reader takes: load a page
@@ -34,9 +33,9 @@ func TestSearchFormEndToEnd(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	sink := make(chanSink, 256)
-	l := loop.New(ctx, loop.Config{Width: 400, MinFrame: 5 * time.Millisecond}, sink)
+	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400, MinFrame: 5 * time.Millisecond}, sink)
 	go l.Run()
-	m := New(l, netpolicy.Policy{AllowPrivate: true}, NavFree, srv.URL+"/")
+	m := New(l, testProfile(nil, true, NavFree), srv.URL+"/")
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m.Update(m.Init()())
 

@@ -7,7 +7,7 @@ A secure, non-JIT terminal web runtime: a hardened pure-Go JavaScript interprete
 ## Usage
 
 ```
-ntbrowser [-allow host] [-allow-private] [-nav free|allowlist|confirm] [-subresources any|origin|off] [-external-scripts] [-width px] [-slice 50ms] [-seed n] URL
+ntbrowser [-profile locked|reader|browse] [-profile-file path] [-show-profile] [gate flags] [-width px] [-slice 50ms] [-seed n] URL
 ```
 
 `URL` is `http(s)://…` or, for the start page only, `file://…`.

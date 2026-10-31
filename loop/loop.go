@@ -34,6 +34,7 @@ import (
 	"nimbleterminal.dev/ntbrowser/dom"
 	"nimbleterminal.dev/ntbrowser/jsvm"
 	"nimbleterminal.dev/ntbrowser/netpolicy"
+	"nimbleterminal.dev/ntbrowser/profile"
 	"nimbleterminal.dev/ntbrowser/subres"
 )
 
@@ -119,9 +120,9 @@ type Config struct {
 	Inbox       int // buffered tasks (default 256)
 	Outbox      int // buffered messages to the UI (default 1024)
 	Script      jsvm.Config
-	// ExternalScripts fetches <script src> through the page's Fetcher. Off
-	// by default: reader mode runs inline scripts only.
-	ExternalScripts bool
+	// Profile is the frozen security profile. Its zero value has every gate
+	// closed: no script runs and fetch() is refused.
+	Profile profile.Profile
 	// Subresources bounds stylesheet and image loading; zero fields take
 	// subres defaults. SubresourceTransport builds the transport for a page
 	// base (nil, or Subresources.Mode == subres.ModeOff, loads nothing).
@@ -286,6 +287,10 @@ func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) {
 		}
 		cfg := l.cfg.Script
 		cfg.Location = base
+		if ms := l.cfg.Profile.ClockMillis; ms > 0 && cfg.Clock == nil {
+			res := time.Duration(ms) * time.Millisecond
+			cfg.Clock = func() time.Time { return time.Now().Truncate(res) }
+		}
 		page := &Page{Tree: tree, Fetcher: fetcher, Base: base, started: time.Now(), firstFrame: true, budgetWarned: map[string]bool{}, refused: map[string]bool{}, firing: map[dom.NodeID]bool{}, resetting: map[dom.NodeID]bool{}}
 		page.ctx, page.cancel = context.WithCancel(l.ctx)
 		page.Sandbox = jsvm.New(cfg, tree, (*host)(l))
@@ -330,12 +335,15 @@ func (l *Loop) dropPage(page *Page) {
 // the sequence until its body arrives, preserving document order; the
 // sequence resumes on the VM goroutine.
 func (l *Loop) runScripts(page *Page, i int) {
+	if !l.cfg.Profile.ScriptsOn() {
+		return // the scripts gate: not even DOMContentLoaded
+	}
 	for ; i < len(page.Tree.Scripts); i++ {
 		sc := page.Tree.Scripts[i]
 		switch {
 		case sc.Inline != "":
 			l.report(page.Sandbox.Eval(fmt.Sprintf("%s#inline-%d", page.Base, i), sc.Inline))
-		case sc.Src != "" && l.cfg.ExternalScripts:
+		case sc.Src != "" && l.cfg.Profile.Scripts == profile.ScriptsExternal:
 			next := i + 1
 			go func() {
 				resp, err := page.Fetcher.Do(page.ctx, netpolicy.Request{Method: "GET", URL: sc.Src})
@@ -863,7 +871,13 @@ func (h *host) Fetch(req jsvm.FetchRequest, done func(jsvm.FetchResponse, error)
 		return errors.New("no page")
 	}
 	go func() {
-		resp, err := page.Fetcher.Do(page.ctx, netpolicy.Request{Method: req.Method, URL: req.URL, Headers: req.Headers, Body: req.Body})
+		var resp netpolicy.Response
+		var err error
+		if f := l.cfg.Profile.Fetch; f == profile.FetchOrigin || f == profile.FetchAllowlist {
+			resp, err = page.Fetcher.Do(page.ctx, netpolicy.Request{Method: req.Method, URL: req.URL, Headers: req.Headers, Body: req.Body})
+		} else {
+			err = fmt.Errorf("%w: fetch is off", netpolicy.ErrDenied)
+		}
 		l.post(func() {
 			if l.page != page {
 				return // promise belongs to a discarded runtime; let it be collected

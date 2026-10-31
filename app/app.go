@@ -22,31 +22,18 @@ import (
 
 	"nimbleterminal.dev/ntbrowser/loop"
 	"nimbleterminal.dev/ntbrowser/netpolicy"
+	"nimbleterminal.dev/ntbrowser/profile"
 )
 
-// NavMode is how link navigation is admitted (decision 11, user-configurable).
-type NavMode int
+// NavMode is how link navigation is admitted: the profile's navigate gate.
+type NavMode = profile.Navigate
 
 const (
-	// NavFree: a user-activated link may open any http(s) origin, like a browser.
-	NavFree NavMode = iota
-	// NavAllowlist: navigation is confined to the current origin plus -allow.
-	NavAllowlist
-	// NavConfirm: leaving the current origin asks in the status line first.
-	NavConfirm
+	NavOff       = profile.NavOff
+	NavFree      = profile.NavFree      // a reader-activated link may open any http(s) origin, like a browser
+	NavAllowlist = profile.NavAllowlist // confined to the current origin plus the profile's hosts
+	NavConfirm   = profile.NavConfirm   // leaving the current origin asks in the status line first
 )
-
-func ParseNavMode(s string) (NavMode, error) {
-	switch strings.ToLower(s) {
-	case "", "free":
-		return NavFree, nil
-	case "allowlist":
-		return NavAllowlist, nil
-	case "confirm":
-		return NavConfirm, nil
-	}
-	return 0, fmt.Errorf("unknown navigation mode %q (free|allowlist|confirm)", s)
-}
 
 type pageLoadedMsg struct {
 	html string
@@ -67,7 +54,8 @@ const shutdownGrace = 150 * time.Millisecond
 type Model struct {
 	loop    *loop.Loop
 	viewer  *nthtml.Model
-	policy  netpolicy.Policy // template; Origin is set per navigation
+	profile profile.Profile  // frozen at launch
+	policy  netpolicy.Policy // template derived from it; Origin is set per navigation
 	nav     NavMode
 	cols    int
 	rows    int
@@ -118,8 +106,13 @@ var viewerOptions = nthtml.ModelOptions{
 	},
 }
 
-func New(l *loop.Loop, policy netpolicy.Policy, nav NavMode, start string) *Model {
-	return &Model{loop: l, policy: policy, nav: nav, cols: 80, rows: 24, start: start, hIndex: -1}
+func New(l *loop.Loop, p profile.Profile, start string) *Model {
+	return &Model{loop: l, profile: p, policy: PolicyFor(p), nav: p.Navigate, cols: 80, rows: 24, start: start, hIndex: -1}
+}
+
+// PolicyFor is the network policy template a profile implies.
+func PolicyFor(p profile.Profile) netpolicy.Policy {
+	return netpolicy.Policy{AllowHosts: append([]string(nil), p.Hosts...), AllowPrivate: p.PrivateNetwork}
 }
 
 func (m *Model) Init() tea.Cmd { return m.navigate(m.start, pushNew, true) }
@@ -196,6 +189,7 @@ func (m *Model) admit(href string, form bool) tea.Cmd {
 	}
 	sameOrigin := m.current != nil && m.current.Scheme == u.Scheme && strings.EqualFold(m.current.Host, u.Host)
 	switch m.nav {
+	case NavFree:
 	case NavAllowlist:
 		p := m.policy
 		p.Origin = m.current
@@ -203,6 +197,9 @@ func (m *Model) admit(href string, form bool) tea.Cmd {
 			m.status = clean("blocked: " + err.Error())
 			return nil
 		}
+	default:
+		m.status = "blocked: navigation is off in this profile"
+		return nil
 	case NavConfirm:
 		if !sameOrigin {
 			m.pendingNav = href
@@ -250,6 +247,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		p := m.policy
 		p.Origin = v.base
+		if m.profile.Fetch != profile.FetchAllowlist {
+			p.AllowHosts = nil // the page's own fetch(): the hosts are for allowlist only
+		}
 		m.loop.LoadPage(v.html, v.base.String(), netpolicy.New(p))
 		m.status = clean("loading " + v.base.String())
 		return m, m.leaveForms()
@@ -325,6 +325,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.loop.LinkActivated(v.Link)
 		return m, nil
 	case nthtml.CopyMsg:
+		if m.profile.Clipboard != profile.ClipboardCopy {
+			return m, nil
+		}
 		return m, tea.SetClipboard(v.Text)
 
 	case tea.MouseClickMsg:
@@ -431,7 +434,7 @@ func (m *Model) View() tea.View {
 	if len(m.history) > 1 {
 		pos = fmt.Sprintf(" · %d/%d", m.hIndex+1, len(m.history))
 	}
-	help := "\n ntbrowser · " + ansi.Truncate(clean(m.title), 40, "…") + pos + " · Tab focus · Enter open · ⌫ back · ⌥→ fwd · ^R reload · / search · q quit"
+	help := "\n ntbrowser · " + ansi.Truncate(clean(m.title), 40, "…") + pos + " · profile " + clean(m.profile.Name) + " · Tab focus · Enter open · ⌫ back · ⌥→ fwd · ^R reload · / search · q quit"
 	if h := m.helpLine(); h != "" {
 		help = "\n" + h
 	}
