@@ -3,9 +3,11 @@ package sandbox
 import (
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -49,6 +51,14 @@ func child(tmp string, locked bool) int {
 	}
 	_, readErr := os.ReadFile("/etc/passwd")
 	writeErr := os.WriteFile(filepath.Join(os.Getenv("NT_SANDBOX_OUTSIDE"), "x"), []byte("x"), 0o600)
+	if !locked {
+		if c, err := net.Dial("unix", os.Getenv("NT_SANDBOX_SOCK")); err != nil {
+			fmt.Println("control socket:", err)
+			return 4
+		} else {
+			c.Close()
+		}
+	}
 	execErr := exec.Command("/bin/ls", "/").Run()
 	tempErr := os.WriteFile(filepath.Join(tmp, "ok"), []byte("x"), 0o600)
 	if tempErr != nil {
@@ -74,6 +84,22 @@ func child(tmp string, locked bool) int {
 		fmt.Println("exec not denied")
 		return 7
 	}
+	victim := os.Getenv("NT_SANDBOX_VICTIM")
+	if err := os.Truncate(victim, 0); !denied(err) {
+		fmt.Println("truncate not denied:", err)
+		return 8
+	}
+	if err := os.Chmod(victim, 0o777); !denied(err) {
+		fmt.Println("chmod not denied:", err)
+		return 8
+	}
+	if runtime.GOOS == "darwin" {
+		if c, err := net.Dial("unix", os.Getenv("NT_SANDBOX_SOCK")); err == nil {
+			c.Close()
+			fmt.Println("unix socket not denied")
+			return 9
+		}
+	}
 	return 0
 }
 
@@ -86,7 +112,22 @@ func runChild(t *testing.T, mode string) (string, error) {
 	tmp := t.TempDir()
 	cmd := childCommand(t, exe, mode, tmp)
 	cmd.Env = append(os.Environ(), cmd.Env...)
-	cmd.Env = append(cmd.Env, "NT_SANDBOX_CHILD="+tmp, "NT_SANDBOX_MODE="+mode, "NT_SANDBOX_OUTSIDE="+t.TempDir())
+	outside := t.TempDir()
+	victim := filepath.Join(outside, "victim")
+	if err := os.WriteFile(victim, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	sock, err := os.MkdirTemp("/tmp", "nts")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.RemoveAll(sock) })
+	l, err := net.Listen("unix", filepath.Join(sock, "s"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l.Close()
+	cmd.Env = append(cmd.Env, "NT_SANDBOX_CHILD="+tmp, "NT_SANDBOX_MODE="+mode, "NT_SANDBOX_OUTSIDE="+outside, "NT_SANDBOX_VICTIM="+victim, "NT_SANDBOX_SOCK="+filepath.Join(sock, "s"))
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
@@ -121,13 +162,17 @@ func TestRequiredFailsWhenUnavailable(t *testing.T) {
 }
 
 func TestStrengthsReportWhatApplied(t *testing.T) {
-	if s := strengths(false); len(s) != 0 {
+	want := profile.Strengths{"native-code": profile.StrengthCompiledOut}
+	if s := strengths(false); len(s) != 1 || s["native-code"] != want["native-code"] {
 		t.Fatalf("nothing applied but reported %v", s)
 	}
 	s := strengths(true)
-	for _, gate := range []string{"files", "process", "native-code"} {
+	for _, gate := range []string{"files", "process"} {
 		if s[gate] != profile.StrengthOS {
 			t.Errorf("%s: %q", gate, s[gate])
 		}
+	}
+	if s["native-code"] != profile.StrengthCompiledOut {
+		t.Errorf("native-code: %q", s["native-code"])
 	}
 }

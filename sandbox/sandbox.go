@@ -66,10 +66,11 @@ func checkRequired(p profile.Profile, applied bool) error {
 
 // strengths reports the gates the kernel holds.
 func strengths(applied bool) profile.Strengths {
-	if !applied {
-		return profile.Strengths{}
+	s := profile.Strengths{"native-code": profile.StrengthCompiledOut} // this binary links none
+	if applied {
+		s["files"], s["process"] = profile.StrengthOS, profile.StrengthOS
 	}
-	return profile.Strengths{"files": profile.StrengthOS, "process": profile.StrengthOS, "native-code": profile.StrengthOS, "environment": profile.StrengthChecked}
+	return s
 }
 
 // Probe reports the strengths this machine could apply, for -show-profile.

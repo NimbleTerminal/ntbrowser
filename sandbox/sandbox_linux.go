@@ -36,14 +36,30 @@ const (
 	accessMakeBlock  = 1 << 11
 	accessMakeSym    = 1 << 12
 
-	accessAll    = accessMakeSym<<1 - 1
+	accessRefer    = 1 << 13 // ABI 2
+	accessTruncate = 1 << 14 // ABI 3
+
+	accessV1     = accessMakeSym<<1 - 1
 	accessRead   = accessReadFile | accessReadDir
-	accessFileRW = accessReadFile | accessWriteFile
-	accessDirRW  = accessAll &^ accessExecute
+	accessFileRW = accessReadFile | accessWriteFile | accessTruncate
+	accessDirRW  = (accessV1 | accessRefer | accessTruncate) &^ accessExecute
+	accessFile   = accessExecute | accessReadFile | accessWriteFile | accessTruncate // all a rule on a file may hold
+
+	netBindTCP    = 1 << 0 // ABI 4
+	netConnectTCP = 1 << 1
+
+	scopeAbstractUnix = 1 << 0 // ABI 6
+	scopeSignal       = 1 << 1
+)
+
+// Missing from package syscall on some architectures.
+const (
+	oPath           = 0x200000 // O_PATH
+	prSetNoNewPrivs = 38       // PR_SET_NO_NEW_PRIVS
 )
 
 type landlockRulesetAttr struct {
-	HandledAccessFS, HandledAccessNet uint64
+	HandledAccessFS, HandledAccessNet, Scoped uint64
 }
 
 type landlockPathBeneath struct {
@@ -51,11 +67,17 @@ type landlockPathBeneath struct {
 	ParentFD      int32
 }
 
-// Available reports whether the kernel has landlock.
-func Available() bool {
+// landlockABI is the kernel's landlock version, 0 without it.
+func landlockABI() int {
 	v, _, errno := syscall.Syscall(sysLandlockCreateRuleset, 0, 0, landlockCreateRulesetVersion)
-	return errno == 0 && int(v) > 0
+	if errno != 0 {
+		return 0
+	}
+	return int(v)
 }
+
+// Available reports whether the kernel has landlock.
+func Available() bool { return landlockABI() > 0 }
 
 // SandboxedArg marks a re-executed process; Linux never re-executes.
 const SandboxedArg = "--sandboxed"
@@ -73,20 +95,40 @@ var readPaths = []string{
 }
 
 // ruleset is the landlock policy for the given paths.
-type ruleset struct{ fd int }
+type ruleset struct {
+	fd      int
+	handled uint64
+}
 
-func newRuleset() (*ruleset, error) {
-	attr := landlockRulesetAttr{HandledAccessFS: accessAll}
-	fd, _, errno := syscall.Syscall(sysLandlockCreateRuleset, uintptr(unsafe.Pointer(&attr)), 16, 0)
+// newRuleset handles everything this kernel's landlock can. isolated also
+// refuses TCP and signals or abstract sockets outside the sandbox, on kernels
+// that can; the helper's only connection is the one it inherits.
+func newRuleset(isolated bool) (*ruleset, error) {
+	abi := landlockABI()
+	attr := landlockRulesetAttr{HandledAccessFS: accessV1}
+	size := uintptr(8)
+	if abi >= 2 {
+		attr.HandledAccessFS |= accessRefer
+	}
+	if abi >= 3 {
+		attr.HandledAccessFS |= accessTruncate
+	}
+	if isolated && abi >= 4 {
+		attr.HandledAccessNet, size = netBindTCP|netConnectTCP, 16
+	}
+	if isolated && abi >= 6 {
+		attr.Scoped, size = scopeAbstractUnix|scopeSignal, 24
+	}
+	fd, _, errno := syscall.Syscall(sysLandlockCreateRuleset, uintptr(unsafe.Pointer(&attr)), size, 0)
 	if errno != 0 {
 		return nil, fmt.Errorf("landlock: %w", errno)
 	}
-	return &ruleset{fd: int(fd)}, nil
+	return &ruleset{fd: int(fd), handled: attr.HandledAccessFS}, nil
 }
 
 // add allows access beneath path; a missing path is skipped.
 func (r *ruleset) add(path string, access uint64) error {
-	f, err := os.OpenFile(path, syscall.O_PATH|syscall.O_CLOEXEC, 0)
+	f, err := os.OpenFile(path, oPath|syscall.O_CLOEXEC, 0)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil
 	}
@@ -95,9 +137,9 @@ func (r *ruleset) add(path string, access uint64) error {
 	}
 	defer f.Close()
 	if st, err := f.Stat(); err == nil && !st.IsDir() {
-		access &= accessExecute | accessReadFile | accessWriteFile // file rules take file rights only
+		access &= accessFile // file rules take file rights only
 	}
-	rule := landlockPathBeneath{AllowedAccess: access, ParentFD: int32(f.Fd())}
+	rule := landlockPathBeneath{AllowedAccess: access & r.handled, ParentFD: int32(f.Fd())}
 	_, _, errno := syscall.Syscall6(sysLandlockAddRule, uintptr(r.fd), landlockRulePathBeneath, uintptr(unsafe.Pointer(&rule)), 0, 0, 0)
 	runtime.KeepAlive(f)
 	if errno != 0 {
@@ -108,7 +150,7 @@ func (r *ruleset) add(path string, access uint64) error {
 
 // restrict applies the ruleset to every thread; the process cannot undo it.
 func (r *ruleset) restrict() error {
-	if _, _, errno := syscall.AllThreadsSyscall(syscall.SYS_PRCTL, syscall.PR_SET_NO_NEW_PRIVS, 1, 0); errno != 0 {
+	if _, _, errno := syscall.AllThreadsSyscall(syscall.SYS_PRCTL, prSetNoNewPrivs, 1, 0); errno != 0 {
 		return fmt.Errorf("no_new_privs: %w", errno)
 	}
 	if _, _, errno := syscall.AllThreadsSyscall(sysLandlockRestrictSelf, uintptr(r.fd), 0, 0); errno != 0 {
@@ -119,7 +161,7 @@ func (r *ruleset) restrict() error {
 }
 
 func mainRuleset(start, tempDir string, canRead bool) (*ruleset, error) {
-	r, err := newRuleset()
+	r, err := newRuleset(false)
 	if err != nil {
 		return nil, err
 	}
@@ -149,8 +191,11 @@ func mainRuleset(start, tempDir string, canRead bool) (*ruleset, error) {
 	return r, nil
 }
 
-// helperLibPaths are where libmpv and its dependencies live.
+// helperLibPaths are where libmpv and its dependencies live: readable, which
+// is all dlopen needs. Only the helper and the dynamic loader are executable.
 var helperLibPaths = []string{"/lib", "/lib64", "/usr/lib", "/usr/lib64", "/usr/local/lib", "/etc/ld.so.cache", "/etc/ld.so.conf", "/etc/ld.so.conf.d"}
+
+var dynamicLoaders = []string{"/lib64/ld-linux-x86-64.so.2", "/lib/ld-linux-aarch64.so.1"}
 
 // helperCommand starts this static binary in its stage, which locks down and
 // then becomes the helper. The helper links goffi, which appears to stop it
@@ -163,20 +208,25 @@ func helperCommand(helper, tempDir string) (*exec.Cmd, error) {
 	return exec.Command(exe, StageArg, tempDir), nil
 }
 
-// deniedHelper adds sockets to what the main process may never do: its only
-// connection is the one it inherited. execve stays allowed, for the stage's
-// one exec; landlock leaves only the helper and libraries executable.
-var deniedHelper = append([]uintptr{sysSocket}, deniedMain[2:]...)
+// deniedHelper adds sockets and signals to what the main process may never
+// do: its only connection is the one it inherited. execve stays allowed, for
+// the stage's one exec; landlock leaves only the helper and loader executable.
+var deniedHelper = append([]uintptr{sysSocket, sysKill}, deniedMain[2:]...)
 
 // MediaStage confines this process and replaces it with the helper. It
 // returns only on failure.
 func MediaStage(helper, tempDir string) error {
-	r, err := newRuleset()
+	r, err := newRuleset(true)
 	if err != nil {
 		return err
 	}
 	for _, p := range helperLibPaths {
-		if err := r.add(p, accessRead|accessExecute); err != nil {
+		if err := r.add(p, accessRead); err != nil {
+			return err
+		}
+	}
+	for _, p := range dynamicLoaders {
+		if err := r.add(p, accessReadFile|accessExecute); err != nil {
 			return err
 		}
 	}

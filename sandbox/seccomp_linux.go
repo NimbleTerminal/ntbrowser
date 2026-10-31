@@ -14,6 +14,7 @@ const (
 	bpfABS = 0x20
 	bpfJMP = 0x05
 	bpfJEQ = 0x10
+	bpfJGE = 0x30
 	bpfK   = 0x00
 	bpfRET = 0x06
 
@@ -22,6 +23,8 @@ const (
 	seccompRetAllow      = 0x7fff0000
 	seccompRetErrno      = 0x00050000
 	seccompRetKill       = 0x80000000
+
+	x32Bit = 0x40000000
 
 	auditArchX8664   = 0xc000003e
 	auditArchAArch64 = 0xc00000b7
@@ -39,11 +42,19 @@ type sockFprog struct {
 	Filter *sockFilter
 }
 
+const (
+	sysIOUringSetup    = 425
+	sysIOUringEnter    = 426
+	sysIOUringRegister = 427
+	sysFchmodat2       = 452
+)
+
 // deniedMain are calls no ntbrowser process makes after lockdown.
-var deniedMain = []uintptr{
+var deniedMain = append([]uintptr{
 	syscall.SYS_EXECVE, sysExecveat, syscall.SYS_PTRACE, syscall.SYS_MOUNT, syscall.SYS_UMOUNT2,
 	sysInitModule, sysFinitModule, sysBPF, sysKexecLoad, sysProcessVMReadv, sysProcessVMWritev,
-}
+	sysIOUringSetup, sysIOUringEnter, sysIOUringRegister, // a route around the socket filter and landlock
+}, metadataCalls...)
 
 func auditArch() uint32 {
 	if runtime.GOARCH == "arm64" {
@@ -59,7 +70,9 @@ func denySyscalls(calls []uintptr) error {
 		{Code: bpfLD | bpfW | bpfABS, K: 4}, // seccomp_data.arch
 		{Code: bpfJMP | bpfJEQ | bpfK, JT: 1, K: auditArch()},
 		{Code: bpfRET | bpfK, K: seccompRetKill},
-		{Code: bpfLD | bpfW | bpfABS, K: 0}, // seccomp_data.nr
+		{Code: bpfLD | bpfW | bpfABS, K: 0},              // seccomp_data.nr
+		{Code: bpfJMP | bpfJGE | bpfK, JF: 1, K: x32Bit}, // x32 numbers would pass every check below
+		{Code: bpfRET | bpfK, K: seccompRetKill},
 	}
 	for _, nr := range calls {
 		prog = append(prog,
@@ -68,8 +81,18 @@ func denySyscalls(calls []uintptr) error {
 	}
 	prog = append(prog, sockFilter{Code: bpfRET | bpfK, K: seccompRetAllow})
 	fprog := sockFprog{Len: uint16(len(prog)), Filter: &prog[0]}
-	if _, _, errno := syscall.RawSyscall(sysSeccomp, seccompSetModeFilter, seccompFilterTSync, uintptr(unsafe.Pointer(&fprog))); errno != 0 {
+	r, _, errno := syscall.RawSyscall(sysSeccomp, seccompSetModeFilter, seccompFilterTSync, uintptr(unsafe.Pointer(&fprog)))
+	return tsyncResult(r, errno)
+}
+
+// tsyncResult reads seccomp's answer: with TSYNC, a positive return is the id
+// of a thread the filter could not reach.
+func tsyncResult(r uintptr, errno syscall.Errno) error {
+	if errno != 0 {
 		return fmt.Errorf("seccomp: %w", errno)
+	}
+	if r != 0 {
+		return fmt.Errorf("seccomp: thread %d not synchronized", r)
 	}
 	return nil
 }

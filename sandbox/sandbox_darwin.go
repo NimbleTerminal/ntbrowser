@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 
 	"nimbleterminal.dev/ntbrowser/profile"
@@ -18,11 +19,13 @@ const sandboxExec = "/usr/bin/sandbox-exec"
 // SandboxedArg marks the re-executed process.
 const SandboxedArg = "--sandboxed"
 
-// Available reports whether sandbox-exec is present. It is deprecated but
-// shipped; sandbox_init itself would need cgo.
-func Available() bool {
-	_, err := os.Stat(sandboxExec)
-	return err == nil
+// Available reports whether sandbox-exec works here. It is deprecated but
+// shipped; sandbox_init itself would need cgo. Inside another sandbox it
+// cannot apply a policy, so it is tried, once.
+var Available = sync.OnceValue(func() bool { return applies(sandboxExec) })
+
+func applies(tool string) bool {
+	return exec.Command(tool, "-p", "(version 1)(allow default)", "/usr/bin/true").Run() == nil
 }
 
 func q(s string) string { return strconv.Quote(s) }
@@ -38,7 +41,7 @@ func Policy(p profile.Profile, start, tempDir, exe string) string {
 	// system.sb reads more than ntbrowser needs; take that back. Later rules win.
 	w("(deny file-read* (subpath \"/private/etc\") (subpath \"/etc\") (subpath \"/Users\") (subpath \"/private/var/root\"))")
 	w("(allow process-exec (literal %s))", q(exe))
-	w("(allow signal (target self))")
+	w("(allow signal (target self) (target children))")
 	w("(allow sysctl-read)")
 	w("(allow file-read-metadata)")
 	w("(allow mach-lookup (global-name \"com.apple.dnssd.service\") (global-name \"com.apple.SystemConfiguration.configd\") (global-name \"com.apple.trustd.agent\") (global-name \"com.apple.trustd\") (global-name \"com.apple.ocspd\"))")
@@ -46,9 +49,8 @@ func Policy(p profile.Profile, start, tempDir, exe string) string {
 	w("  (literal \"/private/etc/hosts\") (literal \"/private/etc/resolv.conf\") (literal \"/private/var/run/resolv.conf\") (literal \"/private/etc/ssl/cert.pem\") (literal \"/private/etc/services\") (literal \"/private/etc/localtime\"))")
 	w("(allow file-read* file-write* file-ioctl (literal \"/dev/null\") (literal \"/dev/tty\") (regex #\"^/dev/ttys[0-9]+$\"))")
 	w("(allow file-read* (literal \"/dev/urandom\") (literal \"/dev/random\"))")
-	w("(allow network-outbound)")
+	w("(allow network-outbound (remote ip) (literal \"/private/var/run/mDNSResponder\"))") // no other Unix socket
 	w("(allow system-socket)")
-	w("(allow network-inbound (local unix))")
 	if start != "" && p.ReadsStartFile() {
 		w("(allow file-read* (literal %s))", q(start))
 	}
@@ -103,8 +105,12 @@ func Reexec(p profile.Profile, start, tempDir string, args []string) error {
 	return syscall.Exec(sandboxExec, argv, os.Environ())
 }
 
-// Apply reports what Reexec achieved: on macOS the policy is applied from
-// outside, so here it is only recorded.
+// Apply reports what Reexec achieved. The policy is applied from outside, so
+// the re-exec marker alone proves nothing: a read the policy must refuse does.
 func Apply(p profile.Profile, _, _ string, reexeced bool) (profile.Strengths, error) {
+	if reexeced {
+		_, err := os.ReadFile("/etc/passwd")
+		reexeced = err != nil
+	}
 	return strengths(reexeced), checkRequired(p, reexeced)
 }

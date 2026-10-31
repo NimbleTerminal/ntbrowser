@@ -38,6 +38,10 @@ func helperProbe(tmp string) {
 		f.Close()
 	}
 	report("tty", err)
+	victim := tmp + "-victim"
+	report("truncate", os.Truncate(victim, 0))
+	report("chmod", os.Chmod(victim, 0o777))
+	report("uring", platformProbe())
 	fmt.Fprintln(conn, "done")
 	conn.Close()
 	os.Exit(0)
@@ -63,6 +67,10 @@ func runProbe(t *testing.T) map[string]string {
 	if err := os.WriteFile(filepath.Join(tmp, "clip"), []byte("x"), 0o600); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(tmp+"-victim", []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { os.Remove(tmp + "-victim") })
 	p, _ := profile.Builtin("browse")
 	h, err := StartHelper(p.WithVideo(), exe, tmp)
 	if err != nil {
@@ -88,7 +96,7 @@ func TestHelperIsConfined(t *testing.T) {
 		t.Skip("OS enforcement unavailable here")
 	}
 	got := runProbe(t)
-	want := map[string]string{"env": "0", "network": "false", "passwd": "false", "readtemp": "true", "writetemp": "false", "tty": "false"}
+	want := map[string]string{"env": "0", "network": "false", "passwd": "false", "readtemp": "true", "writetemp": "false", "tty": "false", "truncate": "false", "chmod": "false", "uring": "false"}
 	for k, v := range want {
 		if got[k] != v {
 			t.Errorf("%s = %q, want %q (all: %v)", k, got[k], v, got)
