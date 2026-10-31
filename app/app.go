@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/textarea"
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"nimbleterminal.dev/nthtml"
@@ -91,6 +93,15 @@ type Model struct {
 	// sequence is a slower, superseded load and is dropped. History is only
 	// touched when a load succeeds (decision 20).
 	navSeq uint64
+
+	// Forms (forms.go): the input mode, the last focus report, and the
+	// editor and chooser state.
+	mode   inputMode
+	focus  loop.FocusMsg
+	ring   string // the element the viewer's focus ring is on ("" = none)
+	input  textinput.Model
+	area   textarea.Model
+	choice int
 }
 
 // viewerOptions tunes the nthtml viewer for a page that re-flows often and
@@ -175,8 +186,9 @@ func (m *Model) navigate(href string, hist int, anyOrigin bool) tea.Cmd {
 // (Back, Forward, Reload): only -nav allowlist keeps redirects confined.
 func (m *Model) anyOriginFor() bool { return m.nav != NavAllowlist }
 
-// admit applies the NavMode to a link the page did not prevent.
-func (m *Model) admit(href string) tea.Cmd {
+// admit applies the NavMode to a link the page did not prevent, or to a form
+// submission (same gate, its own confirmation wording).
+func (m *Model) admit(href string, form bool) tea.Cmd {
 	u, err := url.Parse(href)
 	if err != nil {
 		m.status = clean("bad link: " + err.Error())
@@ -194,7 +206,11 @@ func (m *Model) admit(href string) tea.Cmd {
 	case NavConfirm:
 		if !sameOrigin {
 			m.pendingNav = href
-			m.status = clean("Open " + href + "? Enter to open · Esc to stay")
+			if form {
+				m.status = clean("Submit form to " + u.Host + "? Enter to send · Esc to stay") // the host, not the values in the URL
+			} else {
+				m.status = clean("Open " + href + "? Enter to open · Esc to stay")
+			}
 			return nil
 		}
 		return m.navigate(href, pushNew, false) // same-origin: a redirect off-origin is refused, not silently followed
@@ -236,7 +252,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		p.Origin = v.base
 		m.loop.LoadPage(v.html, v.base.String(), netpolicy.New(p))
 		m.status = clean("loading " + v.base.String())
-		return m, nil
+		return m, m.leaveForms()
 
 	case loop.FrameMsg:
 		// Frames arrive from the render worker; drop anything older than
@@ -253,8 +269,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch {
 		case len(warnings) > 0:
 			m.status = clean(strings.Join(warnings, "; ")) // warnings replace the status; a log line survives the next frame
-		case m.resetView:
-			m.status = "" // the page's first frame: "loading …" is over
+		case m.resetView && !strings.HasPrefix(m.status, "focus: "):
+			m.status = "" // the page's first frame: "loading …" is over (a focus line set by the page stays)
 		}
 		if m.viewer == nil {
 			// viewerOptions leaves ReflowTypeset off, which is what the host
@@ -264,7 +280,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.resetView = false
 			cmd := tea.Batch(m.viewer.Init(), m.viewer.SetBounds(0, 0, m.cols, m.viewRows()))
 			m.loop.Resize(documentWidth(m.viewer))
-			return m, cmd
+			return m, tea.Batch(cmd, m.applyRing(false))
 		}
 		// Re-flow in place (nthtml v0.1.0 Model.SetResult). SetResult resets
 		// scroll, zoom, search and the focused link; the host puts the scroll
@@ -276,13 +292,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmd := m.viewer.SetResult(v.Result)
 		m.loop.Resize(documentWidth(m.viewer)) // no-op unless the terminal's pixel geometry changed
 		if m.resetView || crop.Empty() {
+			scroll := m.resetView // a new page's script focus scrolls into view, as in browsers
 			m.resetView = false
-			return m, cmd
+			return m, tea.Batch(cmd, m.applyRing(scroll))
 		}
-		return m, tea.Batch(cmd, m.viewer.Pan(crop.Min.X, crop.Min.Y))
+		// Pan first: it is relative to the origin SetResult just reset to.
+		pan := m.viewer.Pan(crop.Min.X, crop.Min.Y)
+		return m, tea.Batch(cmd, pan, m.applyRing(false))
 
 	case loop.NavigateMsg:
-		return m, m.admit(v.Href)
+		return m, m.admit(v.Href, v.Form)
+	case loop.FocusMsg:
+		return m, m.onFocus(v)
+	case tea.PasteMsg:
+		if handled, cmd := m.onPaste(v); handled {
+			return m, cmd
+		}
+	case loop.ValueMsg:
+		m.onValue(v)
+		return m, nil
 	case loop.TitleMsg:
 		m.title = clean(v.Title) // page text: never trusted at the terminal boundary
 	case loop.LogMsg:
@@ -332,6 +360,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if !searching {
+			if handled, cmd := m.formKey(v); handled {
+				return m, cmd
+			}
 			switch v.String() {
 			case "q", "ctrl+c":
 				m.closing = true
@@ -371,8 +402,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// viewRows is the viewer's height: the terminal minus the two status lines.
-func (m *Model) viewRows() int { return max(1, m.rows-2) }
+// viewRows is the viewer's height: the terminal minus the two status lines
+// and, while a textarea is edited, its editor panel.
+func (m *Model) viewRows() int { return max(1, m.rows-2-m.panelRows()) }
 
 // step moves through history. Pages are always re-fetched (no cache) so a
 // Back never shows state a script produced earlier.
@@ -392,11 +424,18 @@ func (m *Model) View() tea.View {
 	// Everything on these two lines passed clean() when stored; truncation
 	// only measures width. No page text reaches here unfiltered.
 	status := ansi.Truncate(clean(m.status), max(1, m.cols), "…")
+	if line, ok := m.formStatus(); ok && m.pendingNav == "" {
+		status = line // the editor or chooser; a confirm prompt always wins (pendingNav)
+	}
 	pos := ""
 	if len(m.history) > 1 {
 		pos = fmt.Sprintf(" · %d/%d", m.hIndex+1, len(m.history))
 	}
-	v := tea.NewView(body + "\n" + status + "\n ntbrowser · " + ansi.Truncate(clean(m.title), 40, "…") + pos + " · Tab links · Enter open · ⌫ back · ⌥→ fwd · ^R reload · / search · q quit")
+	help := "\n ntbrowser · " + ansi.Truncate(clean(m.title), 40, "…") + pos + " · Tab focus · Enter open · ⌫ back · ⌥→ fwd · ^R reload · / search · q quit"
+	if h := m.helpLine(); h != "" {
+		help = "\n" + h
+	}
+	v := tea.NewView(body + "\n" + status + help)
 	v.AltScreen = true
 	if !m.closing {
 		v.MouseMode = tea.MouseModeCellMotion

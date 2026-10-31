@@ -48,24 +48,24 @@ func TestQuitAndHistoryKeys(t *testing.T) {
 
 func TestNavigationModes(t *testing.T) {
 	m := newModel(t, NavAllowlist)
-	if cmd := m.admit("https://evil.test/"); cmd != nil || !strings.HasPrefix(m.status, "blocked:") {
+	if cmd := m.admit("https://evil.test/", false); cmd != nil || !strings.HasPrefix(m.status, "blocked:") {
 		t.Fatalf("allowlist admitted evil: %q", m.status)
 	}
-	if cmd := m.admit("https://cdn.test/x"); cmd == nil {
+	if cmd := m.admit("https://cdn.test/x", false); cmd == nil {
 		t.Fatal("allowlist refused an allowlisted host")
 	}
 	m = newModel(t, NavConfirm)
-	if cmd := m.admit("https://other.test/"); cmd != nil || m.pendingNav != "https://other.test/" {
+	if cmd := m.admit("https://other.test/", false); cmd != nil || m.pendingNav != "https://other.test/" {
 		t.Fatal("confirm did not prompt")
 	}
 	if _, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape}); cmd != nil || m.pendingNav != "" {
 		t.Fatal("esc did not cancel")
 	}
-	_ = m.admit("https://other.test/")
+	_ = m.admit("https://other.test/", false)
 	if _, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter}); cmd == nil || m.pendingNav != "" {
 		t.Fatal("enter did not navigate")
 	}
-	if cmd := m.admit("https://page.test/same"); cmd == nil {
+	if cmd := m.admit("https://page.test/same", false); cmd == nil {
 		t.Fatal("confirm mode prompted for a same-origin link")
 	}
 }

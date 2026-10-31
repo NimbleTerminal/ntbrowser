@@ -82,7 +82,7 @@ func TestHistoryMovesOnlyOnSuccessAndLatestNavigationWins(t *testing.T) {
 	// Back again, but a newer navigation (a link) starts before it lands.
 	_ = m.step(-1)
 	backSeq := m.navSeq
-	_ = m.admit("https://c.test/")
+	_ = m.admit("https://c.test/", false)
 	m.Update(pageLoadedMsg{seq: backSeq, hist: 0, html: "<p>a</p>", base: mustURL(t, "https://a.test/")})
 	if m.hIndex != 1 || m.current.String() != "https://b.test/" {
 		t.Fatalf("superseded Back landed: index %d current %s", m.hIndex, m.current)

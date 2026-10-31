@@ -29,7 +29,9 @@ Lockdown pair: `-nav allowlist -subresources origin` confines both navigation an
 
 ## Keys
 
-`Tab`/`Shift+Tab` cycle links · `Enter` opens the selected link · `⌫` or `⌥←` back · `⌥→` forward · `^R` reload · `/` search · `q` quit. Mouse clicks reach page elements; the page cannot swallow these keys.
+`Tab`/`Shift+Tab` move focus through links and form controls · `Enter` opens the focused link or presses the focused button · `Space` toggles a focused checkbox or radio · `⌫` or `⌥←` back · `⌥→` forward · `^R` reload · `/` search · `q` quit. Mouse clicks reach page elements; the page cannot swallow these keys.
+
+**Forms.** Moving focus to a text field (Tab or a click), or `Enter` on it, opens an editor in the status line (a 6-row panel for a textarea); the page shows the value as you type. In the editor, `Enter` submits the form, `Tab`/`Shift+Tab` move on, `Esc` returns to browsing with focus kept, and `^C` still quits; `q` and `/` are text. A page's script can move focus but never starts typing for you. `Enter` on a select opens a chooser (`↑`/`↓`, `Enter` to set, `Space` toggles in a multiple select, `Esc` cancels). GET forms submit through the same navigation gate as links (`-nav confirm` asks "Submit form to <host>?"). POST forms, and GET forms with a filled-in password field, are not submitted; the status line says why.
 
 ## Security model
 
@@ -55,6 +57,7 @@ JavaScript runs in a pure-Go interpreter with no `os`, `net` or environment acce
 | Prototype pollution of host paths | captured `JSON.parse`; frozen globals; wrappers resolve through `Tree` each call | `jsvm` |
 | Use-after-free / handle forgery | integer `NodeID`s, never reused; forged ids reach only this page's own nodes | `dom`, `jsvm` |
 | Page hijacks `q`/`ctrl+c`, search typing, or navigation | host handles keys first and withholds search-box keystrokes; navigation is user-initiated only, resolved against base, http(s) only after the start page; JS can only `preventDefault` | `app`, `loop` |
+| Page captures keystrokes or leaks typed form data | only a reader action (Tab, click, Enter) starts text entry, never script `focus()`/`autofocus`; typed values leave only through a submission the reader triggered, through the link gate; GET with a password and POST are refused; values are never logged | `app`, `loop` |
 | Frame storm | dirty flag + coalescing + `MinFrame`; one render in flight; stale frames dropped by `Gen` | `loop`, `app` |
 
 ## Architecture
