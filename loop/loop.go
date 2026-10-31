@@ -54,9 +54,14 @@ type (
 	}
 	// NavigateMsg carries an absolute URL already resolved against the page
 	// base. Admission (scheme, host) is the host's decision.
-	NavigateMsg struct{ Href string }
-	LogMsg      struct{ Level, Line string }
-	TitleMsg    struct{ Title string }
+	// Form marks a form submission (the host words its confirmation
+	// differently; the admission gate is the same as for links).
+	NavigateMsg struct {
+		Href string
+		Form bool
+	}
+	LogMsg   struct{ Level, Line string }
+	TitleMsg struct{ Title string }
 )
 
 // Page is one navigation: tree + sandbox + policy. Replacing it discards the
@@ -76,6 +81,19 @@ type Page struct {
 	// boxes are the painted boxes of the last frame shown for this page,
 	// used to map a document-pixel hit back to an element (Box.Anchor = id).
 	boxes []document.Box
+	// result is the last frame's Result (SourceAt refines clicks, forms.go).
+	result *document.Result
+	// lastFocus is the focus the host was last told about; focusValue the
+	// focused control's value at focus or last commit (change detection).
+	lastFocus     dom.NodeID
+	focusValue    string
+	autofocusDone bool
+	// formTasks are submit/reset requests made by script (form hooks); they
+	// run after the task that made them, never inside the VM.
+	formTasks []func()
+	// firing and resetting mark forms whose submit or reset event is being
+	// dispatched, so a listener cannot re-request it (forms review #1).
+	firing, resetting map[dom.NodeID]bool
 	// subres loads the page's stylesheets and images (nil when off).
 	subres *subres.Session
 	// firstFrame is true until the first frame of this page has rendered;
@@ -268,9 +286,10 @@ func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) {
 		}
 		cfg := l.cfg.Script
 		cfg.Location = base
-		page := &Page{Tree: tree, Fetcher: fetcher, Base: base, started: time.Now(), firstFrame: true, budgetWarned: map[string]bool{}, refused: map[string]bool{}}
+		page := &Page{Tree: tree, Fetcher: fetcher, Base: base, started: time.Now(), firstFrame: true, budgetWarned: map[string]bool{}, refused: map[string]bool{}, firing: map[dom.NodeID]bool{}, resetting: map[dom.NodeID]bool{}}
 		page.ctx, page.cancel = context.WithCancel(l.ctx)
 		page.Sandbox = jsvm.New(cfg, tree, (*host)(l))
+		page.Sandbox.SetFormHooks(l.formHooks(page))
 		l.page = page
 		l.startSubresources(page)
 		l.send(TitleMsg{tree.Title()})
@@ -415,8 +434,10 @@ func (l *Loop) LinkActivated(link document.Link) {
 // target is the smallest painted box carrying an anchor name; anchors are
 // element ids, including the synthetic ones the serializer mints for
 // listener-bearing elements. Inline elements paint only a 1px marker, so a
-// listener on a <span> is reached through its block ancestor. Focus follows
-// the click; the nearest <a> supplies the default navigation.
+// listener on a <span> is reached through its block ancestor; a link,
+// control or label under the point wins (clickTarget). Focus follows the
+// click; controls and labels get their activation behavior (forms.go); the
+// nearest <a> supplies the default navigation.
 func (l *Loop) ClickAt(area image.Rectangle) {
 	l.tryPost(func() {
 		if l.page == nil {
@@ -432,14 +453,21 @@ func (l *Loop) ClickAt(area image.Rectangle) {
 				best = b
 			}
 		}
-		if best == nil {
-			return
+		target := l.clickTarget(l.page, area)
+		if target == nil && best != nil {
+			target = l.page.Tree.ByID(best.Anchor)
 		}
-		target := l.page.Tree.ByID(best.Anchor)
 		if target == nil {
 			return
 		}
-		l.page.Sandbox.Focus(target.ID())
+		if l.clickControl(l.page, target) {
+			return
+		}
+		if dom.Focusable(target) {
+			l.userFocus(l.page, target)
+		} else {
+			l.userFocus(l.page, nil)
+		}
 		href := ""
 		for n := target; n != nil; n = n.Parent() {
 			if n.Tag() == "a" {
@@ -516,6 +544,21 @@ func (l *Loop) afterTask() {
 	if l.page.Sandbox.Disabled() && !l.page.killed {
 		l.dropPage(l.page) // heap or strike budget: free the runtime, keep the last frame
 	}
+	// Script-requested submissions and resets, bounded: a listener chain
+	// that keeps queueing more is cut off instead of holding the loop.
+	for passes := 0; len(l.page.formTasks) > 0 && !l.page.killed; passes++ {
+		if passes == maxFormPasses {
+			l.page.formTasks = nil
+			l.send(LogMsg{"warn", "form submissions from script dropped: too many in one turn"})
+			break
+		}
+		tasks := l.page.formTasks
+		l.page.formTasks = nil
+		for _, fn := range tasks {
+			fn()
+		}
+	}
+	l.reconcileFocus(l.page)
 	if l.page.Tree.Dirty() || l.pendingFrame {
 		l.scheduleFrame()
 	}
@@ -606,7 +649,8 @@ func (l *Loop) startRender() {
 				return
 			}
 			if res != nil {
-				page.boxes = res.Boxes
+				page.boxes, page.result = res.Boxes, res
+				l.autofocus(page)
 			}
 			if page.subres != nil {
 				page.backgrounds = backgrounds
