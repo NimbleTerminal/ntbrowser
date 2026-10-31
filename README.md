@@ -12,20 +12,57 @@ ntbrowser [-profile locked|reader|browse] [-profile-file path] [-show-profile] [
 
 `URL` is `http(s)://…` or, for the start page only, `file://…`.
 
+## Profiles
+
+A profile is a named set of positions for every gate out of the sandbox. It is fixed at launch, passed by value, and invisible to the page. The zero profile has every gate closed; a profile only opens gates. `-show-profile` prints the effective profile, with how each gate is held on this machine: `compiled-out` (the code is not in the binary), `os` (the kernel refuses) or `checked` (our code refuses).
+
+| | `locked` | `reader` | `browse` (default) |
+| --- | --- | --- | --- |
+| `navigate` | off | confirm | free |
+| `subresources` | off | origin | any |
+| `fetch` | off | off | allowlist |
+| `scripts` | off | off | inline |
+| `files` | off | off | start-page |
+| `native-code` | off | off | off |
+| `media` | off | image | animation |
+| `clipboard` | off | copy | copy |
+| enforcement | required | best-effort | best-effort |
+
+`enforcement: required` exits if the operating system cannot enforce the profile; `best-effort` runs and reports those gates as `checked`. On macOS the process re-executes itself under `sandbox-exec`; on Linux it applies landlock and seccomp. `-profile-file path` reads a JSON file with the same fields plus an optional `base`; unknown fields are errors.
+
+No JIT and a coarse script clock make timing attacks harder, not impossible: nothing inside one process is a real boundary against a speculative read of its own memory.
+
 ## Flags
 
-| Flag | Default | Meaning |
-| --- | --- | --- |
-| `-nav free\|allowlist\|confirm` | `free` | Link navigation: any http(s) origin; confined to the origin plus `-allow`; or ask before leaving the origin |
-| `-allow host[,host]` | | Extra hosts `fetch()` (and allowlist navigation) may reach; a leading dot allows subdomains |
-| `-allow-private` | off | Permit loopback and private addresses (development only) |
-| `-subresources any\|origin\|off` | `any` | Stylesheets, images and CSS backgrounds: any public origin (browser-like); the page origin plus `-allow`; or nothing (v1 behaviour) |
-| `-external-scripts` | off | Fetch `<script src>` through the same policy |
-| `-width px` | 800 | Initial document width; the terminal's pixel geometry takes over once known |
-| `-slice d` | 50ms | JavaScript time budget per entry; three overruns disable the page |
-| `-seed n` | 0 | PRNG seed for `Math.random` (0 = time-based) |
+Flags apply on top of the chosen profile.
 
-Lockdown pair: `-nav allowlist -subresources origin` confines both navigation and subresources to the origin plus `-allow`. In `any` mode a page can load a tracking pixel from any public host, as a browser would, minus cookies and `Referer`; `origin` is the lockdown.
+| Flag | Meaning |
+| --- | --- |
+| `-profile locked\|reader\|browse` | Built-in profile (default `browse`) |
+| `-profile-file path` | JSON profile |
+| `-show-profile` | Print the effective profile and exit |
+| `-nav off\|free\|allowlist\|confirm` | Link navigation. `off` fetches only the start URL |
+| `-allow host[,host]` | Hosts for allowlist gates; a leading dot allows subdomains |
+| `-allow-private` | Permit loopback and private addresses (development only) |
+| `-subresources any\|origin\|off` | Stylesheets, images and CSS backgrounds |
+| `-fetch off\|origin\|allowlist` | `fetch()` from page script |
+| `-scripts off\|inline\|external` | Page script (`-external-scripts` is `-scripts external`) |
+| `-clipboard off\|copy` | Selected-text copy |
+| `-media off\|image\|animation\|video` | The most a top-level response may be shown as. Images inside a page are `-subresources`. `video` also opens `native-code` and `files=temp` |
+| `-max-media-bytes n` | Download cap for media (64 MiB) |
+| `-width px` | Initial document width; the terminal's pixel geometry takes over once known |
+| `-slice d` | JavaScript time budget per entry (50ms); three overruns disable the page |
+| `-seed n` | PRNG seed for `Math.random` (0 = time-based) |
+
+## What a response becomes
+
+A navigation is classified from its headers before its body is read, so a refused kind reads nothing. Pages and text are laid out, images and GIF or WebP animations are shown full view (Esc or Back returns), and anything else stays on the current page with a line such as `application/zip · 2 KB · can't display`.
+
+## Video
+
+With `-media video` and `mpv` installed, activating a link to a video or a focused `<video>` downloads it through the same network policy and plays it: Space pause, ←/→ seek, Esc back. Only the reader can start it; there is no autoplay and no `play()`.
+
+Decoding runs in a separate binary, `ntbrowser-media`, built beside `ntbrowser`. All native code lives there; the main binary links none, and a test proves it. The helper starts before the main process locks itself down and is sandboxed more tightly: no network, no terminal, an empty environment, reading only its libraries and the media directory. It decodes in software with no audio, and sends frames the main process checks and draws. A `<video>` without a known size has no box and cannot be reached this way.
 
 ## Keys
 

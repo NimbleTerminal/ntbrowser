@@ -1,6 +1,6 @@
 # ntbrowser: security profiles, content routing, click-to-play video — design
 
-Date: 2026-10-31 · Status: approved 2026-10-31 (Evan) · Author: Claude
+Date: 2026-10-31 · Status: approved 2026-10-31 (Evan); implemented on branch `profiles` · Author: Claude
 Extends the architecture, subresources and forms designs in this directory. Everything there stands. Marked **Evan** where he decided; everything else is my call.
 
 ## 1. Intent
