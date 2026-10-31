@@ -249,7 +249,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = clean("render: " + v.Err.Error())
 			return m, nil
 		}
-		warnings := append(append([]string(nil), v.Result.Warnings...), v.Warnings...) // nthtml's, then the loader's
+		warnings := append(statusWarnings(v.Result.Warnings), v.Warnings...) // nthtml's, then the loader's
 		switch {
 		case len(warnings) > 0:
 			m.status = clean(strings.Join(warnings, "; ")) // warnings replace the status; a log line survives the next frame
@@ -427,4 +427,17 @@ func SetLocalReader(open func(path string) (io.ReadCloser, error)) {
 		}
 		return string(b), nil
 	}
+}
+
+// statusWarnings drops nthtml's notes about SVG elements it skipped: browsers
+// ignore those elements silently and the rest of the SVG still draws, so they
+// would only push real warnings off the status line.
+func statusWarnings(warnings []string) []string {
+	var out []string
+	for _, w := range warnings {
+		if !strings.HasPrefix(w, "svg: skipped unsupported element ") {
+			out = append(out, w)
+		}
+	}
+	return out
 }

@@ -84,3 +84,32 @@ func TestFrameWarningsReachStatus(t *testing.T) {
 		t.Fatalf("status %q", m.status)
 	}
 }
+
+// nthtml notes each SVG element it skipped, as browsers skip them silently;
+// those notes stay out of the status line, while real warnings still show.
+func TestSkippedSVGElementsStayOutOfStatus(t *testing.T) {
+	res, err := document.Render(context.Background(), strings.NewReader(
+		`<svg width="10" height="10"><foreignObject><div>x</div></foreignObject><rect width="10" height="10" fill="red"/></svg>`),
+		document.Options{Width: 400})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Warnings) == 0 || !strings.HasPrefix(res.Warnings[0], "svg: skipped unsupported element") {
+		t.Fatalf("fixture no longer produces a skip note: %q", res.Warnings)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	l := loop.New(ctx, loop.Config{Width: 400}, dropSink{})
+	go l.Run()
+	m := New(l, netpolicy.Policy{}, NavFree, "")
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m.Update(loop.LogMsg{Level: "log", Line: "hello from the page"})
+	m.Update(loop.FrameMsg{Gen: 1, Result: res})
+	if strings.Contains(m.status, "skipped") || !strings.Contains(m.status, "hello from the page") {
+		t.Fatalf("skip note replaced the status: %q", m.status)
+	}
+	m.Update(loop.FrameMsg{Gen: 2, Result: res, Warnings: []string{"stylesheet \"x.css\": denied"}})
+	if m.status != `stylesheet "x.css": denied` {
+		t.Fatalf("status %q", m.status)
+	}
+}
