@@ -47,7 +47,7 @@ func nodeCost(n *Node) int {
 	if n.kind == Text {
 		return textCost(n.text)
 	}
-	c := elementCost(n.tag)
+	c := elementCost(n.tag) + stateCost(n)
 	for _, a := range n.attrs {
 		c += attrCost(a.Name, a.Value)
 	}
@@ -79,6 +79,7 @@ type Node struct {
 	// serializer gives such elements a stable id attribute so nthtml's
 	// Box.Anchor / Result.Anchors can be mapped back to a NodeID on hit test.
 	listeners map[string]struct{}
+	form      *formState // nil until a control's state changes (forms.go)
 }
 
 type Attr struct{ Name, Value string }
@@ -128,6 +129,7 @@ type Tree struct {
 	// styles holds loaded external stylesheets keyed by the raw <link href>
 	// (see styles.go); the serializer writes each as a <style> twin.
 	styles map[string]*injectedStyle
+	ids    map[string]bool // Serialize's id-uniqueness table, nil outside it
 }
 
 type Script struct {
@@ -613,15 +615,18 @@ func hasClass(n *Node, cls string) bool {
 // ---- serialization: the frame handed to nthtml ----
 
 // Serialize writes the tree as HTML that nthtml's document.Parse accepts.
-// <script> never appears (none are in the tree). Elements with listeners
-// but no id get a synthetic id so nthtml's Result.Anchors / Box.Anchor can
-// be mapped back to NodeIDs for hit testing. Text and attribute values are
-// escaped by x/net/html, so a script cannot smuggle markup through
-// textContent or setAttribute.
+// <script> never appears (none are in the tree). Elements with listeners,
+// and focusable elements, that have no id get a synthetic id so nthtml's
+// Result.Anchors / Box.Anchor can be mapped back to NodeIDs for hit testing
+// and focus. Form controls are written with their current state (forms.go).
+// Text and attribute values are escaped by x/net/html, so a script cannot
+// smuggle markup through textContent or setAttribute.
 func (t *Tree) Serialize() string {
 	var b strings.Builder
 	seen := map[string]bool{} // hrefs whose <style> twin was written in this call
+	t.ids = map[string]bool{} // ids already written in this call (frameID)
 	t.write(&b, t.root, seen, false)
+	t.ids = nil
 	t.releaseOrphanStyles(seen)
 	return b.String()
 }
@@ -646,10 +651,14 @@ func (t *Tree) write(b *strings.Builder, n *Node, seen map[string]bool, inSVG bo
 		if n.tag != "#document" {
 			b.WriteByte('<')
 			b.WriteString(tag)
-			hasID := false
+			own, _ := n.Attr("id")
+			id := frameID(n, t.ids[own])
+			if own != "" {
+				t.ids[own] = true
+			}
 			for _, a := range n.attrs {
-				if a.Name == "id" {
-					hasID = true
+				if skipState(n, a.Name) || (a.Name == "id" && a.Value != id) {
+					continue // a replaced id is written below, as frameID decided
 				}
 				b.WriteByte(' ')
 				b.WriteString(svgName(svgAttrNames, a.Name, inSVG))
@@ -657,10 +666,21 @@ func (t *Tree) write(b *strings.Builder, n *Node, seen map[string]bool, inSVG bo
 				b.WriteString(html.EscapeString(a.Value))
 				b.WriteByte('"')
 			}
-			if !hasID && len(n.listeners) > 0 {
-				fmt.Fprintf(b, ` id="%s"`, syntheticID(n.id))
+			writeState(b, n)
+			if id != "" && id != own {
+				b.WriteString(` id="`)
+				b.WriteString(html.EscapeString(id))
+				b.WriteByte('"')
 			}
 			b.WriteByte('>')
+		}
+		if n.tag == "textarea" && n.form != nil && n.form.dirtyValue {
+			if strings.HasPrefix(n.form.value, "\n") {
+				b.WriteByte('\n') // the parser drops one leading newline in <textarea>
+			}
+			b.WriteString(html.EscapeString(n.form.value))
+			b.WriteString("</textarea>")
+			return
 		}
 		childSVG := inSVG && n.tag != "foreignobject" // foreignObject content is HTML again
 		for _, c := range n.children {

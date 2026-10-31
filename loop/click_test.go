@@ -44,7 +44,7 @@ func TestClickAtHitsElementsAndMintedAnchors(t *testing.T) {
 		switch {
 		case b.Anchor == "card":
 			card = b.Bounds
-		case len(b.Anchor) > 5 && b.Anchor[:5] == "nt-h-":
+		case b.Tag == "div" && len(b.Anchor) > 5 && b.Anchor[:5] == "nt-h-":
 			anon = b.Bounds
 		}
 	}
