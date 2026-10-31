@@ -10,6 +10,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"runtime/debug"
 	"strings"
@@ -21,6 +22,7 @@ import (
 	"nimbleterminal.dev/ntbrowser/jsvm"
 	"nimbleterminal.dev/ntbrowser/loop"
 	"nimbleterminal.dev/ntbrowser/profile"
+	"nimbleterminal.dev/ntbrowser/sandbox"
 	"nimbleterminal.dev/ntbrowser/subres"
 )
 
@@ -119,7 +121,8 @@ func parseArgs(args []string) (config, error) {
 }
 
 func main() {
-	c, err := parseArgs(os.Args[1:])
+	args, tempDir, sandboxed := sandboxArgs(os.Args[1:])
+	c, err := parseArgs(args)
 	if err != nil {
 		if !errors.Is(err, flag.ErrHelp) {
 			fmt.Fprintln(os.Stderr, err)
@@ -127,9 +130,21 @@ func main() {
 		os.Exit(2)
 	}
 	if c.ShowProfile {
-		fmt.Print(c.Profile.Table(nil))
+		fmt.Print(c.Profile.Table(sandbox.Probe()))
 		return
 	}
+	if !sandboxed && c.Profile.UsesTemp() {
+		if tempDir, err = os.MkdirTemp("", "ntbrowser-media-"); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+	}
+	strengths, err := lockDown(c, tempDir, args, sandboxed)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	_ = strengths // the status line reports it (app)
 	// Process-wide soft heap cap: Goja has no per-runtime memory limit, so
 	// the GC is told to work harder past this point and dom/nthtml limits
 	// keep individual allocations bounded.
@@ -163,6 +178,31 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
+}
+
+// sandboxArgs strips the marker the macOS re-exec adds.
+func sandboxArgs(args []string) (rest []string, tempDir string, sandboxed bool) {
+	if len(args) > 0 {
+		if v, ok := strings.CutPrefix(args[0], sandbox.SandboxedArg+"="); ok {
+			return args[1:], v, true
+		}
+	}
+	return args, "", false
+}
+
+// lockDown applies OS enforcement before any page content is touched. On
+// macOS the first run replaces itself here and comes back sandboxed.
+func lockDown(c config, tempDir string, args []string, sandboxed bool) (profile.Strengths, error) {
+	start := ""
+	if u, err := url.Parse(c.Start); err == nil && u.Scheme == "file" {
+		start = u.Path
+	}
+	if !sandboxed {
+		if err := sandbox.Reexec(c.Profile, start, tempDir, args); err != nil {
+			return nil, err
+		}
+	}
+	return sandbox.Apply(c.Profile, start, tempDir, sandboxed)
 }
 
 type sinkFunc func(tea.Msg)

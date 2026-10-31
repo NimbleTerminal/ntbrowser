@@ -58,6 +58,11 @@ tasks:
     cmds:
       - go vet ./...
 
+  test-sandbox-linux:
+    desc: Run the sandbox tests on a Linux kernel in Docker
+    cmds:
+      - docker run --rm -v "$PWD":/src -w /src -e GOWORK=off -e CGO_ENABLED=0 --security-opt seccomp=unconfined golang:1.26 go test ./sandbox -count=1
+
   wasm:
     desc: Compile the sandbox-side packages for js/wasm (compile-only in v1)
     env:
