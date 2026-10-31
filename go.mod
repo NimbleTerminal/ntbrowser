@@ -9,14 +9,14 @@ require (
 	golang.org/x/image v0.47.0
 	golang.org/x/net v0.62.0
 	nimbleterminal.dev/ntfonts/cjk v0.1.0
-	nimbleterminal.dev/nthtml v0.1.3-0.20261029152251-efd6ec4ef906
+	nimbleterminal.dev/nthtml v0.2.0
 	nimbleterminal.dev/ntpicture v0.1.4
 )
 
 require (
 	charm.land/bubbles/v2 v2.2.1 // indirect
 	charm.land/lipgloss/v2 v2.0.6 // indirect
-	github.com/NimbleMarkets/oksvg v0.1.4 // indirect
+	github.com/NimbleMarkets/oksvg v0.1.6 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
 	github.com/charmbracelet/ultraviolet v0.0.0-20261023060817-a45b7c86333f // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect
@@ -24,7 +24,7 @@ require (
 	github.com/charmbracelet/x/windows v0.2.2 // indirect
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
-	github.com/dlclark/regexp2/v2 v2.11.0 // indirect
+	github.com/dlclark/regexp2/v2 v2.12.0 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/google/pprof v0.0.0-20230207041349-798e818bf904 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.1 // indirect
@@ -38,7 +38,7 @@ require (
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	nimbleterminal.dev/ntfonts v0.2.0 // indirect
-	nimbleterminal.dev/ntsvg v0.5.4 // indirect
+	nimbleterminal.dev/ntsvg v0.5.5 // indirect
 )
 
 // Same WASM-capable Bubble Tea pin as nthtml/ntpicture/nttypeset/ntsvg.
