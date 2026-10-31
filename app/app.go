@@ -19,6 +19,7 @@ import (
 	"nimbleterminal.dev/nthtml"
 	"nimbleterminal.dev/nthtml/document"
 	"nimbleterminal.dev/ntpicture"
+	"nimbleterminal.dev/ntpicture/animation"
 
 	"nimbleterminal.dev/ntbrowser/loop"
 	"nimbleterminal.dev/ntbrowser/netpolicy"
@@ -41,6 +42,13 @@ type pageLoadedMsg struct {
 	seq  uint64 // navigation sequence; only the latest navigation may land
 	hist int    // history index to make current, or pushNew
 	err  error
+
+	// What navigation found, when it is not a page: a line for the status
+	// (the current page stays), or a picture to show in the page's place.
+	finalURL string
+	line     string
+	img      image.Image
+	player   *animation.Player
 }
 
 // pushNew means "truncate forward history and append" (a link, the start
@@ -86,7 +94,8 @@ type Model struct {
 	// editor and chooser state.
 	mode   inputMode
 	focus  loop.FocusMsg
-	ring   string // the element the viewer's focus ring is on ("" = none)
+	ring   string     // the element the viewer's focus ring is on ("" = none)
+	media  *mediaView // a picture shown in the page's place (content.go)
 	input  textinput.Model
 	area   textarea.Model
 	choice int
@@ -144,6 +153,8 @@ func (m *Model) navigate(href string, hist int, anyOrigin bool) tea.Cmd {
 	firstPage := m.hIndex < 0
 	policy := m.policy
 	policy.Origin, policy.AnyOrigin, policy.MaxBody = m.current, anyOrigin, 1<<20
+	policy.Timeout = navTimeout
+	gates := m.profile
 	return func() tea.Msg {
 		u, err := url.Parse(href)
 		if err != nil {
@@ -164,14 +175,11 @@ func (m *Model) navigate(href string, hist int, anyOrigin bool) tea.Cmd {
 			policy.Origin = u // first page: nothing to be same-origin with but itself
 		}
 		f := netpolicy.New(policy)
-		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), navTimeout)
 		defer cancel()
-		resp, err := f.Do(ctx, netpolicy.Request{Method: "GET", URL: u.String()})
-		if err != nil {
-			return pageLoadedMsg{seq: seq, err: err}
-		}
-		final, _ := url.Parse(resp.URL)
-		return pageLoadedMsg{html: resp.Body, base: final, seq: seq, hist: hist}
+		msg := load(ctx, f, u.String(), gates, pageLoadedMsg{seq: seq, hist: hist})
+		msg.base, _ = url.Parse(msg.finalURL)
+		return msg
 	}
 }
 
@@ -234,6 +242,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = clean("load failed: " + v.err.Error()) // errors echo page-controlled input
 			return m, nil
 		}
+		if v.line != "" {
+			m.status = clean(v.line) // not presented; the current page stays
+			return m, nil
+		}
 		m.current = v.base
 		m.resetView = true
 		// History moves only now, on success, so Back/Forward always name
@@ -245,6 +257,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.hIndex = v.hist
 			m.history[v.hist] = v.base.String() // a redirect may have moved it
 		}
+		cmds := []tea.Cmd{m.closeMedia(), m.leaveForms()}
+		if v.img != nil {
+			view, cmd := newMediaView(v.img, v.player, m.cols, m.viewRows())
+			m.media = view
+			m.status = ""
+			return m, tea.Batch(append(cmds, cmd)...)
+		}
 		p := m.policy
 		p.Origin = v.base
 		if m.profile.Fetch != profile.FetchAllowlist {
@@ -252,7 +271,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.loop.LoadPage(v.html, v.base.String(), netpolicy.New(p))
 		m.status = clean("loading " + v.base.String())
-		return m, m.leaveForms()
+		return m, tea.Batch(cmds...)
 
 	case loop.FrameMsg:
 		// Frames arrive from the render worker; drop anything older than
@@ -363,7 +382,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if !searching {
-			if handled, cmd := m.formKey(v); handled {
+			if m.media != nil {
+				if v.String() == "esc" {
+					return m, m.step(-1)
+				}
+			} else if handled, cmd := m.formKey(v); handled {
 				return m, cmd
 			}
 			switch v.String() {
@@ -392,12 +415,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.WindowSizeMsg:
 		m.cols, m.rows = v.Width, v.Height
+		var media tea.Cmd
+		if m.media != nil {
+			media = m.media.setSize(v.Width, m.viewRows())
+		}
 		if m.viewer != nil {
-			cmd := tea.Batch(m.viewer.SetBounds(0, 0, v.Width, m.viewRows()), m.viewer.Update(msg))
+			cmd := tea.Batch(media, m.viewer.SetBounds(0, 0, v.Width, m.viewRows()), m.viewer.Update(msg))
 			m.loop.Resize(documentWidth(m.viewer)) // re-flow at the terminal's real pixel width
 			return m, cmd
 		}
-		return m, nil
+		return m, media
+	}
+	if m.media != nil {
+		return m, m.media.update(msg) // the picture shown in the page's place
 	}
 	if m.viewer != nil {
 		return m, m.viewer.Update(msg)
@@ -421,7 +451,9 @@ func (m *Model) step(delta int) tea.Cmd {
 
 func (m *Model) View() tea.View {
 	body := ""
-	if m.viewer != nil {
+	if m.media != nil {
+		body = m.media.view()
+	} else if m.viewer != nil {
 		body = m.viewer.View()
 	}
 	// Everything on these two lines passed clean() when stored; truncation
