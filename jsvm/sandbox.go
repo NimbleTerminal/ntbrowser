@@ -86,6 +86,7 @@ type Sandbox struct {
 	typeCount   map[string]int
 	nListen     int
 	active      dom.NodeID // focused element, 0 = none
+	forms       FormHooks  // host hooks for submit/reset/value writes (forms.go)
 	collectedMu sync.Mutex
 	collected   []dom.NodeID // NodeIDs whose wrappers the GC reclaimed
 	docObj      *goja.Object

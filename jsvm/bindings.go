@@ -292,18 +292,18 @@ func (s *Sandbox) buildElementProto() *goja.Object {
 		return goja.Undefined()
 	})
 	s.method(p, "focus", func(c goja.FunctionCall) goja.Value {
-		n := s.node(c.This)
-		if s.tree.Attached(n) && n.Kind() == dom.Element {
-			s.active = n.ID()
+		if n := s.node(c.This); dom.Focusable(n) && s.tree.Attached(n) {
+			_ = s.SetFocus(n.ID()) // listener errors are logged inside
 		}
 		return goja.Undefined()
 	})
 	s.method(p, "blur", func(c goja.FunctionCall) goja.Value {
 		if s.active == s.node(c.This).ID() {
-			s.active = 0
+			_ = s.SetFocus(0)
 		}
 		return goja.Undefined()
 	})
+	s.installFormBindings(p)
 	return p
 }
 
@@ -603,11 +603,16 @@ type Event struct {
 	Target dom.NodeID // 0 targets the focused element (keyboard) or the document
 	Key    string     // keydown: DOM KeyboardEvent.key where known
 	Href   string     // click: the resolved href of the target or its nearest <a>, if any
+	// NoBubble limits dispatch to the target (focus, blur); the zero value
+	// bubbles to the document, as every other event here does.
+	NoBubble bool
 }
 
 // Dispatch runs listeners from the target up to the document (bubbling
 // only). It returns whether the page called preventDefault. All listener
-// calls happen inside one watchdog slice.
+// calls happen inside one watchdog slice. Called from inside running script
+// (element.focus()), it runs the listeners in the current slice; their
+// exceptions are logged rather than thrown into the caller, as in browsers.
 func (s *Sandbox) Dispatch(ev Event) (prevented bool, err error) {
 	if s.disabled {
 		return false, ErrDisabled // nothing can prevent anything any more
@@ -635,11 +640,14 @@ func (s *Sandbox) Dispatch(ev Event) (prevented bool, err error) {
 				path = append(path, hop{w, fns})
 			}
 		}
+		if ev.NoBubble {
+			break
+		}
 	}
 	if len(path) == 0 {
 		return false, nil
 	}
-	err = s.Run(func(vm *goja.Runtime) error {
+	run := func(vm *goja.Runtime) error {
 		stopped := false
 		e := vm.NewObject()
 		defineFrozen(e, "type", vm.ToValue(ev.Type))
@@ -666,7 +674,14 @@ func (s *Sandbox) Dispatch(ev Event) (prevented bool, err error) {
 			}
 		}
 		return nil
-	})
+	}
+	if s.running {
+		if err := run(s.vm); err != nil {
+			s.host.Log("error", "uncaught in "+ev.Type+" listener: "+safeString(s.vm.ToValue(err.Error())))
+		}
+		return prevented, nil
+	}
+	err = s.Run(run)
 	return prevented, err
 }
 
@@ -678,22 +693,38 @@ func (s *Sandbox) Active() dom.NodeID { return s.active }
 
 // Focus sets the focused element from the host (e.g. after a click hit a
 // focusable element). Non-focusable targets clear focus to the body.
-func (s *Sandbox) Focus(id dom.NodeID) {
-	n := s.tree.Node(id)
-	if n == nil || !s.tree.Attached(n) || !focusable(n) {
-		s.active = 0
-		return
+func (s *Sandbox) Focus(id dom.NodeID) { _ = s.SetFocus(id) }
+
+// SetFocus moves focus to id (0 or a non-focusable or detached element
+// clears it) and dispatches blur/focusout on the old element and
+// focus/focusin on the new, each only when the page listens for it, so a
+// listener-free page never enters the VM.
+func (s *Sandbox) SetFocus(id dom.NodeID) error {
+	if n := s.tree.Node(id); n == nil || !s.tree.Attached(n) || !focusable(n) {
+		id = 0
+	}
+	old := s.active
+	if id == old {
+		return nil
 	}
 	s.active = id
+	var errs []error
+	fire := func(target dom.NodeID, typ string, noBubble bool) {
+		if target == 0 || !s.HasListeners(typ) {
+			return
+		}
+		if n := s.tree.Node(target); n == nil || !s.tree.Attached(n) {
+			return
+		}
+		if _, err := s.Dispatch(Event{Type: typ, Target: target, NoBubble: noBubble}); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	fire(old, "blur", true)
+	fire(old, "focusout", false)
+	fire(id, "focus", true)
+	fire(id, "focusin", false)
+	return errors.Join(errs...)
 }
 
-func focusable(n *dom.Node) bool {
-	if _, ok := n.Attr("tabindex"); ok {
-		return true
-	}
-	switch n.Tag() {
-	case "a", "button", "input", "select", "textarea", "summary":
-		return true
-	}
-	return false
-}
+func focusable(n *dom.Node) bool { return dom.Focusable(n) }
