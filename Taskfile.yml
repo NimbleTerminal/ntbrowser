@@ -8,7 +8,7 @@ env:
 
 vars:
   EXE: '{{if eq OS "windows"}}.exe{{end}}'
-  WASM_PKGS: ./dom ./jsvm ./loop ./netpolicy ./subres ./profile
+  WASM_PKGS: ./dom ./jsvm ./loop ./netpolicy ./subres ./profile ./content
 
 tasks:
   default:

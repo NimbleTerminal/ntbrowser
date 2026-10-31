@@ -19,7 +19,7 @@ import (
 // where those imports belong.
 func TestNoSystemImports(t *testing.T) {
 	forbidden := map[string]bool{"os": true, "os/exec": true, "net": true, "net/http": true, "syscall": true, "io/fs": true, "plugin": true, "unsafe": true}
-	for _, pkg := range []string{"nimbleterminal.dev/ntbrowser/jsvm", "nimbleterminal.dev/ntbrowser/dom", "nimbleterminal.dev/ntbrowser/profile"} {
+	for _, pkg := range []string{"nimbleterminal.dev/ntbrowser/jsvm", "nimbleterminal.dev/ntbrowser/dom", "nimbleterminal.dev/ntbrowser/profile", "nimbleterminal.dev/ntbrowser/content"} {
 		p, err := build.Import(pkg, ".", 0)
 		if err != nil {
 			t.Fatal(err)

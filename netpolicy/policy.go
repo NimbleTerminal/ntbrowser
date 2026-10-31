@@ -15,6 +15,7 @@ import (
 	"net/netip"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -54,6 +55,7 @@ const (
 	KindDocument Kind = iota // fetch() and top-level navigation: today's behaviour
 	KindStyle                // a stylesheet: text/css (or octet-stream with a .css path), 2xx only
 	KindImage                // an image: png, jpeg, gif, webp or svg+xml, 2xx only
+	KindNavigate             // top-level navigation: any content type; the caller classifies (content.Classify)
 )
 
 type Request struct {
@@ -197,34 +199,62 @@ func (f *Fetcher) Resolve(ref string) (*url.URL, error) {
 	return u, nil
 }
 
-// Do performs one bounded request. It is safe for concurrent use; the loop
-// calls it from a worker goroutine, never from the VM goroutine.
-func (f *Fetcher) Do(ctx context.Context, r Request) (Response, error) {
+// OpenResponse is a response whose headers have passed every check and whose
+// body has not been read. Body holds the request's in-flight slot until it is
+// closed; closing twice is safe.
+type OpenResponse struct {
+	Status      int
+	URL         string // final URL after vetted redirects
+	ContentType string
+	Length      int64 // -1 when the server did not say
+	Headers     map[string]string
+	Body        io.ReadCloser
+}
+
+type openBody struct {
+	io.ReadCloser
+	once sync.Once
+	done func()
+}
+
+func (b *openBody) Close() error {
+	err := b.ReadCloser.Close()
+	b.once.Do(b.done)
+	return err
+}
+
+// Open performs a request up to the response headers, under every check Do
+// makes. It is safe for concurrent use.
+func (f *Fetcher) Open(ctx context.Context, r Request) (*OpenResponse, error) {
 	select {
 	case f.sem <- struct{}{}:
-		defer func() { <-f.sem }()
 	default:
-		return Response{}, ErrBusy
+		return nil, ErrBusy
 	}
+	release := func() { <-f.sem }
 	u, err := f.Resolve(r.URL)
 	if err != nil {
-		return Response{}, err
+		release()
+		return nil, err
 	}
 	method := strings.ToUpper(r.Method)
 	if method == "" {
 		method = http.MethodGet
 	}
 	if method != http.MethodGet && method != http.MethodPost {
-		return Response{}, fmt.Errorf("%w: method %s", ErrDenied, method)
+		release()
+		return nil, fmt.Errorf("%w: method %s", ErrDenied, method)
 	}
 	if int64(len(r.Body)) > f.p.MaxBody {
-		return Response{}, ErrTooLarge
+		release()
+		return nil, ErrTooLarge
 	}
 	ctx, cancel := context.WithTimeout(ctx, f.p.Timeout)
-	defer cancel()
+	done := func() { cancel(); release() }
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), strings.NewReader(r.Body))
 	if err != nil {
-		return Response{}, err
+		done()
+		return nil, err
 	}
 	req.Header.Set("User-Agent", "ntbrowser/0.1 (+https://nimbleterminal.dev)")
 	req.Header.Set("Accept", acceptFor(r.Kind))
@@ -235,23 +265,22 @@ func (f *Fetcher) Do(ctx context.Context, r Request) (Response, error) {
 	}
 	resp, err := f.client.Do(req)
 	if err != nil {
-		return Response{}, err
+		done()
+		return nil, err
 	}
-	defer resp.Body.Close()
-	if r.Kind != KindDocument && (resp.StatusCode < 200 || resp.StatusCode > 299) {
-		return Response{}, fmt.Errorf("%w: status %d", ErrDenied, resp.StatusCode)
+	if r.Kind != KindDocument && r.Kind != KindNavigate && (resp.StatusCode < 200 || resp.StatusCode > 299) {
+		resp.Body.Close()
+		done()
+		return nil, fmt.Errorf("%w: status %d", ErrDenied, resp.StatusCode)
 	}
-	if err := acceptableFor(r.Kind, resp.Request.URL.Path, resp.Header.Get("Content-Type")); err != nil {
-		return Response{}, err
+	if r.Kind != KindNavigate {
+		if err := acceptableFor(r.Kind, resp.Request.URL.Path, resp.Header.Get("Content-Type")); err != nil {
+			resp.Body.Close()
+			done()
+			return nil, err
+		}
 	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, f.p.MaxBody+1))
-	if err != nil {
-		return Response{}, err
-	}
-	if int64(len(body)) > f.p.MaxBody {
-		return Response{}, ErrTooLarge
-	}
-	out := Response{Status: resp.StatusCode, StatusText: http.StatusText(resp.StatusCode), URL: resp.Request.URL.String(), Headers: map[string]string{}, Body: string(body)}
+	out := &OpenResponse{Status: resp.StatusCode, URL: resp.Request.URL.String(), ContentType: resp.Header.Get("Content-Type"), Length: resp.ContentLength, Headers: map[string]string{}, Body: &openBody{ReadCloser: resp.Body, done: done}}
 	for _, h := range responseHeaderAllow {
 		if v := resp.Header.Get(h); v != "" {
 			out.Headers[strings.ToLower(h)] = v
@@ -260,12 +289,32 @@ func (f *Fetcher) Do(ctx context.Context, r Request) (Response, error) {
 	return out, nil
 }
 
+// Do performs one bounded request. It is safe for concurrent use; the loop
+// calls it from a worker goroutine, never from the VM goroutine.
+func (f *Fetcher) Do(ctx context.Context, r Request) (Response, error) {
+	o, err := f.Open(ctx, r)
+	if err != nil {
+		return Response{}, err
+	}
+	defer o.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(o.Body, f.p.MaxBody+1))
+	if err != nil {
+		return Response{}, err
+	}
+	if int64(len(body)) > f.p.MaxBody {
+		return Response{}, ErrTooLarge
+	}
+	return Response{Status: o.Status, StatusText: http.StatusText(o.Status), URL: o.URL, Headers: o.Headers, Body: string(body)}, nil
+}
+
 func acceptFor(k Kind) string {
 	switch k {
 	case KindStyle:
 		return "text/css"
 	case KindImage:
 		return "image/png, image/jpeg, image/gif, image/webp, image/svg+xml"
+	case KindNavigate:
+		return "text/html, text/*;q=0.9, */*;q=0.8"
 	}
 	return "text/*, application/json;q=0.9"
 }
