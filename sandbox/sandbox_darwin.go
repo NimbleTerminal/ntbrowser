@@ -1,8 +1,10 @@
 package sandbox
 
 import (
+	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -55,6 +57,33 @@ func Policy(p profile.Profile, start, tempDir, exe string) string {
 	}
 	return b.String()
 }
+
+// HelperPolicy confines the media helper: no network, no terminal, no file
+// writes; it reads libmpv and its libraries and the media directory.
+func HelperPolicy(helper, tempDir string) string {
+	var b strings.Builder
+	w := func(format string, args ...any) { fmt.Fprintf(&b, format+"\n", args...) }
+	w("(version 1)")
+	w("(deny default)")
+	w("(import \"system.sb\")")
+	w("(deny file-read* (subpath \"/private/etc\") (subpath \"/etc\") (subpath \"/Users\") (subpath \"/private/var/root\"))")
+	w("(allow process-exec (literal %s))", q(helper))
+	w("(allow signal (target self))")
+	w("(allow sysctl-read)")
+	w("(allow file-read-metadata)")
+	w("(allow file-read* (literal %s) (subpath %s) (subpath \"/opt/homebrew\") (subpath \"/usr/local/lib\") (subpath \"/usr/local/Cellar\") (subpath \"/usr/local/opt\") (subpath \"/usr/lib\") (subpath \"/System/Library\"))", q(helper), q(tempDir))
+	w("(allow file-read* file-write* (literal \"/dev/null\"))")
+	w("(allow file-read* (literal \"/dev/urandom\") (literal \"/dev/random\"))")
+	w("(deny network*)")
+	return b.String()
+}
+
+func helperCommand(helper, tempDir string) (*exec.Cmd, error) {
+	return exec.Command(sandboxExec, "-p", HelperPolicy(helper, tempDir), helper, tempDir), nil
+}
+
+// MediaStage is Linux's; macOS confines the helper from outside.
+func MediaStage(string, string) error { return errors.New("sandbox: no media stage on macOS") }
 
 // Reexec replaces the process with itself under sandbox-exec. args are the
 // program's arguments; it returns only if that cannot happen. The sandboxed

@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -81,5 +82,36 @@ func TestShowProfilePrintsEffective(t *testing.T) {
 func TestUnknownProfileFails(t *testing.T) {
 	if _, err := parseArgs([]string{"-profile", "nope", "https://a.test/"}); err == nil {
 		t.Fatal("accepted")
+	}
+}
+
+func TestHelperOnlyWhenVideo(t *testing.T) {
+	p, _ := profile.Builtin("browse")
+	if needsHelper(p) {
+		t.Fatal("browse must not start the helper")
+	}
+	if !needsHelper(p.WithVideo()) {
+		t.Fatal("video needs the helper")
+	}
+}
+
+func TestSandboxArgsCarryMediaFD(t *testing.T) {
+	rest, dir, fd, sandboxed := sandboxArgs([]string{"--sandboxed=/tmp/x", "--media-fd=7", "-profile", "reader", "u"})
+	if dir != "/tmp/x" || fd != 7 || !sandboxed || len(rest) != 3 {
+		t.Fatalf("%v %q %d %v", rest, dir, fd, sandboxed)
+	}
+}
+
+// All native code lives in cmd/ntbrowser-media: a compromised page must never
+// share a process with it.
+func TestMainDoesNotLinkNativeCode(t *testing.T) {
+	out, err := exec.Command("go", "list", "-deps", ".").CombinedOutput()
+	if err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
+	for _, bad := range []string{"ntvideo", "goffi"} {
+		if strings.Contains(string(out), bad) {
+			t.Fatalf("ntbrowser links %s", bad)
+		}
 	}
 }

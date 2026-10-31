@@ -26,11 +26,13 @@ tasks:
     cmds:
       - go build -mod=readonly ./...
       - go build -mod=readonly -o bin/ntbrowser{{.EXE}} ./cmd/ntbrowser
+      - cd cmd/ntbrowser-media && go build -mod=readonly -o ../../bin/ntbrowser-media{{.EXE}} .
 
   test:
     desc: Run the test suite under the race detector
     cmds:
       - go test -race -count=1 ./...
+      - cd cmd/ntbrowser-media && go test -race -count=1 .
 
   build-nocjk:
     desc: Build the binary without the CJK fallback face (about 4 MB smaller)
@@ -44,7 +46,9 @@ tasks:
 
   notices:
     desc: Regenerate THIRD_PARTY_NOTICES.md from the modules the binary links
-    cmds: ['go run ./internal/tools/notices > THIRD_PARTY_NOTICES.md']
+    cmds:
+      - go run ./internal/tools/notices > THIRD_PARTY_NOTICES.md
+      - go run ./internal/tools/notices -media > cmd/ntbrowser-media/THIRD_PARTY_NOTICES.md
 
   notices-check:
     desc: Check generated notices without modifying tracked files
@@ -52,6 +56,8 @@ tasks:
       - mkdir -p dist
       - go run ./internal/tools/notices > dist/THIRD_PARTY_NOTICES.md
       - cmp THIRD_PARTY_NOTICES.md dist/THIRD_PARTY_NOTICES.md
+      - go run ./internal/tools/notices -media > dist/MEDIA_NOTICES.md
+      - cmp cmd/ntbrowser-media/THIRD_PARTY_NOTICES.md dist/MEDIA_NOTICES.md
 
   vet:
     desc: go vet

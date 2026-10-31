@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"nimbleterminal.dev/ntbrowser/profile"
@@ -15,6 +16,13 @@ import (
 // tries each escape. A control child without the sandbox proves the attempts
 // work when nothing stops them.
 func TestMain(m *testing.M) {
+	if len(os.Args) == 3 && os.Args[1] == StageArg {
+		fmt.Println(MediaStage(os.Args[0], os.Args[2])) // the helper stage: never returns on success
+		os.Exit(9)
+	}
+	if len(os.Args) == 2 && strings.Contains(os.Args[1], probeMarker) {
+		helperProbe(os.Args[1])
+	}
 	if tmp := os.Getenv("NT_SANDBOX_CHILD"); tmp != "" {
 		os.Exit(child(tmp, os.Getenv("NT_SANDBOX_MODE") == "locked"))
 	}

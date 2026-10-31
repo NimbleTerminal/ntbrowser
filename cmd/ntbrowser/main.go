@@ -12,7 +12,9 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"runtime"
 	"runtime/debug"
+	"strconv"
 	"strings"
 	"time"
 
@@ -121,7 +123,16 @@ func parseArgs(args []string) (config, error) {
 }
 
 func main() {
-	args, tempDir, sandboxed := sandboxArgs(os.Args[1:])
+	if len(os.Args) == 3 && os.Args[1] == sandbox.StageArg {
+		// Linux: this static binary locks down, then becomes the helper.
+		helper, err := sandbox.HelperPath()
+		if err == nil {
+			err = sandbox.MediaStage(helper, os.Args[2])
+		}
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+	args, tempDir, helperFD, sandboxed := sandboxArgs(os.Args[1:])
 	c, err := parseArgs(args)
 	if err != nil {
 		if !errors.Is(err, flag.ErrHelp) {
@@ -139,12 +150,17 @@ func main() {
 			os.Exit(1)
 		}
 	}
+	conn, err := startMedia(c, tempDir, helperFD, sandboxed, &args)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 	strengths, err := lockDown(c, tempDir, args, sandboxed)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	_ = strengths // the status line reports it (app)
+	_, _ = strengths, conn // the status line reports them (app)
 	// Process-wide soft heap cap: Goja has no per-runtime memory limit, so
 	// the GC is told to work harder past this point and dom/nthtml limits
 	// keep individual allocations bounded.
@@ -180,14 +196,55 @@ func main() {
 	}
 }
 
-// sandboxArgs strips the marker the macOS re-exec adds.
-func sandboxArgs(args []string) (rest []string, tempDir string, sandboxed bool) {
+// sandboxArgs strips the markers the macOS re-exec adds.
+func sandboxArgs(args []string) (rest []string, tempDir string, helperFD int, sandboxed bool) {
+	helperFD = -1
 	if len(args) > 0 {
 		if v, ok := strings.CutPrefix(args[0], sandbox.SandboxedArg+"="); ok {
-			return args[1:], v, true
+			tempDir, sandboxed, args = v, true, args[1:]
 		}
 	}
-	return args, "", false
+	if len(args) > 0 {
+		if v, ok := strings.CutPrefix(args[0], mediaFDArg+"="); ok {
+			if fd, err := strconv.Atoi(v); err == nil {
+				helperFD, args = fd, args[1:]
+			}
+		}
+	}
+	return args, tempDir, helperFD, sandboxed
+}
+
+const mediaFDArg = "--media-fd"
+
+// needsHelper is true only for a profile that opened video.
+func needsHelper(p profile.Profile) bool { return p.Media == profile.MediaVideo }
+
+// startMedia starts the media helper before lockdown, when the profile
+// allows video; afterwards the main process cannot start anything. The macOS
+// re-exec comes back with the socket's descriptor instead.
+func startMedia(c config, tempDir string, helperFD int, sandboxed bool, args *[]string) (io.ReadWriteCloser, error) {
+	if !needsHelper(c.Profile) {
+		return nil, nil
+	}
+	if sandboxed && helperFD >= 0 {
+		return os.NewFile(uintptr(helperFD), "media-helper"), nil
+	}
+	path, err := sandbox.HelperPath()
+	if err != nil {
+		return nil, err
+	}
+	h, err := sandbox.StartHelper(c.Profile, path, tempDir)
+	if err != nil {
+		return nil, err
+	}
+	if runtime.GOOS == "darwin" {
+		fd, err := h.InheritableFD()
+		if err != nil {
+			return nil, err
+		}
+		*args = append([]string{mediaFDArg + "=" + strconv.Itoa(fd)}, *args...)
+	}
+	return h.Conn, nil
 }
 
 // lockDown applies OS enforcement before any page content is touched. On

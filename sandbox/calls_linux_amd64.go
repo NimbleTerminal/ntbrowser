@@ -8,5 +8,6 @@ const (
 	sysKexecLoad       = 246
 	sysProcessVMReadv  = 310
 	sysProcessVMWritev = 311
+	sysSocket          = 41
 	sysSeccomp         = 317
 )

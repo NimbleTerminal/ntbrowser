@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"runtime"
 	"syscall"
 	"unsafe"
@@ -146,6 +147,55 @@ func mainRuleset(start, tempDir string, canRead bool) (*ruleset, error) {
 		}
 	}
 	return r, nil
+}
+
+// helperLibPaths are where libmpv and its dependencies live.
+var helperLibPaths = []string{"/lib", "/lib64", "/usr/lib", "/usr/lib64", "/usr/local/lib", "/etc/ld.so.cache", "/etc/ld.so.conf", "/etc/ld.so.conf.d"}
+
+// helperCommand starts this static binary in its stage, which locks down and
+// then becomes the helper. The helper links goffi, which appears to stop it
+// restricting all its own threads; restrictions set here survive execve.
+func helperCommand(helper, tempDir string) (*exec.Cmd, error) {
+	exe, err := os.Executable()
+	if err != nil {
+		return nil, err
+	}
+	return exec.Command(exe, StageArg, tempDir), nil
+}
+
+// deniedHelper adds sockets to what the main process may never do: its only
+// connection is the one it inherited. execve stays allowed, for the stage's
+// one exec; landlock leaves only the helper and libraries executable.
+var deniedHelper = append([]uintptr{sysSocket}, deniedMain[2:]...)
+
+// MediaStage confines this process and replaces it with the helper. It
+// returns only on failure.
+func MediaStage(helper, tempDir string) error {
+	r, err := newRuleset()
+	if err != nil {
+		return err
+	}
+	for _, p := range helperLibPaths {
+		if err := r.add(p, accessRead|accessExecute); err != nil {
+			return err
+		}
+	}
+	if err := r.add(helper, accessRead|accessExecute); err != nil {
+		return err
+	}
+	if err := r.add(tempDir, accessRead); err != nil {
+		return err
+	}
+	if err := r.add("/dev/null", accessFileRW); err != nil {
+		return err
+	}
+	if err := r.restrict(); err != nil {
+		return err
+	}
+	if err := denySyscalls(deniedHelper); err != nil {
+		return err
+	}
+	return syscall.Exec(helper, []string{helper, tempDir}, []string{})
 }
 
 // Apply restricts this process with landlock and seccomp, before any page
