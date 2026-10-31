@@ -21,7 +21,7 @@ Click-to-play video is the first feature that needs both.
 - Named profiles, inspectable before launch, fixed for the life of the process, and not visible to the page.
 - A content tree that navigation produces for every response, with one decision about what a response is, shared by all surfaces.
 - A terminal presenter for pages, images, animations (GIF, WebP), video and unknown content.
-- Opt-in click-to-play video through ntvideo.
+- Opt-in click-to-play video, decoded in a separate sandboxed helper process that is the pattern for any later risky decoder (**Evan**).
 - OS-enforced file and process limits where the platform allows, reported honestly where it does not.
 
 **Non-goals (this round)**
@@ -36,6 +36,7 @@ Click-to-play video is the first feature that needs both.
 - IE's failure: levels nobody could read. Every profile prints as a short table of plain settings.
 - Anything inside the sandbox changing, widening or reading the profile.
 - A native decoder touching content the reader did not ask to play.
+- Native code in the main process, ever.
 - A second parser. For a page, the DOM already is the tree.
 
 ## 3. What recon established
@@ -78,12 +79,12 @@ New packages: `profile` (data, validation, printing; no system imports) and `con
    | `scripts` | `off`, `inline`, `external` | page script |
    | `clock` | milliseconds | script clock resolution (speculation timing) |
    | `files` | `off`, `start-page`, `temp` | `start-page` reads the one `file:` URL given at launch; `temp` adds the private media directory |
-   | `native-code` | `off`, `on` | any native code loaded at runtime (today: libmpv) |
+   | `native-code` | `off`, `on` | native code, which exists only in the media helper (decision 21); the main binary never loads any |
    | `media` | `off`, `image`, `animation`, `video` | the most a top-level response may be presented as (cumulative). Images inside a page are the `subresources` gate; the printed table says so |
    | `max-media-bytes` | bytes | download cap for media |
    | `clipboard` | `off`, `copy` | selected-text copy to the terminal clipboard |
    | `environment` | `off` | reserved: nothing in the sandbox reads the environment |
-   | `process` | `off` | reserved: the program starts no processes; there is no `on` |
+   | `process` | `off` | after startup the program starts no processes; there is no `on`. The media helper is started before lockdown (decision 22) |
 
 2. **Closed by default** (**Evan**). The zero `Profile` is every gate `off`, and code reads the profile, not a flag. A profile only opens gates.
 3. **Three built-in profiles:**
@@ -107,7 +108,7 @@ New packages: `profile` (data, validation, printing; no system imports) and `con
 6. **`-show-profile` prints the effective profile as a table and exits**, including each gate's strength on this machine. The running app shows the profile's name in the help line.
 7. **Frozen and private** (**Evan**). The profile is built before the loop starts and passed by value. No binding exposes it, and nothing in `jsvm` can reach it. A page sees only that things fail, as it does for an unreachable host.
 8. **Each gate has a strength** (**Evan**), and the table reports the strongest that applies:
-   - `compiled-out`: the code is not in this binary (build tags `nocjk`, `nomedia`).
+   - `compiled-out`: the code is not in this binary (build tag `nocjk`; native code is only ever in `ntbrowser-media`).
    - `os`: the kernel refuses (decision 10).
    - `checked`: our code refuses.
 9. **`enforcement` is a profile field:** `required` or `best-effort`. Under `required`, if OS enforcement cannot be applied on this machine, the program exits with an error. Under `best-effort` it runs, and `-show-profile` and the status line on start say `checked` for those gates.
@@ -115,8 +116,8 @@ New packages: `profile` (data, validation, printing; no system imports) and `con
     - **Linux:** landlock (filesystem: read the start page and the Go runtime's needs, read-write the media temp directory, nothing else) and seccomp (deny `execve`, `ptrace`, `mount` family, kernel-module and `bpf` calls). Pure syscalls, so cgo-free. Kernels without landlock are "unavailable".
     - **macOS:** `sandbox_init` needs cgo, so the process re-executes itself under `/usr/bin/sandbox-exec -p <generated policy>` at startup, guarded by an internal argument so it happens once. `sandbox-exec` is deprecated but present; if it is missing, enforcement is "unavailable". The re-exec is the only process ntbrowser starts, it happens before the sandbox exists, and `process=off` applies from then on.
     - **Other platforms and wasm:** "unavailable". In wasm the browser is the OS sandbox.
-    - The sandbox covers libmpv too, since it runs in our process. Generated policies allow the libmpv path only when `native-code=on`.
-11. **Speculation** (**Evan** raised it). No JIT and the `clock` gate are this round's measures. They make timing attacks harder; they do not make them impossible, and the doc says so: nothing in-process is a real boundary against a speculative read of the same address space. A strong boundary for computer use is a separate process per task, which `sandbox` makes possible later.
+    - The main process's policy never allows native code or process creation. The helper has its own policy (decision 24).
+11. **Speculation** (**Evan** raised it). No JIT and the `clock` gate are this round's measures. They make timing attacks harder; they do not make them impossible, and the doc says so: nothing in-process is a real boundary against a speculative read of the same address space. The media helper is the first use of a process boundary; a separate process per task is the strong boundary for computer use, later.
 
 ### Content
 
@@ -149,9 +150,13 @@ New packages: `profile` (data, validation, printing; no system imports) and `con
 ### Video
 
 20. **Only a reader action starts video** (**Evan**: opt-in, click-to-play). Activating a link that resolves to a video, or a focused `<video>` element, starts it. Script cannot: there is no `play()` binding, and `autoplay` is ignored. A `<video>` with a `src` or a `<source>` child becomes focusable only when `media=video`; the first `<source>` whose `type` classifies as `Video` wins. This is best-effort: nthtml gives `<video>` a box only with a known `width` or `height`, so one without has no box and cannot be reached, and nothing is synthesized for it. `poster` is not fetched this round. A poster image inside a link, the nimbleterminal.com case, is an ordinary `<img>` and works; that is the case this round must get right. With video off, activating one shows the status line `video is off in this profile`.
-21. **The player** is an `ntvideo.Model` filling the viewer's area, with `WithScrubber(true)`, in the app. Keys: Space pause, ←/→ seek 5 s, `m` mute, Esc back, Ctrl+C quit. All messages are forwarded to it while open. A page keeps running beneath it, and frames are not shown. Without libmpv, ntvideo's own message shows and Esc still returns.
-22. **Download first, then play.** The file comes through netpolicy, the page's own origin rules and the `navigate` gate, into a private directory (`os.MkdirTemp`, mode 0700, random file name, no extension from the URL), and ntvideo gets that local path. mpv never sees a URL, so every network request stays under netpolicy. The status line shows progress. The file is deleted when the player closes and the directory at exit; a crash leaves it in the OS temp area (accepted).
-23. **ntvideo is compiled in by default and removed with `-tags nomedia`,** as CJK is with `nocjk`. Its only import is in a build-tagged file in `app`. With `nomedia`, `media=video` fails validation, and `-show-profile` reports `compiled-out`. libmpv is loaded only when a video first plays, never at startup, and never when `native-code=off`.
+21. **Risky decoders run in a helper process** (**Evan**: the revised B, because it is a model for other media types). The main binary stays pure Go and static: it links neither ntvideo nor goffi, so OS enforcement holds on it in every profile. `cmd/ntbrowser-media` is a separate binary holding the native code. The helper never touches the terminal. It produces pixels; the main process treats them as opaque bytes of a checked size and hands them to ntpicture, which picks the transport. So it works on any terminal, over SSH and in ntrecord, and a native surface can composite the same frames.
+22. **The helper starts at launch, before the main process locks itself down, and only when `media=video`.** The main process then never needs permission to start anything, so `process=off` holds in every profile and no exec right appears in its policy. The helper idles, with libmpv unloaded, until the first play. It is one process for the session: if it dies, the player says `media helper stopped; restart ntbrowser` and the page goes on. (Starting one per video would need an exec right in the main policy, which is what this avoids. A compromised helper can reach only later videos' pixels.) `ntbrowser-media` is found next to the main executable; if it is missing, `media=video` fails validation.
+23. **The helper protocol is generic, not video-shaped.** A stream socket pair created at launch carries framed binary messages: from the main process `open(name)`, `play`, `pause`, `seek`, `resize(w,h)`, `close`; from the helper `status(state, position, duration, error)` and `frame(seq, w, h, rgba)`. `kind` in the handshake names the decoder, so another media type is another decoder behind the same protocol. Frames are RGBA with `w*h*4` bytes, `w` and `h` no larger than requested, checked by the main process; a violation stops the helper. A pipe-style socket costs one copy per frame and needs no cgo; shared memory is a later optimisation behind the same protocol (ntpicture's shared memory needs cgo on macOS).
+24. **The helper's sandbox is narrower than the main process's, and minimal** (my call; Evan did not choose yet). It has no network, no terminal, an empty environment, and reads only libmpv and its libraries plus the media temp directory. Software decoding, no GPU, no audio: the player says `no audio in this profile`. Terminal recordings are silent, so nothing is lost today, and sound or GPU can become gate values later. On Linux, landlock and seccomp are applied in the helper by a small re-exec-free stage before libmpv loads; if goffi prevents restricting all threads (it appears to set `iscgo`), the helper is started under a wrapper stage that restricts itself and then execs, and this is proved first. On macOS it starts under its own `sandbox-exec` policy. Because it is started before the main lockdown, it is not nested in the main policy.
+25. **The player** is in `app`: a view filling the viewer's area, fed by helper frames through ntpicture, with a scrubber from `status`. Keys: Space pause, ←/→ seek 5 s, Esc back, Ctrl+C quit. A page keeps running beneath it, and its frames are not shown.
+26. **Download first, then play.** The file comes through netpolicy, under the `navigate` gate, into a private directory created before lockdown (`os.MkdirTemp`, mode 0700), with a random name and no extension from the URL. The helper gets only that name, reads it from the directory its sandbox allows, and mpv sees a local file. Every network request stays under netpolicy. The status line shows progress. The file is deleted when the player closes and the directory at exit; a crash leaves it in the OS temp area (accepted).
+27. **Needed from ntvideo:** today its frames come only through the Bubble Tea `Model` (the backend's `Frame` is unexported, and `WithFrameTransform` is a stopgap), and `hwdec=auto-copy` and audio are fixed. The helper needs a headless player: load a local path, play, pause, seek, pull RGBA frames at a requested size, status, with hardware decoding and audio off. That is a small upstream request, and the plan's first dependency.
 
 ## 6. Interfaces
 
@@ -168,7 +173,7 @@ type Profile struct {
 }
 func Builtin(name string) (Profile, bool)
 func Parse(jsonBytes []byte) (Profile, error) // unknown fields are errors; base resolved
-func (p Profile) Validate() error
+func (p Profile) Validate() error // also: helper binary present when media=video
 func (p Profile) ValidateStart(rawURL string) error
 func (p Profile) Table(s Strengths) string
 
@@ -180,8 +185,12 @@ func (f *Fetcher) Open(ctx context.Context, r Request) (*OpenResponse, error) //
 func Classify(mime, rawURL string) Kind
 type Node struct { /* decision 12 */ }
 
-// sandbox: per platform, imported only by cmd/ntbrowser.
+// sandbox: per platform, imported only by cmd/ntbrowser and cmd/ntbrowser-media.
 func Apply(p profile.Profile, start string) (Strengths, error)
+
+// mediaproc: the helper protocol (no system imports beyond the socket it is given).
+type Client struct{ /* main side: Open, Play, Pause, Seek, Resize, Close, Frames, Status */ }
+type Decoder interface{ /* helper side: one per kind */ }
 ```
 
 `app.New` and `loop.Config` take the `Profile` in place of the flags they take today; the subresource and fetch policies are derived from it.
@@ -189,7 +198,8 @@ func Apply(p profile.Profile, start string) (Strengths, error)
 ## 7. Threat model additions
 
 - **A hostile page or agent inside the sandbox:** it has only the JS surface; the gates are not reachable from it, and OS enforcement backs the file and process gates.
-- **Hostile media:** images and animations go through pure-Go decoders with limits. Video reaches C decoders only after a reader action in a profile that opened `native-code`, and the OS sandbox still applies to that process. This is the main risk the round adds, and it is why video is in no built-in.
+- **Hostile media:** images and animations go through pure-Go decoders with limits. Video reaches C decoders only after a reader action in a profile that opened `native-code`, and only in the helper, whose sandbox has no network, terminal or environment. A compromised decoder can send wrong pixels, which are bounded and checked, or stop. This is the main risk the round adds, and it is why video is in no built-in.
+- **Helper channel:** the main process parses a small fixed binary protocol from a process it must treat as hostile; the parser is fuzzed, and sizes are checked before allocation.
 - **Type confusion:** a server calling HTML `video/mp4` gets it treated as video; a server calling a video `text/html` gets it parsed as a page, safely. mpv probes files itself, so a non-video in a video response fails in mpv, in the same sandbox.
 - **Temp files:** private directory, random names, deleted on close. `files=temp` adds nothing the page can read: no binding touches the filesystem.
 - **Honest reporting:** a gate reported stronger than it is would be a security bug, so `Strengths` comes from what `Apply` actually achieved.
@@ -203,7 +213,8 @@ func Apply(p profile.Profile, start string) (Strengths, error)
 - Each kind × each `media` value: allowed presents; refused reads no body and leaves the page in place.
 - Each gate closed produces the refusal it should, end to end in `loop`/`app`: `scripts=off` runs no script, `fetch=off` rejects, `navigate=off` refuses a link, `clipboard=off` does not copy.
 - `sandbox`, Linux (CI or a container): under `locked`, a child test process cannot read `/etc/passwd`, write outside temp or `execve`. macOS: the same through the re-exec. `required` with enforcement unavailable exits non-zero.
-- Video: no reader action, no player; script cannot start it; `autoplay` ignored; `nomedia` build fails validation; temp file gone after Esc; libmpv not loaded when `native-code=off`.
+- Video: no reader action, no player; script cannot start it; `autoplay` ignored; a missing helper binary fails validation; temp file gone after Esc; no helper process exists when `media` is below `video`.
+- Helper: the main binary links no goffi or ntvideo (`go list -deps` test); the protocol parser fuzzed; oversize frames, bad sizes and a killed helper leave the page running; helper sandbox tests (no network, cannot read `/etc/passwd`, no terminal, empty environment); a fake `Decoder` drives the player without mpv.
 - A fake `Surface` proves a presenter can choose a lesser presentation, and that a refused node never reaches it.
 - Live: nimbleterminal.com, activating a recording, plays under `-media video`, and shows the refusal line under `browse`.
 - `GOOS=js GOARCH=wasm` builds `profile` and `content` along with the existing list.
