@@ -16,9 +16,6 @@ import (
 
 const sandboxExec = "/usr/bin/sandbox-exec"
 
-// SandboxedArg marks the re-executed process.
-const SandboxedArg = "--sandboxed"
-
 // Available reports whether sandbox-exec works here. It is deprecated but
 // shipped; sandbox_init itself would need cgo. Inside another sandbox it
 // cannot apply a policy, so it is tried, once.
@@ -49,7 +46,7 @@ func Policy(p profile.Profile, start, tempDir, exe string) string {
 	w("  (literal \"/private/etc/hosts\") (literal \"/private/etc/resolv.conf\") (literal \"/private/var/run/resolv.conf\") (literal \"/private/etc/ssl/cert.pem\") (literal \"/private/etc/services\") (literal \"/private/etc/localtime\"))")
 	w("(allow file-read* file-write* file-ioctl (literal \"/dev/null\") (literal \"/dev/tty\") (regex #\"^/dev/ttys[0-9]+$\"))")
 	w("(allow file-read* (literal \"/dev/urandom\") (literal \"/dev/random\"))")
-	w("(allow network-outbound (remote ip) (literal \"/private/var/run/mDNSResponder\"))") // no other Unix socket
+	w("(allow network-outbound (remote ip \"*:*\") (literal \"/private/var/run/mDNSResponder\"))") // no other Unix socket
 	w("(allow system-socket)")
 	if start != "" && p.ReadsStartFile() {
 		w("(allow file-read* (literal %s))", q(start))
@@ -88,8 +85,9 @@ func helperCommand(helper, tempDir string) (*exec.Cmd, error) {
 func MediaStage(string, string) error { return errors.New("sandbox: no media stage on macOS") }
 
 // Reexec replaces the process with itself under sandbox-exec. args are the
-// program's arguments; it returns only if that cannot happen. The sandboxed
-// process sees SandboxedArg first, so this happens once.
+// program's arguments, which must mark the run as sandboxed so this happens
+// once; it returns only if that cannot happen. Without sandbox-exec, under
+// best-effort, it returns nil and the program goes on unconfined.
 func Reexec(p profile.Profile, start, tempDir string, args []string) error {
 	if !Available() {
 		return checkRequired(p, false)
@@ -101,7 +99,7 @@ func Reexec(p profile.Profile, start, tempDir string, args []string) error {
 	if exe, err = filepath.EvalSymlinks(exe); err != nil {
 		return err
 	}
-	argv := append([]string{"sandbox-exec", "-p", Policy(p, start, tempDir, exe), exe, SandboxedArg + "=" + tempDir}, args...)
+	argv := append([]string{"sandbox-exec", "-p", Policy(p, start, tempDir, exe), exe}, args...)
 	return syscall.Exec(sandboxExec, argv, os.Environ())
 }
 

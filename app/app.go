@@ -106,7 +106,9 @@ type Model struct {
 	mediaDir    string
 	player      *player
 	navCancel   context.CancelFunc
+	navURL      string
 	downloading atomic.Bool
+	notEnforced bool
 	input       textinput.Model
 	area        textarea.Model
 	choice      int
@@ -169,8 +171,8 @@ func (m *Model) navigate(href string, hist int, anyOrigin bool) tea.Cmd {
 	if m.navCancel != nil {
 		m.navCancel() // a newer navigation wins; an unfinished download stops
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), navTimeout)
-	m.navCancel = cancel
+	ctx, cancel := context.WithCancel(context.Background())
+	m.navCancel, m.navURL = cancel, href
 	var video *videoTarget
 	if m.bridge != nil {
 		video = &videoTarget{dir: m.mediaDir, cap: m.profile.MaxMediaBytes, active: &m.downloading, dead: m.bridge.dead.Load(), progress: func(n int64) { m.bridge.send(videoProgressMsg{n}) }}
@@ -196,7 +198,7 @@ func (m *Model) navigate(href string, hist int, anyOrigin bool) tea.Cmd {
 		}
 		f := netpolicy.New(policy)
 		defer cancel()
-		msg := load(ctx, f, u.String(), gates, video, pageLoadedMsg{seq: seq, hist: hist})
+		msg := load(ctx, cancel, f, u.String(), gates, video, pageLoadedMsg{seq: seq, hist: hist})
 		msg.base, _ = url.Parse(msg.finalURL)
 		return msg
 	}
@@ -209,8 +211,8 @@ func (m *Model) anyOriginFor() bool { return m.nav != NavAllowlist }
 // admit applies the NavMode to a link the page did not prevent, or to a form
 // submission (same gate, its own confirmation wording).
 func (m *Model) admit(href string, form bool) tea.Cmd {
-	if m.downloading.Load() {
-		return nil // one video at a time
+	if m.downloading.Load() && href == m.navURL {
+		return nil // already on its way; anything else replaces the download
 	}
 	u, err := url.Parse(href)
 	if err != nil {
@@ -380,9 +382,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.SetClipboard(v.Text)
 
 	case tea.MouseClickMsg:
+		if m.overlay() {
+			return m, nil // nothing reaches the page beneath a picture or video
+		}
 		m.pressed = v.Button == tea.MouseLeft
 		m.pressCell = image.Pt(v.X, v.Y)
 	case tea.MouseReleaseMsg:
+		if m.overlay() {
+			return m, nil
+		}
 		p := image.Pt(v.X, v.Y)
 		click := m.pressed && p == m.pressCell
 		m.pressed = false
@@ -423,8 +431,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if !searching {
 			if m.media != nil {
-				if v.String() == "esc" {
+				switch v.String() {
+				case "esc":
 					return m, m.step(-1)
+				case "q", "ctrl+c", "backspace", "alt+left", "alt+right":
+				default:
+					return m, nil
 				}
 			} else if handled, cmd := m.formKey(v); handled {
 				return m, cmd
@@ -440,6 +452,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.current != nil {
 					return m, m.navigate(m.current.String(), m.hIndex, m.anyOriginFor())
 				}
+				return m, nil
+			}
+			if m.overlay() {
 				return m, nil
 			}
 			// The terminal keeps its own navigation keys; the page gets a copy
@@ -465,24 +480,37 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, media
 	}
-	if m.player != nil {
-		return m, m.player.pic.Update(msg)
+	var overlay tea.Cmd
+	switch {
+	case m.player != nil:
+		overlay = m.player.pic.Update(msg)
+	case m.media != nil:
+		overlay = m.media.update(msg)
 	}
-	if m.media != nil {
-		return m, m.media.update(msg) // the picture shown in the page's place
+	// The viewer's own picture messages must reach it even under an overlay:
+	// its render job would otherwise never finish and the page stay frozen.
+	// Only input stops at the overlay.
+	if _, input := msg.(tea.MouseMsg); input && m.overlay() {
+		return m, overlay
 	}
 	if m.viewer != nil {
-		return m, m.viewer.Update(msg)
+		return m, tea.Batch(overlay, m.viewer.Update(msg))
 	}
-	return m, nil
+	return m, overlay
 }
+
+// overlay reports a picture or video in the page's place.
+func (m *Model) overlay() bool { return m.player != nil || m.media != nil }
 
 // quit starts shutdown: graphics are cleaned up, then the program ends.
 func (m *Model) quit() tea.Cmd {
 	m.closing = true
-	var closeCmd tea.Cmd
+	if m.navCancel != nil {
+		m.navCancel()
+	}
+	closeCmd := tea.Batch(m.closePlayer(), m.closeMedia())
 	if m.viewer != nil {
-		closeCmd = m.viewer.Close()
+		closeCmd = tea.Batch(closeCmd, m.viewer.Close())
 	}
 	return tea.Sequence(closeCmd, tea.Tick(shutdownGrace, func(time.Time) tea.Msg { return shutdownReadyMsg{} }))
 }
@@ -523,7 +551,11 @@ func (m *Model) View() tea.View {
 	if len(m.history) > 1 {
 		pos = fmt.Sprintf(" · %d/%d", m.hIndex+1, len(m.history))
 	}
-	help := "\n ntbrowser · " + ansi.Truncate(clean(m.title), 40, "…") + pos + " · profile " + clean(m.profile.Name) + " · Tab focus · Enter open · ⌫ back · ⌥→ fwd · ^R reload · / search · q quit"
+	enforced := ""
+	if m.notEnforced {
+		enforced = " (not OS-enforced)"
+	}
+	help := "\n ntbrowser · " + ansi.Truncate(clean(m.title), 40, "…") + pos + " · profile " + clean(m.profile.Name) + enforced + " · Tab focus · Enter open · ⌫ back · ⌥→ fwd · ^R reload · / search · q quit"
 	if h := m.helpLine(); h != "" {
 		help = "\n" + h
 	}

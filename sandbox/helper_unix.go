@@ -45,3 +45,6 @@ func StartHelper(p profile.Profile, helper, tempDir string) (*Helper, error) {
 // InheritableFD duplicates our end for the macOS re-exec: a dup is not
 // close-on-exec, so it survives into the sandboxed process.
 func (h *Helper) InheritableFD() (int, error) { return syscall.Dup(int(h.file.Fd())) }
+
+// KillHelper ends a helper by process id, for a process that holds no Helper.
+func KillHelper(pid int) { syscall.Kill(pid, syscall.SIGKILL) }

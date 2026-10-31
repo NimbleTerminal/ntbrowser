@@ -79,9 +79,6 @@ func landlockABI() int {
 // Available reports whether the kernel has landlock.
 func Available() bool { return landlockABI() > 0 }
 
-// SandboxedArg marks a re-executed process; Linux never re-executes.
-const SandboxedArg = "--sandboxed"
-
 // Reexec is not needed on Linux: Apply restricts the running process.
 func Reexec(profile.Profile, string, string, []string) error { return nil }
 

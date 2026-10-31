@@ -26,8 +26,11 @@ import (
 
 const (
 	pageReadTimeout = 15 * time.Second
-	navTimeout      = 60 * time.Second // the whole response, media downloads included
+	navTimeout      = 15 * time.Second // reaching the response headers
 )
+
+// navIdle ends a media download that has stopped making progress.
+var navIdle = 30 * time.Second
 
 // termSurface presents content in the terminal. player says whether a media
 // helper is connected.
@@ -77,18 +80,21 @@ func humanSize(n int64) string {
 
 // load fetches u and turns the response into a pageLoadedMsg: classified from
 // its headers, checked against the profile, and only then read, by kind.
-func load(ctx context.Context, f *netpolicy.Fetcher, u string, p profile.Profile, video *videoTarget, msg pageLoadedMsg) pageLoadedMsg {
+func load(ctx context.Context, stop context.CancelFunc, f *netpolicy.Fetcher, u string, p profile.Profile, video *videoTarget, msg pageLoadedMsg) pageLoadedMsg {
 	o, err := f.Open(ctx, netpolicy.Request{Method: "GET", URL: u, Kind: netpolicy.KindNavigate})
 	if err != nil {
 		msg.err = err
 		return msg
 	}
 	defer o.Body.Close()
+	idle := time.AfterFunc(navIdle, stop)
+	defer idle.Stop()
+	body := &idleReader{r: o.Body, idle: idle}
 	n := &content.Node{Kind: content.Classify(o.ContentType, o.URL), MIME: o.ContentType, URL: o.URL, Size: o.Length}
 	msg.finalURL = o.URL
 	switch pres := content.Decide(termSurface{player: video != nil}, n, p.Media); pres {
 	case content.PresentPlayer:
-		download(ctx, o.Body, n, video, &msg)
+		download(ctx, body, n, video, &msg)
 	case content.PresentRefused:
 		msg.line = n.Kind.String() + " is off in this profile"
 	case content.PresentLine:
@@ -96,12 +102,12 @@ func load(ctx context.Context, f *netpolicy.Fetcher, u string, p profile.Profile
 	case content.PresentPage:
 		timer := time.AfterFunc(pageReadTimeout, func() { o.Body.Close() })
 		defer timer.Stop()
-		body, err := readCapped(o.Body, 1<<20)
+		page, err := readCapped(body, 1<<20)
 		if err != nil {
 			msg.err = err
 			return msg
 		}
-		msg.html = string(body)
+		msg.html = string(page)
 		if n.Kind == content.Text {
 			msg.html = "<!doctype html><pre>" + html.EscapeString(msg.html) + "</pre>"
 		}
@@ -110,7 +116,7 @@ func load(ctx context.Context, f *netpolicy.Fetcher, u string, p profile.Profile
 			msg.line = describe(n, "over the media limit")
 			return msg
 		}
-		data, err := readCapped(o.Body, p.MaxMediaBytes)
+		data, err := readCapped(body, p.MaxMediaBytes)
 		if errors.Is(err, netpolicy.ErrTooLarge) {
 			msg.line = describe(n, "over the media limit")
 			return msg
@@ -129,6 +135,20 @@ func load(ctx context.Context, f *netpolicy.Fetcher, u string, p profile.Profile
 		}
 	}
 	return msg
+}
+
+// idleReader restarts its timer on every read that makes progress.
+type idleReader struct {
+	r    io.Reader
+	idle *time.Timer
+}
+
+func (i *idleReader) Read(p []byte) (int, error) {
+	n, err := i.r.Read(p)
+	if n > 0 {
+		i.idle.Reset(navIdle)
+	}
+	return n, err
 }
 
 // maxImagePixels bounds a decoded still; animation has its own limits.

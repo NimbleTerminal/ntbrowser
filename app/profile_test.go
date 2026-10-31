@@ -38,3 +38,14 @@ func TestHelpLineNamesProfile(t *testing.T) {
 		t.Fatalf("%q", statusLines(m))
 	}
 }
+
+func TestHelpSaysWhenNotEnforced(t *testing.T) {
+	m := newModel(t, NavFree)
+	if strings.Contains(statusLines(m), "not OS-enforced") {
+		t.Fatal(statusLines(m))
+	}
+	m.SetEnforced(false)
+	if !strings.Contains(statusLines(m), "not OS-enforced") {
+		t.Fatal(statusLines(m))
+	}
+}

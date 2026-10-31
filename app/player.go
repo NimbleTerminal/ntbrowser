@@ -41,11 +41,12 @@ type MediaBridge struct {
 	latest  atomic.Pointer[image.RGBA]
 	pending atomic.Bool
 	dead    atomic.Bool
+	kill    func() // ends the helper process; a violation must stop it, not just the socket
 }
 
 // NewMediaBridge starts talking to the helper on conn; send must not block.
-func NewMediaBridge(conn io.ReadWriteCloser, send func(tea.Msg)) (*MediaBridge, error) {
-	b := &MediaBridge{send: send}
+func NewMediaBridge(conn io.ReadWriteCloser, send func(tea.Msg), kill func()) (*MediaBridge, error) {
+	b := &MediaBridge{send: send, kill: kill}
 	b.client = mediaproc.NewClient(conn, func(s mediaproc.Status) { send(videoStatusMsg{s}) }, func(img *image.RGBA) {
 		b.latest.Store(img)
 		if b.pending.CompareAndSwap(false, true) {
@@ -59,6 +60,9 @@ func NewMediaBridge(conn io.ReadWriteCloser, send func(tea.Msg)) (*MediaBridge, 
 	go func() {
 		<-b.client.Dead()
 		b.dead.Store(true)
+		if b.kill != nil {
+			b.kill()
+		}
 		send(videoDeadMsg{})
 	}()
 	return b, nil
@@ -74,11 +78,24 @@ func (m *Model) Cleanup() {
 	}
 	if m.bridge != nil {
 		m.bridge.client.Close()
+		if m.bridge.kill != nil {
+			m.bridge.kill()
+		}
 	}
-	if m.mediaDir != "" {
-		os.RemoveAll(m.mediaDir)
+	if m.mediaDir == "" {
+		return
 	}
+	// By name, not RemoveAll: under landlock the process cannot open the
+	// directory's parent. For the same reason the empty directory may stay.
+	entries, _ := os.ReadDir(m.mediaDir)
+	for _, e := range entries {
+		os.Remove(filepath.Join(m.mediaDir, e.Name()))
+	}
+	os.Remove(m.mediaDir)
 }
+
+// SetEnforced records whether the OS actually holds the profile.
+func (m *Model) SetEnforced(on bool) { m.notEnforced = !on }
 
 // videoTarget is what load needs to download a video.
 type videoTarget struct {
@@ -195,10 +212,11 @@ func (m *Model) sendSize() {
 }
 
 func (m *Model) startPlayer(name string) tea.Cmd {
+	closing := m.closePlayer() // never two
 	pic := ntpicture.New(m.pictureOptions())
 	m.player = &player{pic: pic, name: name, playing: true, dead: m.bridge.dead.Load()}
 	m.status = ""
-	cmd := tea.Batch(pic.Init(), pic.SetSize(m.cols, m.viewRows()))
+	cmd := tea.Batch(closing, pic.Init(), pic.SetSize(m.cols, m.viewRows()))
 	m.sendSize()
 	m.bridge.client.Open(name)
 	m.bridge.client.Play()

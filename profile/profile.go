@@ -281,6 +281,9 @@ func (p Profile) Table(s Strengths) string {
 		{"process", "off", "no process is started after launch"},
 		{"enforcement", string(p.Enforcement), "required: exit if the OS cannot enforce"},
 	}
+	if p.Media == MediaVideo {
+		rows = append(rows, [3]string{"media-helper", "on", "started before lockdown; no network, terminal or environment; reads only its libraries and the media directory"})
+	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "profile: %s\n", name)
 	for _, r := range rows {

@@ -15,6 +15,10 @@ import (
 	"nimbleterminal.dev/ntbrowser/profile"
 )
 
+// SandboxedArg marks the re-executed process; its value carries the state the
+// run decided before lockdown, so nothing is read again inside the sandbox.
+const SandboxedArg = "--sandboxed"
+
 // StageArg is the hidden first argument of the Linux helper stage.
 const StageArg = "--media-stage"
 
@@ -25,6 +29,9 @@ type Helper struct {
 	cmd  *exec.Cmd
 	file *os.File
 }
+
+// PID is the helper's process id.
+func (h *Helper) PID() int { return h.cmd.Process.Pid }
 
 // Close ends the helper.
 func (h *Helper) Close() error {

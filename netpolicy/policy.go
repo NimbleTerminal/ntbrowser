@@ -127,12 +127,11 @@ func New(p Policy) *Fetcher {
 					return nil, fmt.Errorf("%w: %s resolves to %s", ErrDenied, host, ip)
 				}
 			}
-			return dialer.DialContext(ctx, network, net.JoinHostPort(ips[0].String(), port))
+			return dialVetted(ctx, dialer.DialContext, network, ips, port)
 		},
 	}
 	f.client = &http.Client{
 		Transport: transport,
-		Timeout:   p.Timeout,
 		Jar:       nil, // no cookies, ever
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= f.p.MaxRedirects {
@@ -199,6 +198,24 @@ func (f *Fetcher) Resolve(ref string) (*url.URL, error) {
 	return u, nil
 }
 
+// dialVetted connects to the first reachable address. All of them were vetted.
+func dialVetted(ctx context.Context, dial func(context.Context, string, string) (net.Conn, error), network string, ips []netip.Addr, port string) (net.Conn, error) {
+	var firstErr error
+	for _, ip := range ips {
+		c, err := dial(ctx, network, net.JoinHostPort(ip.String(), port))
+		if err == nil {
+			return c, nil
+		}
+		if firstErr == nil {
+			firstErr = err
+		}
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	return nil, firstErr
+}
+
 // OpenResponse is a response whose headers have passed every check and whose
 // body has not been read. Body holds the request's in-flight slot until it is
 // closed; closing twice is safe.
@@ -249,8 +266,11 @@ func (f *Fetcher) Open(ctx context.Context, r Request) (*OpenResponse, error) {
 		release()
 		return nil, ErrTooLarge
 	}
-	ctx, cancel := context.WithTimeout(ctx, f.p.Timeout)
-	done := func() { cancel(); release() }
+	// The timeout covers reaching the headers, and for everything but a
+	// navigation the body too: a navigation's caller owns a possibly long read.
+	ctx, cancel := context.WithCancel(ctx)
+	deadline := time.AfterFunc(f.p.Timeout, cancel)
+	done := func() { deadline.Stop(); cancel(); release() }
 	req, err := http.NewRequestWithContext(ctx, method, u.String(), strings.NewReader(r.Body))
 	if err != nil {
 		done()
@@ -267,6 +287,9 @@ func (f *Fetcher) Open(ctx context.Context, r Request) (*OpenResponse, error) {
 	if err != nil {
 		done()
 		return nil, err
+	}
+	if r.Kind == KindNavigate {
+		deadline.Stop()
 	}
 	if r.Kind != KindDocument && r.Kind != KindNavigate && (resp.StatusCode < 200 || resp.StatusCode > 299) {
 		resp.Body.Close()

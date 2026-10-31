@@ -126,3 +126,13 @@ func TestTableIsReadable(t *testing.T) {
 		}
 	}
 }
+
+func TestTableNamesTheHelper(t *testing.T) {
+	p, _ := Builtin("browse")
+	if strings.Contains(p.Table(nil), "media-helper") {
+		t.Fatal("no helper without video")
+	}
+	if out := p.WithVideo().Table(nil); !strings.Contains(out, "media-helper") || !strings.Contains(out, "started before lockdown") {
+		t.Fatalf("%s", out)
+	}
+}

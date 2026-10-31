@@ -6,6 +6,8 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -13,9 +15,10 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"runtime/debug"
-	"strconv"
+	"slices"
 	"strings"
 	"time"
 
@@ -75,6 +78,8 @@ func parseArgs(args []string) (config, error) {
 			return c, err
 		}
 	}
+	chosen := p
+	chosen.Hosts = slices.Clone(p.Hosts)
 	if *nav != "" {
 		p.Navigate = profile.Navigate(*nav)
 	}
@@ -112,6 +117,9 @@ func parseArgs(args []string) (config, error) {
 	if err := p.Validate(); err != nil {
 		return c, err
 	}
+	if !reflect.DeepEqual(p, chosen) {
+		p.Name += "+flags" // the name must not outlive what it promised
+	}
 	c.Profile = p
 	if c.ShowProfile {
 		return c, nil
@@ -121,6 +129,39 @@ func parseArgs(args []string) (config, error) {
 	}
 	c.Start = fs.Arg(0)
 	return c, p.ValidateStart(c.Start)
+}
+
+// state is what the run decided before lockdown. The macOS re-exec carries it
+// across as data: a profile is read once, never again inside the sandbox.
+type state struct {
+	Config    config
+	TempDir   string
+	HelperFD  int
+	HelperPID int
+}
+
+func encodeState(st state) (string, error) {
+	data, err := json.Marshal(st)
+	if err != nil {
+		return "", err
+	}
+	return sandbox.SandboxedArg + "=" + base64.StdEncoding.EncodeToString(data), nil
+}
+
+func decodeState(args []string) (state, bool, error) {
+	var st state
+	if len(args) != 1 {
+		return st, false, nil
+	}
+	v, ok := strings.CutPrefix(args[0], sandbox.SandboxedArg+"=")
+	if !ok {
+		return st, false, nil
+	}
+	data, err := base64.StdEncoding.DecodeString(v)
+	if err != nil {
+		return st, true, err
+	}
+	return st, true, json.Unmarshal(data, &st)
 }
 
 func main() {
@@ -133,35 +174,39 @@ func main() {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	args, tempDir, helperFD, sandboxed := sandboxArgs(os.Args[1:])
-	c, err := parseArgs(args)
+	st, sandboxed, err := decodeState(os.Args[1:])
+	if err == nil && !sandboxed {
+		st.HelperFD = -1
+		st.Config, err = parseArgs(os.Args[1:])
+	}
 	if err != nil {
 		if !errors.Is(err, flag.ErrHelp) {
 			fmt.Fprintln(os.Stderr, err)
 		}
 		os.Exit(2)
 	}
+	c := st.Config
 	if c.ShowProfile {
 		fmt.Print(c.Profile.Table(sandbox.Probe()))
+		fmt.Println("strengths are what this machine should achieve; a running ntbrowser says if it did not")
 		return
 	}
 	if !sandboxed && c.Profile.UsesTemp() {
-		if tempDir, err = mediaTemp(); err != nil {
+		if st.TempDir, err = mediaTemp(); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
 	}
-	conn, err := startMedia(c, tempDir, helperFD, sandboxed, &args)
+	conn, err := startMedia(&st, sandboxed)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	strengths, err := lockDown(c, tempDir, args, sandboxed)
+	strengths, err := lockDown(st, sandboxed)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	_ = strengths // reported by -show-profile (sandbox.Probe)
 	// Process-wide soft heap cap: Goja has no per-runtime memory limit, so
 	// the GC is told to work harder past this point and dom/nthtml limits
 	// keep individual allocations bounded.
@@ -191,13 +236,14 @@ func main() {
 
 	m := app.New(l, c.Profile, c.Start)
 	program = tea.NewProgram(m)
+	m.SetEnforced(strengths["files"] == profile.StrengthOS)
 	if conn != nil {
-		bridge, err := app.NewMediaBridge(conn, program.Send)
+		bridge, err := app.NewMediaBridge(conn, program.Send, func() { sandbox.KillHelper(st.HelperPID) })
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
-		m.SetMedia(bridge, tempDir)
+		m.SetMedia(bridge, st.TempDir)
 	}
 	_, err = program.Run()
 	m.Cleanup()
@@ -206,26 +252,6 @@ func main() {
 		os.Exit(1)
 	}
 }
-
-// sandboxArgs strips the markers the macOS re-exec adds.
-func sandboxArgs(args []string) (rest []string, tempDir string, helperFD int, sandboxed bool) {
-	helperFD = -1
-	if len(args) > 0 {
-		if v, ok := strings.CutPrefix(args[0], sandbox.SandboxedArg+"="); ok {
-			tempDir, sandboxed, args = v, true, args[1:]
-		}
-	}
-	if len(args) > 0 {
-		if v, ok := strings.CutPrefix(args[0], mediaFDArg+"="); ok {
-			if fd, err := strconv.Atoi(v); err == nil {
-				helperFD, args = fd, args[1:]
-			}
-		}
-	}
-	return args, tempDir, helperFD, sandboxed
-}
-
-const mediaFDArg = "--media-fd"
 
 // mediaTemp creates the private media directory. Its path is resolved because
 // sandbox policies match real paths, and macOS's temp area is behind a symlink.
@@ -243,44 +269,59 @@ func needsHelper(p profile.Profile) bool { return p.Media == profile.MediaVideo 
 // startMedia starts the media helper before lockdown, when the profile
 // allows video; afterwards the main process cannot start anything. The macOS
 // re-exec comes back with the socket's descriptor instead.
-func startMedia(c config, tempDir string, helperFD int, sandboxed bool, args *[]string) (io.ReadWriteCloser, error) {
+func startMedia(st *state, sandboxed bool) (io.ReadWriteCloser, error) {
+	c := st.Config
 	if !needsHelper(c.Profile) {
 		return nil, nil
 	}
-	if sandboxed && helperFD >= 0 {
-		return os.NewFile(uintptr(helperFD), "media-helper"), nil
+	if sandboxed {
+		return os.NewFile(uintptr(st.HelperFD), "media-helper"), nil
 	}
 	path, err := sandbox.HelperPath()
 	if err != nil {
 		return nil, err
 	}
-	h, err := sandbox.StartHelper(c.Profile, path, tempDir)
+	h, err := sandbox.StartHelper(c.Profile, path, st.TempDir)
 	if err != nil {
 		return nil, err
 	}
+	st.HelperPID = h.PID()
 	if runtime.GOOS == "darwin" {
-		fd, err := h.InheritableFD()
-		if err != nil {
+		if st.HelperFD, err = h.InheritableFD(); err != nil {
 			return nil, err
 		}
-		*args = append([]string{mediaFDArg + "=" + strconv.Itoa(fd)}, *args...)
 	}
 	return h.Conn, nil
 }
 
+// startPath is the real path of a file: start URL, "" otherwise. Sandbox
+// policies match real paths.
+func startPath(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme != "file" {
+		return ""
+	}
+	if real, err := filepath.EvalSymlinks(u.Path); err == nil {
+		return real
+	}
+	return u.Path
+}
+
 // lockDown applies OS enforcement before any page content is touched. On
 // macOS the first run replaces itself here and comes back sandboxed.
-func lockDown(c config, tempDir string, args []string, sandboxed bool) (profile.Strengths, error) {
-	start := ""
-	if u, err := url.Parse(c.Start); err == nil && u.Scheme == "file" {
-		start = u.Path
-	}
+func lockDown(st state, sandboxed bool) (profile.Strengths, error) {
+	c := st.Config
+	start := startPath(c.Start)
 	if !sandboxed {
-		if err := sandbox.Reexec(c.Profile, start, tempDir, args); err != nil {
+		arg, err := encodeState(st)
+		if err != nil {
+			return nil, err
+		}
+		if err := sandbox.Reexec(c.Profile, start, st.TempDir, []string{arg}); err != nil {
 			return nil, err
 		}
 	}
-	return sandbox.Apply(c.Profile, start, tempDir, sandboxed)
+	return sandbox.Apply(c.Profile, start, st.TempDir, sandboxed)
 }
 
 type sinkFunc func(tea.Msg)

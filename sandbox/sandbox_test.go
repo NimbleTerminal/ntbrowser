@@ -10,6 +10,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"nimbleterminal.dev/ntbrowser/profile"
 )
@@ -93,6 +94,13 @@ func child(tmp string, locked bool) int {
 		fmt.Println("chmod not denied:", err)
 		return 8
 	}
+	// The sandbox must still let the program reach the web.
+	c, err := net.DialTimeout("tcp", os.Getenv("NT_SANDBOX_TCP"), 2*time.Second)
+	if err != nil {
+		fmt.Println("tcp refused:", err)
+		return 10
+	}
+	c.Close()
 	if runtime.GOOS == "darwin" {
 		if c, err := net.Dial("unix", os.Getenv("NT_SANDBOX_SOCK")); err == nil {
 			c.Close()
@@ -127,6 +135,12 @@ func runChild(t *testing.T, mode string) (string, error) {
 		t.Fatal(err)
 	}
 	defer l.Close()
+	tcp, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tcp.Close()
+	cmd.Env = append(cmd.Env, "NT_SANDBOX_TCP="+tcp.Addr().String())
 	cmd.Env = append(cmd.Env, "NT_SANDBOX_CHILD="+tmp, "NT_SANDBOX_MODE="+mode, "NT_SANDBOX_OUTSIDE="+outside, "NT_SANDBOX_VICTIM="+victim, "NT_SANDBOX_SOCK="+filepath.Join(sock, "s"))
 	out, err := cmd.CombinedOutput()
 	return string(out), err

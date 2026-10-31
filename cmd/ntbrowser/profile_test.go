@@ -31,7 +31,7 @@ func TestFlagsOverrideProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 	p := c.Profile
-	if p.Name != "locked" || p.Navigate != profile.NavConfirm || p.Subresources != profile.SubOrigin || p.Scripts != profile.ScriptsExternal ||
+	if p.Name != "locked+flags" || p.Navigate != profile.NavConfirm || p.Subresources != profile.SubOrigin || p.Scripts != profile.ScriptsExternal ||
 		len(p.Hosts) != 2 || !p.PrivateNetwork || p.Fetch != profile.FetchOrigin || p.Clipboard != profile.ClipboardCopy {
 		t.Fatalf("%+v", p)
 	}
@@ -74,7 +74,7 @@ func TestShowProfilePrintsEffective(t *testing.T) {
 		t.Fatal(err)
 	}
 	out := c.Profile.Table(nil)
-	if !c.ShowProfile || !strings.Contains(out, "profile: reader") || !strings.Contains(out, "free") {
+	if !c.ShowProfile || !strings.Contains(out, "profile: reader+flags") || !strings.Contains(out, "free") {
 		t.Fatalf("%s", out)
 	}
 }
@@ -92,13 +92,6 @@ func TestHelperOnlyWhenVideo(t *testing.T) {
 	}
 	if !needsHelper(p.WithVideo()) {
 		t.Fatal("video needs the helper")
-	}
-}
-
-func TestSandboxArgsCarryMediaFD(t *testing.T) {
-	rest, dir, fd, sandboxed := sandboxArgs([]string{"--sandboxed=/tmp/x", "--media-fd=7", "-profile", "reader", "u"})
-	if dir != "/tmp/x" || fd != 7 || !sandboxed || len(rest) != 3 {
-		t.Fatalf("%v %q %d %v", rest, dir, fd, sandboxed)
 	}
 }
 
@@ -138,4 +131,55 @@ func symlinkedDir(t *testing.T) string {
 		t.Fatal(err)
 	}
 	return link
+}
+
+func TestStateSurvivesReexec(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "p.json")
+	os.WriteFile(path, []byte(`{"name":"mine","base":"reader"}`), 0o600)
+	c, err := parseArgs([]string{"-profile-file", path, "-width", "640", "https://a.test/"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Remove(path) // the sandboxed run never reads inputs again
+	arg, err := encodeState(state{Config: c, TempDir: "/t", HelperFD: 7, HelperPID: 99})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok, err := decodeState([]string{arg})
+	if err != nil || !ok || got.Config.Profile.Name != "mine" || got.Config.Width != 640 || got.Config.Start != "https://a.test/" || got.TempDir != "/t" || got.HelperFD != 7 || got.HelperPID != 99 {
+		t.Fatalf("%+v %v %v", got, ok, err)
+	}
+	if _, ok, _ := decodeState([]string{"-profile", "x"}); ok {
+		t.Fatal("ordinary arguments read as state")
+	}
+}
+
+func TestFlagsChangeTheName(t *testing.T) {
+	c, err := parseArgs([]string{"-profile", "locked", "-scripts", "inline", "https://a.test/"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Profile.Name != "locked+flags" {
+		t.Fatalf("%q", c.Profile.Name)
+	}
+	c, err = parseArgs([]string{"-profile", "locked", "-scripts", "off", "https://a.test/"})
+	if err != nil || c.Profile.Name != "locked" {
+		t.Fatalf("a flag that changes nothing: %q %v", c.Profile.Name, err)
+	}
+}
+
+func TestStartPathResolved(t *testing.T) {
+	real := filepath.Join(t.TempDir(), "x.html")
+	os.WriteFile(real, []byte("x"), 0o600)
+	want, _ := filepath.EvalSymlinks(real)
+	link := filepath.Join(t.TempDir(), "link.html")
+	if err := os.Symlink(real, link); err != nil {
+		t.Fatal(err)
+	}
+	if got := startPath("file://" + link); got != want {
+		t.Fatalf("%q, want %q", got, want)
+	}
+	if got := startPath("https://a.test/"); got != "" {
+		t.Fatalf("%q", got)
+	}
 }

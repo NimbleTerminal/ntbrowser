@@ -14,6 +14,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"nimbleterminal.dev/ntbrowser/loop"
 	"nimbleterminal.dev/ntbrowser/mediaproc"
 	"nimbleterminal.dev/ntbrowser/profile"
 )
@@ -89,7 +90,7 @@ func videoModel(t *testing.T, srvURL string) *videoRig {
 		case msgs <- msg:
 		default:
 		}
-	})
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -337,5 +338,163 @@ func TestImageViewSharesTheViewerSession(t *testing.T) {
 	view, _ := newMediaView(image.NewRGBA(image.Rect(0, 0, 2, 2)), nil, m.pictureOptions(), 80, 20)
 	if view.pic.Session() != m.viewer.Picture().Session() {
 		t.Fatal("the image view has its own terminal session")
+	}
+}
+
+func TestQuitDuringPlayRemovesFile(t *testing.T) {
+	srv := videoServer(t)
+	r := videoModel(t, srv.URL)
+	run(t, r.m, srv.URL+"/v.mp4")
+	r.m.quit()
+	if dirEntries(t, r.dir) != 0 {
+		t.Fatal("the video stayed on disk after quit")
+	}
+}
+
+func TestSecondPlayerClosesFirst(t *testing.T) {
+	srv := videoServer(t)
+	r := videoModel(t, srv.URL)
+	run(t, r.m, srv.URL+"/v.mp4")
+	first := r.m.player
+	run(t, r.m, srv.URL+"/v.mp4")
+	if r.m.player == first || dirEntries(t, r.dir) != 1 {
+		t.Fatalf("files %d", dirEntries(t, r.dir))
+	}
+}
+
+func TestOverlayBlocksPageInput(t *testing.T) {
+	srv := videoServer(t)
+	r := videoModel(t, srv.URL)
+	r.m.current = mustURL(t, srv.URL+"/")
+	run(t, r.m, srv.URL+"/v.mp4")
+	r.m.Update(tea.MouseClickMsg{X: 5, Y: 5, Button: tea.MouseLeft})
+	if r.m.pressed {
+		t.Fatal("a click reached the page beneath the player")
+	}
+	m := newModel(t, NavFree)
+	m.media, _ = newMediaView(image.NewRGBA(image.Rect(0, 0, 2, 2)), nil, m.pictureOptions(), 80, 20)
+	if _, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyTab}); cmd != nil {
+		t.Fatal("a key reached the page beneath the picture")
+	}
+	m.Update(tea.MouseClickMsg{X: 5, Y: 5, Button: tea.MouseLeft})
+	if m.pressed {
+		t.Fatal("a click reached the page beneath the picture")
+	}
+}
+
+func TestLinkDuringDownloadNavigates(t *testing.T) {
+	m := newModel(t, NavFree)
+	m.downloading.Store(true)
+	m.navURL = "https://page.test/v.mp4"
+	if cmd := m.admit("https://page.test/v.mp4", false); cmd != nil {
+		t.Fatal("the same video started twice")
+	}
+	if cmd := m.admit("https://page.test/other", false); cmd == nil {
+		t.Fatal("a link to another page was ignored")
+	}
+}
+
+func TestBridgeKillsHelperWhenTheConnectionEnds(t *testing.T) {
+	a, b := net.Pipe()
+	defer b.Close()
+	go func() {
+		buf := make([]byte, 64)
+		for {
+			if _, err := b.Read(buf); err != nil {
+				return
+			}
+		}
+	}()
+	killed := make(chan struct{})
+	if _, err := NewMediaBridge(a, func(tea.Msg) {}, func() { close(killed) }); err != nil {
+		t.Fatal(err)
+	}
+	b.Write([]byte{0, 0, 0, 1, 99}) // a protocol violation
+	select {
+	case <-killed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("helper not killed")
+	}
+}
+
+func TestStalledDownloadTimesOut(t *testing.T) {
+	old := navIdle
+	navIdle = 100 * time.Millisecond
+	defer func() { navIdle = old }()
+	release := make(chan struct{})
+	defer close(release)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "video/mp4")
+		w.Write(make([]byte, 64))
+		w.(http.Flusher).Flush()
+		select {
+		case <-release:
+		case <-r.Context().Done():
+		}
+	}))
+	defer srv.Close()
+	r := videoModel(t, srv.URL)
+	msg := r.m.navigate(srv.URL+"/v.mp4", pushNew, true)().(pageLoadedMsg)
+	if msg.video != "" || dirEntries(t, r.dir) != 0 {
+		t.Fatalf("%+v files %d", msg, dirEntries(t, r.dir))
+	}
+}
+
+// Messages for the viewer's picture must reach it while an overlay is up, or
+// its render job never finishes and the page stays frozen afterwards.
+func TestPageRecoversAfterOverlayAndResize(t *testing.T) {
+	srv := videoServer(t)
+	r := videoModel(t, srv.URL)
+	r.m.current = mustURL(t, srv.URL+"/")
+	m := r.m
+	drain(t, m, m.viewer.Picture().SetTerminal(false, 10, 20))
+	run(t, m, srv.URL+"/v.mp4")
+	drain(t, m, m.onResizeForTest(100, 30))
+	drain(t, m, m.closePlayer())
+	drain(t, m, frame(t, m, 7, `<p>one</p>`))
+	before := m.viewer.View()
+	drain(t, m, frame(t, m, 8, `<div style="background:#f00;height:400px">two</div>`))
+	if m.viewer.View() == before {
+		t.Fatal("the page stayed frozen after the overlay")
+	}
+}
+
+func (m *Model) onResizeForTest(w, h int) tea.Cmd {
+	_, cmd := m.Update(tea.WindowSizeMsg{Width: w, Height: h})
+	return cmd
+}
+
+func frame(t *testing.T, m *Model, gen uint64, body string) tea.Cmd {
+	t.Helper()
+	_, cmd := m.Update(loop.FrameMsg{Gen: gen, Result: renderTall(t, body)})
+	return cmd
+}
+
+// drain runs cmd and everything it leads to, feeding results to the model, as
+// Bubble Tea would, until nothing is pending.
+func drain(t *testing.T, m *Model, cmd tea.Cmd) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	queue := []tea.Cmd{cmd}
+	for len(queue) > 0 && time.Now().Before(deadline) {
+		c := queue[0]
+		queue = queue[1:]
+		if c == nil {
+			continue
+		}
+		done := make(chan tea.Msg, 1)
+		go func() { done <- c() }()
+		select {
+		case msg := <-done:
+			switch v := msg.(type) {
+			case nil:
+			case tea.BatchMsg:
+				queue = append(queue, v...)
+			default:
+				_, next := m.Update(msg)
+				queue = append(queue, next)
+			}
+		case <-time.After(200 * time.Millisecond): // a timer: not part of this drain
+		}
 	}
 }
