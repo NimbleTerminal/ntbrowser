@@ -168,12 +168,12 @@ type mediaView struct {
 	closed   bool
 }
 
-func newMediaView(img image.Image, player *animation.Player, cols, rows int) (*mediaView, tea.Cmd) {
+func newMediaView(img image.Image, player *animation.Player, opts ntpicture.Options, cols, rows int) (*mediaView, tea.Cmd) {
 	if player != nil {
-		c := playback.New(player, playback.Options{})
+		c := playback.New(player, playback.Options{Picture: opts})
 		return &mediaView{ctrl: c, animated: true}, tea.Batch(c.Init(), c.SetSize(cols, rows))
 	}
-	p := ntpicture.New(ntpicture.Options{})
+	p := ntpicture.New(opts)
 	return &mediaView{pic: p}, tea.Batch(p.Init(), p.SetSize(cols, rows), p.SetImage(img))
 }
 
@@ -204,6 +204,17 @@ func (v *mediaView) close() tea.Cmd {
 		return v.ctrl.Close()
 	}
 	return v.pic.Close()
+}
+
+// pictureOptions are for pictures shown in the page's place. They share the
+// viewer's terminal session, so Kitty discovery need not happen again.
+func (m *Model) pictureOptions() ntpicture.Options {
+	opts := viewerOptions.Picture
+	opts.AutoMode = true
+	if m.viewer != nil {
+		opts.Session = m.viewer.Picture().Session()
+	}
+	return opts
 }
 
 // closeMedia releases a shown picture, if any.

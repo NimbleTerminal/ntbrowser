@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/url"
 	"os"
+	"path/filepath"
 	"runtime"
 	"runtime/debug"
 	"strconv"
@@ -145,7 +146,7 @@ func main() {
 		return
 	}
 	if !sandboxed && c.Profile.UsesTemp() {
-		if tempDir, err = os.MkdirTemp("", "ntbrowser-media-"); err != nil {
+		if tempDir, err = mediaTemp(); err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
 		}
@@ -225,6 +226,16 @@ func sandboxArgs(args []string) (rest []string, tempDir string, helperFD int, sa
 }
 
 const mediaFDArg = "--media-fd"
+
+// mediaTemp creates the private media directory. Its path is resolved because
+// sandbox policies match real paths, and macOS's temp area is behind a symlink.
+func mediaTemp() (string, error) {
+	dir, err := os.MkdirTemp("", "ntbrowser-media-")
+	if err != nil {
+		return "", err
+	}
+	return filepath.EvalSymlinks(dir)
+}
 
 // needsHelper is true only for a profile that opened video.
 func needsHelper(p profile.Profile) bool { return p.Media == profile.MediaVideo }

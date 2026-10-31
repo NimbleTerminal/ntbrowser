@@ -287,7 +287,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		cmds := []tea.Cmd{m.closeMedia(), m.leaveForms()}
 		if v.img != nil {
-			view, cmd := newMediaView(v.img, v.player, m.cols, m.viewRows())
+			view, cmd := newMediaView(v.img, v.player, m.pictureOptions(), m.cols, m.viewRows())
 			m.media = view
 			m.status = ""
 			return m, tea.Batch(append(cmds, cmd)...)

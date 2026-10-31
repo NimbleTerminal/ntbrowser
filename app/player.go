@@ -176,7 +176,8 @@ type player struct {
 
 func (m *Model) framePixels() image.Point {
 	if m.player != nil {
-		if px := m.player.pic.RasterGeometry().Pixels; px.X > 1 && px.Y > 1 {
+		// Glyph geometry (before Kitty is detected) is about a pixel per cell.
+		if px := m.player.pic.RasterGeometry().Pixels; px.X > m.cols && px.Y > m.viewRows()*2 {
 			return image.Pt(min(px.X, mediaproc.MaxFrameSide), min(px.Y, mediaproc.MaxFrameSide))
 		}
 	}
@@ -194,7 +195,7 @@ func (m *Model) sendSize() {
 }
 
 func (m *Model) startPlayer(name string) tea.Cmd {
-	pic := ntpicture.New(viewerOptions.Picture)
+	pic := ntpicture.New(m.pictureOptions())
 	m.player = &player{pic: pic, name: name, playing: true, dead: m.bridge.dead.Load()}
 	m.status = ""
 	cmd := tea.Batch(pic.Init(), pic.SetSize(m.cols, m.viewRows()))

@@ -115,3 +115,27 @@ func TestMainDoesNotLinkNativeCode(t *testing.T) {
 		}
 	}
 }
+
+// Sandbox policies match real paths; a symlinked temp area must be resolved.
+func TestMediaTempIsResolved(t *testing.T) {
+	t.Setenv("TMPDIR", symlinkedDir(t))
+	dir, err := mediaTemp()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(dir)
+	real, err := filepath.EvalSymlinks(dir)
+	if err != nil || real != dir {
+		t.Fatalf("%q resolves to %q (%v)", dir, real, err)
+	}
+}
+
+func symlinkedDir(t *testing.T) string {
+	t.Helper()
+	base := t.TempDir()
+	link := filepath.Join(base, "link")
+	if err := os.Symlink(t.TempDir(), link); err != nil {
+		t.Fatal(err)
+	}
+	return link
+}

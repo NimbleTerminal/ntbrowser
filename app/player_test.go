@@ -2,6 +2,7 @@ package app
 
 import (
 	"errors"
+	"image"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -306,5 +307,35 @@ func TestNoHelperMeansLine(t *testing.T) {
 	run(t, m, srv.URL+"/v.mp4")
 	if m.player != nil || !strings.Contains(m.status, "can't display") {
 		t.Fatalf("%q", m.status)
+	}
+}
+
+// Before Kitty is detected a picture reports about one pixel per cell; video
+// must still be requested at a usable size.
+func TestFramePixelsIgnoresGlyphGeometry(t *testing.T) {
+	srv := videoServer(t)
+	r := videoModel(t, srv.URL)
+	run(t, r.m, srv.URL+"/v.mp4")
+	if px := r.m.framePixels(); px.X < r.m.cols*10 || px.Y < r.m.viewRows()*10 {
+		t.Fatalf("frame size %v for %d×%d cells", px, r.m.cols, r.m.viewRows())
+	}
+}
+
+// Kitty discovery happened once, for the viewer; a player or image view must
+// share it, or it draws in glyphs.
+func TestPicturesShareTheViewerSession(t *testing.T) {
+	srv := videoServer(t)
+	r := videoModel(t, srv.URL)
+	run(t, r.m, srv.URL+"/v.mp4")
+	if r.m.player.pic.Session() != r.m.viewer.Picture().Session() {
+		t.Fatal("the player has its own terminal session")
+	}
+}
+
+func TestImageViewSharesTheViewerSession(t *testing.T) {
+	m := newModel(t, NavFree)
+	view, _ := newMediaView(image.NewRGBA(image.Rect(0, 0, 2, 2)), nil, m.pictureOptions(), 80, 20)
+	if view.pic.Session() != m.viewer.Picture().Session() {
+		t.Fatal("the image view has its own terminal session")
 	}
 }
