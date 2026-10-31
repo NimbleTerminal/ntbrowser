@@ -42,6 +42,17 @@ tasks:
     cmds:
       - go test -count=1 -tags nocjk ./loop
 
+  notices:
+    desc: Regenerate THIRD_PARTY_NOTICES.md from the modules the binary links
+    cmds: ['go run ./internal/tools/notices > THIRD_PARTY_NOTICES.md']
+
+  notices-check:
+    desc: Check generated notices without modifying tracked files
+    cmds:
+      - mkdir -p dist
+      - go run ./internal/tools/notices > dist/THIRD_PARTY_NOTICES.md
+      - cmp THIRD_PARTY_NOTICES.md dist/THIRD_PARTY_NOTICES.md
+
   vet:
     desc: go vet
     cmds:
@@ -62,6 +73,7 @@ tasks:
       - task: test
       - task: test-nocjk
       - task: wasm
+      - task: notices-check
 
   run:
     desc: 'Run ntbrowser (task run -- [flags] URL)'
