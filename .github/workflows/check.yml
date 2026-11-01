@@ -5,13 +5,28 @@ env:
   CGO_ENABLED: '0'
 jobs:
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # -race needs cgo on Linux, and every build here runs without it.
+        include:
+          - os: ubuntu-latest
+            race: ''
+          - os: macos-latest
+            race: -race
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - run: go test -race ./...
+      - run: go test ${{ matrix.race }} ./...
       - run: go vet ./...
-      - run: GOOS=js GOARCH=wasm go build ./dom ./jsvm ./loop ./netpolicy ./subres
+      - run: go test ${{ matrix.race }} ./...
+        working-directory: cmd/ntbrowser-media
+      - run: go vet ./...
+        working-directory: cmd/ntbrowser-media
+      - run: go build -mod=readonly -o /dev/null .
+        working-directory: cmd/ntbrowser-media
+      - run: GOOS=js GOARCH=wasm go build ./dom ./jsvm ./loop ./netpolicy ./subres ./profile ./content ./mediaproc
       - run: go test -run='^$' -fuzz=FuzzParseSerializeRoundTrip -fuzztime=30s ./dom/

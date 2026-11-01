@@ -8,6 +8,7 @@ env:
 
 vars:
   EXE: '{{if eq OS "windows"}}.exe{{end}}'
+  RACE: '{{if eq OS "darwin"}}-race{{end}}' # needs cgo on Linux
   WASM_PKGS: ./dom ./jsvm ./loop ./netpolicy ./subres ./profile ./content ./mediaproc
 
 tasks:
@@ -31,8 +32,8 @@ tasks:
   test:
     desc: Run the test suite under the race detector
     cmds:
-      - go test -race -count=1 ./...
-      - cd cmd/ntbrowser-media && go test -race -count=1 .
+      - go test {{.RACE}} -count=1 ./...
+      - cd cmd/ntbrowser-media && go test {{.RACE}} -count=1 .
 
   build-nocjk:
     desc: Build the binary without the CJK fallback face (about 4 MB smaller)
