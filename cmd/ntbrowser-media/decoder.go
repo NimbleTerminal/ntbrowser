@@ -65,8 +65,18 @@ func (d *videoDecoder) Frame(w, h int) ([]byte, int, int, error) {
 	if err != nil || img == nil {
 		return nil, 0, 0, err
 	}
+	pix, fw, fh := pixels(img)
+	return pix, fw, fh, nil
+}
+
+// pixels returns img as RGBA bytes. Player frames are opaque, so their NRGBA
+// bytes are already RGBA and go out without a copy.
+func pixels(img image.Image) ([]byte, int, int) {
 	b := img.Bounds()
+	if n, ok := img.(*image.NRGBA); ok && n.Stride == 4*b.Dx() && len(n.Pix) == 4*b.Dx()*b.Dy() {
+		return n.Pix, b.Dx(), b.Dy()
+	}
 	rgba := image.NewRGBA(image.Rect(0, 0, b.Dx(), b.Dy()))
 	draw.Draw(rgba, rgba.Bounds(), img, b.Min, draw.Src)
-	return rgba.Pix, b.Dx(), b.Dy(), nil
+	return rgba.Pix, b.Dx(), b.Dy()
 }
