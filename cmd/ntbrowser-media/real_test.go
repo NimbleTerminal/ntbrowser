@@ -1,10 +1,12 @@
 package main
 
 import (
+	"fmt"
 	"image"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"testing"
 	"time"
 
@@ -13,6 +15,18 @@ import (
 	"nimbleterminal.dev/ntbrowser/sandbox"
 )
 
+// TestMain hands the Linux stage, which re-runs this binary, to the real
+// ntbrowser built beside the helper: only a binary without goffi can restrict
+// all its threads.
+func TestMain(m *testing.M) {
+	if len(os.Args) == 3 && os.Args[1] == sandbox.StageArg {
+		main := filepath.Join(os.Args[2], "ntbrowser")
+		fmt.Fprintln(os.Stderr, syscall.Exec(main, []string{main, sandbox.StageArg, os.Args[2]}, nil))
+		os.Exit(1)
+	}
+	os.Exit(m.Run())
+}
+
 // TestRealHelperDecodes runs the real binary under its real sandbox and
 // decodes a real file. Opt-in, like ntvideo's libmpv tests.
 func TestRealHelperDecodes(t *testing.T) {
@@ -20,12 +34,16 @@ func TestRealHelperDecodes(t *testing.T) {
 	if source == "" {
 		t.Skip("set NTVIDEO_TEST_FILE")
 	}
-	bin := filepath.Join(t.TempDir(), "ntbrowser-media")
+	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	bin := filepath.Join(dir, "ntbrowser-media")
 	if out, err := exec.Command("go", "build", "-o", bin, ".").CombinedOutput(); err != nil {
 		t.Fatalf("%v: %s", err, out)
 	}
-	bin, _ = filepath.EvalSymlinks(bin)
-	dir, _ := filepath.EvalSymlinks(t.TempDir())
+	build := exec.Command("go", "build", "-o", filepath.Join(dir, "ntbrowser"), "./cmd/ntbrowser")
+	build.Dir = "../.."
+	if out, err := build.CombinedOutput(); err != nil {
+		t.Fatalf("%v: %s", err, out)
+	}
 	data, err := os.ReadFile(source)
 	if err != nil {
 		t.Fatal(err)
