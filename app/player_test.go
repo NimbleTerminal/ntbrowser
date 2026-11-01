@@ -13,16 +13,16 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"nimbleterminal.dev/ntmediabox"
 
 	"nimbleterminal.dev/ntbrowser/loop"
-	"nimbleterminal.dev/ntbrowser/mediaproc"
 	"nimbleterminal.dev/ntbrowser/profile"
 )
 
 type stubDecoder struct {
 	mu    sync.Mutex
 	ops   []string
-	state mediaproc.State
+	state ntmediabox.State
 }
 
 func (d *stubDecoder) add(s string) error {
@@ -31,24 +31,26 @@ func (d *stubDecoder) add(s string) error {
 	d.ops = append(d.ops, s)
 	return nil
 }
-func (d *stubDecoder) Load(n string) error {
+func (d *stubDecoder) Load(ntmediabox.OpenRequest) error {
 	d.mu.Lock()
-	d.state = mediaproc.Paused
+	d.state = ntmediabox.Paused
 	d.mu.Unlock()
 	return d.add("load")
 }
 func (d *stubDecoder) Play() error {
 	d.mu.Lock()
-	d.state = mediaproc.Playing
+	d.state = ntmediabox.Playing
 	d.mu.Unlock()
 	return d.add("play")
 }
-func (d *stubDecoder) Pause() error               { return d.add("pause") }
-func (d *stubDecoder) Seek(t time.Duration) error { return d.add("seek " + t.String()) }
-func (d *stubDecoder) Status() (mediaproc.State, time.Duration, time.Duration, error) {
+func (d *stubDecoder) Pause() error                    { return d.add("pause") }
+func (d *stubDecoder) Seek(t time.Duration) error      { return d.add("seek " + t.String()) }
+func (d *stubDecoder) SelectTrack(string, string) error { return nil }
+func (d *stubDecoder) SetCaptionOverlay(bool) error    { return nil }
+func (d *stubDecoder) Status() (ntmediabox.Status, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	return d.state, 12 * time.Second, 32 * time.Second, nil
+	return ntmediabox.Status{State: d.state, Position: 12 * time.Second, Duration: 32 * time.Second}, nil
 }
 func (d *stubDecoder) Frame(w, h int) ([]byte, int, int, error) {
 	return make([]byte, 2*2*4), 2, 2, nil
@@ -82,7 +84,7 @@ func videoModel(t *testing.T, srvURL string) *videoRig {
 	a, b := net.Pipe()
 	t.Cleanup(func() { a.Close(); b.Close() })
 	d := &stubDecoder{}
-	go mediaproc.Serve(b, func(string) (mediaproc.Decoder, error) { return d, nil })
+	go ntmediabox.Serve(b, func(string) (ntmediabox.Decoder, error) { return d, nil })
 	dir := t.TempDir()
 	msgs := make(chan tea.Msg, 256)
 	bridge, err := NewMediaBridge(a, func(msg tea.Msg) {
@@ -163,7 +165,7 @@ func TestPlayerKeys(t *testing.T) {
 	srv := videoServer(t)
 	r := videoModel(t, srv.URL)
 	run(t, r.m, srv.URL+"/v.mp4")
-	r.pump(t, func() bool { return r.m.player.status.State == mediaproc.Playing })
+	r.pump(t, func() bool { return r.m.player.status.State == ntmediabox.Playing })
 	r.m.Update(tea.KeyPressMsg{Code: tea.KeySpace, Text: " "})
 	r.pump(t, func() bool { return r.d.saw("pause") })
 	r.m.Update(tea.KeyPressMsg{Code: tea.KeyRight})

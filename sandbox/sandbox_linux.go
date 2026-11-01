@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"runtime"
 	"syscall"
 	"unsafe"
@@ -97,9 +96,7 @@ type ruleset struct {
 	handled uint64
 }
 
-// newRuleset handles everything this kernel's landlock can. isolated also
-// refuses TCP and signals or abstract sockets outside the sandbox, on kernels
-// that can; the helper's only connection is the one it inherits.
+// newRuleset handles everything this kernel's landlock can.
 func newRuleset(isolated bool) (*ruleset, error) {
 	abi := landlockABI()
 	attr := landlockRulesetAttr{HandledAccessFS: accessV1}
@@ -186,63 +183,6 @@ func mainRuleset(start, tempDir string, canRead bool) (*ruleset, error) {
 		}
 	}
 	return r, nil
-}
-
-// helperLibPaths are where libmpv and its dependencies live: readable, which
-// is all dlopen needs. Only the helper and the dynamic loader are executable.
-var helperLibPaths = []string{"/lib", "/lib64", "/usr/lib", "/usr/lib64", "/usr/local/lib", "/etc/ld.so.cache", "/etc/ld.so.conf", "/etc/ld.so.conf.d"}
-
-var dynamicLoaders = []string{"/lib64/ld-linux-x86-64.so.2", "/lib/ld-linux-aarch64.so.1"}
-
-// helperCommand starts this static binary in its stage, which locks down and
-// then becomes the helper. The helper links goffi, which appears to stop it
-// restricting all its own threads; restrictions set here survive execve.
-func helperCommand(helper, tempDir string) (*exec.Cmd, error) {
-	exe, err := os.Executable()
-	if err != nil {
-		return nil, err
-	}
-	return exec.Command(exe, StageArg, tempDir), nil
-}
-
-// deniedHelper adds sockets and signals to what the main process may never
-// do: its only connection is the one it inherited. execve stays allowed, for
-// the stage's one exec; landlock leaves only the helper and loader executable.
-var deniedHelper = append([]uintptr{sysSocket, sysKill}, deniedMain[2:]...)
-
-// MediaStage confines this process and replaces it with the helper. It
-// returns only on failure.
-func MediaStage(helper, tempDir string) error {
-	r, err := newRuleset(true)
-	if err != nil {
-		return err
-	}
-	for _, p := range helperLibPaths {
-		if err := r.add(p, accessRead); err != nil {
-			return err
-		}
-	}
-	for _, p := range dynamicLoaders {
-		if err := r.add(p, accessReadFile|accessExecute); err != nil {
-			return err
-		}
-	}
-	if err := r.add(helper, accessRead|accessExecute); err != nil {
-		return err
-	}
-	if err := r.add(tempDir, accessRead); err != nil {
-		return err
-	}
-	if err := r.add("/dev/null", accessFileRW); err != nil {
-		return err
-	}
-	if err := r.restrict(); err != nil {
-		return err
-	}
-	if err := denySyscalls(deniedHelper); err != nil {
-		return err
-	}
-	return syscall.Exec(helper, []string{helper, tempDir}, []string{})
 }
 
 // Apply restricts this process with landlock and seccomp, before any page

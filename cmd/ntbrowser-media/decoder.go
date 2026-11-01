@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"nimbleterminal.dev/ntbrowser/mediaproc"
+	"nimbleterminal.dev/ntmediabox"
 	"nimbleterminal.dev/ntvideo"
 )
 
@@ -24,40 +24,47 @@ func newVideoDecoder(dir string) *videoDecoder {
 }
 
 // Load opens a file by its bare name; the main process chooses names.
-func (d *videoDecoder) Load(name string) error {
+func (d *videoDecoder) Load(req ntmediabox.OpenRequest) error {
+	name := req.Name
 	if name == "" || name != filepath.Base(name) || strings.ContainsAny(name, `/\`) || name == "." || name == ".." {
 		return errors.New("bad media name")
 	}
 	return d.p.Load(filepath.Join(d.dir, name))
 }
 
-func (d *videoDecoder) Play() error                { return d.p.Play() }
-func (d *videoDecoder) Pause() error               { return d.p.Pause() }
-func (d *videoDecoder) Seek(t time.Duration) error { return d.p.Seek(t) }
-func (d *videoDecoder) Close() error               { return d.p.Close() }
+func (d *videoDecoder) Play() error                      { return d.p.Play() }
+func (d *videoDecoder) Pause() error                     { return d.p.Pause() }
+func (d *videoDecoder) Seek(t time.Duration) error       { return d.p.Seek(t) }
+func (d *videoDecoder) SelectTrack(string, string) error { return nil }
+func (d *videoDecoder) SetCaptionOverlay(bool) error     { return nil }
+func (d *videoDecoder) Close() error                     { return d.p.Close() }
 
-func (d *videoDecoder) Status() (mediaproc.State, time.Duration, time.Duration, error) {
+func (d *videoDecoder) Status() (ntmediabox.Status, error) {
 	s, err := d.p.Status()
 	if err == nil {
 		err = s.Err
 	}
-	return stateOf(s.State), s.CurrentTime, s.Duration, err
+	return ntmediabox.Status{
+		State:    stateOf(s.State),
+		Position: s.CurrentTime,
+		Duration: s.Duration,
+	}, err
 }
 
-func stateOf(s ntvideo.State) mediaproc.State {
+func stateOf(s ntvideo.State) ntmediabox.State {
 	switch s {
 	case ntvideo.Loading, ntvideo.Buffering:
-		return mediaproc.Loading
+		return ntmediabox.Loading
 	case ntvideo.Playing:
-		return mediaproc.Playing
+		return ntmediabox.Playing
 	case ntvideo.Paused:
-		return mediaproc.Paused
+		return ntmediabox.Paused
 	case ntvideo.Ended:
-		return mediaproc.Ended
+		return ntmediabox.Ended
 	case ntvideo.Failed:
-		return mediaproc.Failed
+		return ntmediabox.Failed
 	}
-	return mediaproc.Idle
+	return ntmediabox.Idle
 }
 
 func (d *videoDecoder) Frame(w, h int) ([]byte, int, int, error) {

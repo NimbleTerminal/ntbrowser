@@ -11,6 +11,7 @@ require (
 	golang.org/x/net v0.62.0
 	nimbleterminal.dev/ntfonts/cjk v0.1.0
 	nimbleterminal.dev/nthtml v0.2.2
+	nimbleterminal.dev/ntmediabox v0.0.0
 	nimbleterminal.dev/ntpicture v0.1.4
 )
 
@@ -47,3 +48,5 @@ replace charm.land/bubbletea/v2 => github.com/neomantra/bubbletea/v2 v2.0.0-2026
 
 // Vector rendering fork used by nttypeset and ntsvg (same as nthtml).
 replace github.com/srwiley/rasterx => github.com/neomantra/rasterx v0.1.0
+
+replace nimbleterminal.dev/ntmediabox => ../ntmediabox

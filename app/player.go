@@ -14,10 +14,10 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"nimbleterminal.dev/ntmediabox"
 	"nimbleterminal.dev/ntpicture"
 
 	"nimbleterminal.dev/ntbrowser/content"
-	"nimbleterminal.dev/ntbrowser/mediaproc"
 )
 
 const (
@@ -28,7 +28,7 @@ const (
 
 type (
 	videoFrameMsg    struct{}
-	videoStatusMsg   struct{ status mediaproc.Status }
+	videoStatusMsg   struct{ status ntmediabox.Status }
 	videoDeadMsg     struct{}
 	videoProgressMsg struct{ bytes int64 }
 )
@@ -36,7 +36,7 @@ type (
 // MediaBridge turns a media helper's connection into Bubble Tea messages.
 // Frames are latest-wins: a slow terminal drops frames, it does not queue them.
 type MediaBridge struct {
-	client  *mediaproc.Client
+	client  *ntmediabox.Client
 	send    func(tea.Msg)
 	latest  atomic.Pointer[image.RGBA]
 	pending atomic.Bool
@@ -47,7 +47,7 @@ type MediaBridge struct {
 // NewMediaBridge starts talking to the helper on conn; send must not block.
 func NewMediaBridge(conn io.ReadWriteCloser, send func(tea.Msg), kill func()) (*MediaBridge, error) {
 	b := &MediaBridge{send: send, kill: kill}
-	b.client = mediaproc.NewClient(conn, func(s mediaproc.Status) { send(videoStatusMsg{s}) }, func(img *image.RGBA) {
+	b.client = ntmediabox.NewClient(conn, func(s ntmediabox.Status) { send(videoStatusMsg{s}) }, func(img *image.RGBA) {
 		b.latest.Store(img)
 		if b.pending.CompareAndSwap(false, true) {
 			send(videoFrameMsg{})
@@ -184,7 +184,7 @@ func download(ctx context.Context, body io.Reader, n *content.Node, t *videoTarg
 type player struct {
 	pic     *ntpicture.Picture
 	name    string
-	status  mediaproc.Status
+	status  ntmediabox.Status
 	playing bool
 	dead    bool
 	frames  int
@@ -195,10 +195,10 @@ func (m *Model) framePixels() image.Point {
 	if m.player != nil {
 		// Glyph geometry (before Kitty is detected) is about a pixel per cell.
 		if px := m.player.pic.RasterGeometry().Pixels; px.X > m.cols && px.Y > m.viewRows()*2 {
-			return image.Pt(min(px.X, mediaproc.MaxFrameSide), min(px.Y, mediaproc.MaxFrameSide))
+			return image.Pt(min(px.X, ntmediabox.MaxFrameSide), min(px.Y, ntmediabox.MaxFrameSide))
 		}
 	}
-	return image.Pt(min(m.cols*10, mediaproc.MaxFrameSide), min(m.viewRows()*20, mediaproc.MaxFrameSide))
+	return image.Pt(min(m.cols*10, ntmediabox.MaxFrameSide), min(m.viewRows()*20, ntmediabox.MaxFrameSide))
 }
 
 func (m *Model) sendSize() {
@@ -298,9 +298,9 @@ func (m *Model) playerStatus() string {
 	switch {
 	case p.dead:
 		return helperStopped
-	case p.status.State == mediaproc.Failed:
+	case p.status.State == ntmediabox.Failed:
 		return clean("can't play: " + p.status.Err)
-	case p.status.State == mediaproc.Loading || p.status.Duration == 0:
+	case p.status.State == ntmediabox.Loading || p.status.State == ntmediabox.Buffering || p.status.Duration == 0:
 		return "loading video"
 	}
 	mark := "▶"

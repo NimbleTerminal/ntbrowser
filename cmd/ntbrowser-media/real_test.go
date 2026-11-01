@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
-	"nimbleterminal.dev/ntbrowser/mediaproc"
 	"nimbleterminal.dev/ntbrowser/profile"
 	"nimbleterminal.dev/ntbrowser/sandbox"
+	"nimbleterminal.dev/ntmediabox"
 )
 
 // TestMain hands the Linux stage, which re-runs this binary, to the real
@@ -58,8 +58,8 @@ func TestRealHelperDecodes(t *testing.T) {
 	}
 	defer h.Close()
 	frames := make(chan *image.RGBA, 4)
-	statuses := make(chan mediaproc.Status, 64)
-	c := mediaproc.NewClient(h.Conn, func(s mediaproc.Status) {
+	statuses := make(chan ntmediabox.Status, 64)
+	c := ntmediabox.NewClient(h.Conn, func(s ntmediabox.Status) {
 		select {
 		case statuses <- s:
 		default:
@@ -83,7 +83,7 @@ func TestRealHelperDecodes(t *testing.T) {
 			return
 		case s := <-statuses:
 			t.Logf("status %+v", s)
-			if s.State == mediaproc.Failed {
+			if s.State == ntmediabox.Failed {
 				t.Fatalf("failed: %s", s.Err)
 			}
 		case <-c.Dead():

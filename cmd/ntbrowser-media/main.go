@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"os"
 
-	"nimbleterminal.dev/ntbrowser/mediaproc"
+	"nimbleterminal.dev/ntmediabox"
 )
 
 func main() {
@@ -17,9 +17,9 @@ func main() {
 		fmt.Fprintln(os.Stderr, "ntbrowser-media is started by ntbrowser")
 		os.Exit(2)
 	}
-	conn := os.NewFile(3, "socket")
+	conn := ntmediabox.WorkerConn()
 	dir := os.Args[1]
-	err := mediaproc.Serve(conn, func(kind string) (mediaproc.Decoder, error) {
+	err := ntmediabox.Serve(conn, func(kind string) (ntmediabox.Decoder, error) {
 		if kind != "video" {
 			return nil, errors.New("unknown media kind")
 		}

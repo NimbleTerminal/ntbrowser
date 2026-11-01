@@ -4,6 +4,7 @@ go 1.26.8
 
 require (
 	nimbleterminal.dev/ntbrowser v0.0.0
+	nimbleterminal.dev/ntmediabox v0.0.0
 	nimbleterminal.dev/ntvideo v0.4.0
 )
 
@@ -34,3 +35,5 @@ replace nimbleterminal.dev/ntbrowser => ../..
 replace charm.land/bubbletea/v2 => github.com/neomantra/bubbletea/v2 v2.0.0-20261020122444-536722b0bdb6
 
 replace github.com/srwiley/rasterx => github.com/neomantra/rasterx v0.1.0
+
+replace nimbleterminal.dev/ntmediabox => ../../../ntmediabox
