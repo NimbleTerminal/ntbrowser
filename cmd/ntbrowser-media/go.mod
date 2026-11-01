@@ -4,7 +4,7 @@ go 1.26.8
 
 require (
 	nimbleterminal.dev/ntbrowser v0.0.0
-	nimbleterminal.dev/ntvideo v0.3.0
+	nimbleterminal.dev/ntvideo v0.4.0
 )
 
 require (
@@ -30,9 +30,6 @@ require (
 )
 
 replace nimbleterminal.dev/ntbrowser => ../..
-
-// Local until ntvideo's Player is tagged.
-replace nimbleterminal.dev/ntvideo => ../../../ntvideo
 
 replace charm.land/bubbletea/v2 => github.com/neomantra/bubbletea/v2 v2.0.0-20261020122444-536722b0bdb6
 

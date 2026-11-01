@@ -40,3 +40,5 @@ golang.org/x/sys v0.49.0 h1:XbzkgYJHdqh/8m2Uu0W/dQv8nktxx4BFHp1M0gROTXA=
 golang.org/x/sys v0.49.0/go.mod h1:hNLxWAXmnKAxqDtdwIYC4bM9oQPEecfsnNMuSxOs3og=
 nimbleterminal.dev/ntpicture v0.1.4 h1:uuQcLosD+fmxYR3DuXEkAcXJxZ15U/nyt9QRd3H6hdY=
 nimbleterminal.dev/ntpicture v0.1.4/go.mod h1:RNLYJAZ7Bakb9WdOXRvsL+xsbpREAQGPGeXLlDrpUMI=
+nimbleterminal.dev/ntvideo v0.4.0 h1:Ch0w7ClAd4oY5rk62/ck2yoI8CkpG5WsbotRdGZuaVo=
+nimbleterminal.dev/ntvideo v0.4.0/go.mod h1:dxEDO0x3k80hEMiJRMAeJZamKWRI/DhE31OkNLSQFmU=
