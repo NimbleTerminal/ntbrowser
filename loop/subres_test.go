@@ -296,13 +296,12 @@ func TestMixedContent(t *testing.T) {
 	page := `<link rel="stylesheet" href="` + srv.URL + `/s.css"><h1>Hi</h1><img src="` + srv.URL + `/p.png">`
 	l, sink := newSubresLoop(t, subres.Config{Mode: subres.ModeAny})
 	l.LoadPage(page, "https://example.test/", nil)
-	first := nextFrame(t, sink)
+	// The image's warning comes from its completion, so it can ride a later frame.
+	frameWhere(t, sink, 5*time.Second, func(f FrameMsg) bool {
+		return strings.Count(strings.Join(f.Warnings, "\n"), "mixed content") == 2
+	})
 	if h.get("/s.css") != 0 || h.get("/p.png") != 0 {
 		t.Fatalf("https page loaded http subresources: %v", h.m)
-	}
-	joined := strings.Join(first.Warnings, "\n")
-	if strings.Count(joined, "mixed content") != 2 {
-		t.Fatalf("want two mixed-content warnings, got %q", joined)
 	}
 	l.LoadPage(page, srv.URL+"/", nil)
 	frameWhere(t, sink, 5*time.Second, func(f FrameMsg) bool {
