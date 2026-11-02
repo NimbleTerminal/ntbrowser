@@ -40,6 +40,7 @@ require (
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	nimbleterminal.dev/ntfonts v0.2.1 // indirect
+	nimbleterminal.dev/ntmediabox/pkg/mediabox v0.0.0 // indirect
 	nimbleterminal.dev/ntsvg v0.5.5 // indirect
 )
 
@@ -50,3 +51,5 @@ replace charm.land/bubbletea/v2 => github.com/neomantra/bubbletea/v2 v2.0.0-2026
 replace github.com/srwiley/rasterx => github.com/neomantra/rasterx v0.1.0
 
 replace nimbleterminal.dev/ntmediabox => ../ntmediabox
+
+replace nimbleterminal.dev/ntmediabox/pkg/mediabox => ../ntmediabox/pkg/mediabox
