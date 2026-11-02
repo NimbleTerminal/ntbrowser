@@ -598,9 +598,9 @@ terms, PROVIDED THAT:
    commercial hosted service, remote terminal/multiplexer service, cloud AI
    agent sandbox, multi-tenant server, or closed-source commercial product.
    Any such network/hosted or closed-source commercial use remains strictly
-   subject to the full terms of the AGPL-3.0-only (including Section 13 source
-   disclosure of the entire service) unless covered by a valid Commercial
-   License from Neomantra Corp.
+   subject to the full terms of the AGPL-3.0-only (including Section 13
+   Corresponding Source disclosure of the covered work) unless covered by a
+   valid Commercial License from Neomantra Corp.
 3. Modification of `ntmediabox`: Any modifications made directly to the
    `ntmediabox` files themselves remain governed by the AGPL-3.0-only (or a
    Neomantra Corp. Commercial License).

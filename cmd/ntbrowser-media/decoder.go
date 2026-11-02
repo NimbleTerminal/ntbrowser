@@ -40,7 +40,12 @@ func (d *videoDecoder) Pause() error                     { return d.p.Pause() }
 func (d *videoDecoder) Seek(t time.Duration) error       { return d.p.Seek(t) }
 func (d *videoDecoder) SelectTrack(string, string) error { return nil }
 func (d *videoDecoder) SetCaptionOverlay(bool) error     { return nil }
-func (d *videoDecoder) Close() error                     { return d.p.Close() }
+func (d *videoDecoder) Unload() error {
+	err := d.p.Close()
+	d.p = ntvideo.NewPlayer(ntvideo.PlayerOptions{DisableHardwareDecoding: true, DisableAudio: true})
+	return err
+}
+func (d *videoDecoder) Close() error { return d.p.Close() }
 
 func (d *videoDecoder) Status() (ntmediabox.Status, error) {
 	s, err := d.p.Status()

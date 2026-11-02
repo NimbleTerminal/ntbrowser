@@ -14,7 +14,7 @@ Copyright (c) 2026 Neomantra Corp. All rights reserved.
 You must obtain a Commercial OEM / Enterprise Runtime License from **Neomantra Corp.** if your organization or product wishes to:
 
 1. **Closed-Source / Proprietary Distribution:** Embed, link, bundle, or distribute `ntbrowser` (or modified versions of it) as part of a closed-source, proprietary, or commercial desktop, CLI, or embedded application without complying with the source-code disclosure and copyleft obligations of the `AGPL-3.0-only`; **OR**
-2. **Cloud, Hosted Sandbox, Remote Workspace & SaaS Deployment:** Run, host, stream, or execute `ntbrowser`—or open-source tools powered by or linking `ntbrowser`—inside a commercial hosted platform, cloud AI agent sandbox fleet, remote terminal/multiplexer service, multi-tenant server, or commercial SaaS offering without disclosing the complete Corresponding Source of your service stack to network users under **AGPLv3 Section 13**.
+2. **Cloud, Hosted Sandbox, Remote Workspace & SaaS Deployment:** Run, host, stream, or execute `ntbrowser`—or open-source tools powered by or linking `ntbrowser`—inside a commercial hosted platform, cloud AI agent sandbox fleet, remote terminal/multiplexer service, multi-tenant server, or commercial SaaS offering without disclosing the Corresponding Source of the covered work to network users under **AGPLv3 Section 13**.
 
 *(Note: The NimbleTerminal Open-Source Linking Exception in `LICENSE` applies solely to local, non-hosted CLI and desktop execution by an end user on their own device, and keeps importing MIT modules from the `NimbleTerminal`, `NimbleMarkets`, and `wethinkt` organizations governed by the MIT License for local use.)*
 
