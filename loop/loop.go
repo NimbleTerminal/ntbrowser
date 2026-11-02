@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Neomantra Corp. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-only WITH LicenseRef-NimbleTerminal-Linking-Exception OR LicenseRef-Neomantra-Commercial
+
 // Package loop is the orchestrator. One goroutine (the VM goroutine) owns the
 // Goja runtime, the dom.Tree, the timer heap and the frame scheduler. Bubble
 // Tea's Update goroutine never touches the VM: it posts input through Input

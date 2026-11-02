@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Neomantra Corp. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-only WITH LicenseRef-NimbleTerminal-Linking-Exception OR LicenseRef-Neomantra-Commercial
+
 // Package ntbrowser is a secure, non-JIT terminal web runtime: a hardened
 // Goja (pure-Go ECMAScript interpreter) sandbox drives a mutable DOM owned by
 // ntbrowser, and nthtml renders that DOM in the terminal. JavaScript has no

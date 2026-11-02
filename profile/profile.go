@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Neomantra Corp. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-only WITH LicenseRef-NimbleTerminal-Linking-Exception OR LicenseRef-Neomantra-Commercial
+
 // Package profile is ntbrowser's security profile: one position for each gate,
 // the complete list of ways out of the sandbox. A profile is built before the
 // program starts, passed by value, and frozen; nothing a page can reach reads

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Neomantra Corp. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-only WITH LicenseRef-NimbleTerminal-Linking-Exception OR LicenseRef-Neomantra-Commercial
+
 // Package netpolicy is the only place in ntbrowser that opens sockets on behalf
 // of a page. JavaScript never sees it: jsvm hands it a Request through the
 // loop and gets back a Response struct, both plain data. Everything a browser

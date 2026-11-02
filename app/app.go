@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Neomantra Corp. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-only WITH LicenseRef-NimbleTerminal-Linking-Exception OR LicenseRef-Neomantra-Commercial
+
 // Package app is the Bubble Tea host. It owns the terminal, the nthtml viewer,
 // navigation policy and history. It knows nothing about JavaScript beyond the
 // loop's messages.

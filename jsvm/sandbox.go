@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Neomantra Corp. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-only WITH LicenseRef-NimbleTerminal-Linking-Exception OR LicenseRef-Neomantra-Commercial
+
 // Package jsvm owns the Goja runtime for one page. It is the hardened
 // boundary: this package imports neither os, net, net/http, os/exec nor
 // syscall (enforced by TestNoSystemImports), exposes no Go value to scripts by

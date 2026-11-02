@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Neomantra Corp. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-only WITH LicenseRef-NimbleTerminal-Linking-Exception OR LicenseRef-Neomantra-Commercial
+
 // Package dom is ntbrowser's own mutable document tree. JavaScript never sees
 // these structs: the jsvm package hands scripts integer handles and proxies
 // every operation through Tree methods. nthtml's document.Document is

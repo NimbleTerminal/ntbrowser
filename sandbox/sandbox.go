@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Neomantra Corp. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-only WITH LicenseRef-NimbleTerminal-Linking-Exception OR LicenseRef-Neomantra-Commercial
+
 // Package sandbox applies the operating system's half of a profile: once, at
 // startup, irreversibly, before any page content is touched. What it reports
 // comes from what was actually applied, because a gate reported stronger than

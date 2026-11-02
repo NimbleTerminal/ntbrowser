@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Neomantra Corp. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-only WITH LicenseRef-NimbleTerminal-Linking-Exception OR LicenseRef-Neomantra-Commercial
+
 // Package content is what incoming content is, apart from where it will be
 // shown. Navigation classifies a response from its headers into a Node; the
 // core checks the profile; a Surface then chooses how to present what is

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Neomantra Corp. All rights reserved.
+// SPDX-License-Identifier: AGPL-3.0-only WITH LicenseRef-NimbleTerminal-Linking-Exception OR LicenseRef-Neomantra-Commercial
+
 // Package subres loads a page's subresources (stylesheets, images, CSS
 // backgrounds) for ntbrowser. This file holds the CSS text tools: a rule
 // counter that mirrors nthtml's budget, the @import scanner and the url()
