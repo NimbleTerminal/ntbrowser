@@ -281,3 +281,7 @@ this boundary. Report actual worker enforcement independently of protocol checks
 The render extension is a separate implementation decision; this audit does not
 claim that pure-Go image, animation, diagram, or HTML rendering is already
 process-isolated.
+
+The cross-project [security landscape](2026-11-05-nimbleterminal-security-landscape.md)
+and [boundary review](2026-11-05-security-landscape-review.md) distinguish
+existing library guarantees from the application integration work described above.
