@@ -107,12 +107,21 @@ respective budgets. Extending isolation requires covering embedded resources
 and CSS backgrounds as well as top-level media, without opening native-code
 permission in profiles that have it disabled.
 
-**gloss** handles a wider range of local documents. It has parser subprocesses
-for SVG, Mermaid, and PDF parsing, and optional worker video playback. These
-paths do not establish uniform confinement across every format or operation.
-Its current parser launcher permits unconfined fallback, while ordinary raster
-and animation loading still has in-process paths. The library worker APIs offer
-a route toward more consistent boundaries without inventing another transport.
+**gloss** handles a wider range of local documents. Its opt-in `--strict` mode
+requires OS confinement for local still-image, SVG, Mermaid, and PDF detection,
+metadata, text extraction, and rendering. Native workers return bounded RGBA
+through ntmediabox; gloss checks the structured metadata separately. Unsupported
+formats, animation playback, typesetting, remote/handoff/browser paths, and
+unavailable confinement are refused, without a weaker retry. PDF pages are
+reopened per request in this first implementation.
+
+Normal mode remains portable: parser workers may run unconfined when OS
+enforcement is unavailable. Stage, policy, and startup failures are errors;
+they do not trigger a direct-exec retry. Normal raster, animation, office,
+mesh, and layout paths still include in-process processing, and
+`--video-sandbox` remains a separate playback option. Strict document loading
+does not confine the entire viewer or external applications explicitly opened
+by the user. This is application policy, not a universal property of the libraries.
 
 Applications should describe their actual loading path and enforcement status,
 rather than inheriting a blanket security claim from a dependency.

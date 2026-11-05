@@ -12,9 +12,10 @@ by default. This review covers the document/media stack and the two applications
 under discussion. It is not an audit of every Nimble Terminal repository.
 
 Sources are local working trees. nthtml and nttypeset are being exercised before
-release. Gloss has existing uncommitted work; its observations describe the
-inspected paths, not a verified release. No library code or website code was
-changed for this review, and no new security test campaign was run.
+release. The source map records the initial inspection, when Gloss had
+uncommitted work; it does not describe a verified release. The implementation
+follow-up below records subsequent changes and integration tests. No library
+code or website code was changed for this review.
 
 ## Source map
 
@@ -61,6 +62,39 @@ design. The latter must carry the boxes, anchors, links, and other metadata
 ntbrowser uses; substituting nttypeset's raster result would lose that contract.
 Office/archive/mesh processing, browser bridges, and terminal parsers merit
 separate detailed reviews before claiming ecosystem-wide coverage.
+
+## Implementation follow-up: opt-in gloss strict mode
+
+The agreed policy is portable normal mode with opt-in required confinement.
+Gloss now uses ntmediabox's render protocol for native parser workers, keeping
+its existing PDF text-layer and metadata semantics in a bounded adapter. The
+host no longer decodes worker-produced PNG. Detection and accept filters join
+rendering inside the strict boundary; merely moving the last raster call would
+leave these earlier parsing operations exposed.
+
+The initial strict set is local still images, SVG, Mermaid, and PDF, including
+metadata, text, previews, thumbnails, and exports. Unsupported formats,
+animation playback, typesetting, and remote/handoff/browser paths are refused.
+An unsupported OS cannot fall back to an unconfined process in this mode.
+Normal mode permits only the library's explicit unavailable-OS fallback;
+arbitrary startup errors are no longer retried with direct exec.
+
+Strict PDF loads currently reopen each page in a fresh worker. Extending this
+set or retaining sessions must preserve the complete boundary, including
+resource admission, cancellation, metadata validation, and process reaping.
+The viewer itself and explicit external-app actions remain outside this policy.
+The Linux build/test tasks provide the required sibling confinement stage.
+
+Gloss implementation: `b535296` (local, unreleased). Its complete `task ci`
+gate passed with `GOWORK=off CGO_ENABLED=1` on macOS, including race tests,
+real confined raster/text/metadata operations, refusal and cleanup tests,
+static analysis, Windows cross-build/vet, notices, and documentation checks.
+The Linux application/stage and the browser demo also cross-compiled. Linux
+confinement was not exercised at runtime: the local Docker daemon was not
+running. These are integration checks, not an independent security audit.
+
+The ntbrowser rendering boundary remains as described above: this follow-up
+does not move its pure-Go renderers out of the host or change its process gates.
 
 ## Website integration proposal
 
