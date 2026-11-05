@@ -1053,7 +1053,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## nimbleterminal.dev/ntconfine (local)
+## nimbleterminal.dev/ntconfine v0.1.1
 
 ```
 Copyright (c) 2026 Neomantra Corp. All rights reserved.
@@ -1757,7 +1757,7 @@ For more information on this, and how to apply and follow the GNU AGPL, see
 <https://www.gnu.org/licenses/>.
 ```
 
-## nimbleterminal.dev/ntconfine/pkg/confine (local)
+## nimbleterminal.dev/ntconfine/pkg/confine v0.1.0
 
 ```
 MIT License
@@ -2853,7 +2853,7 @@ FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
 ```
 
-## nimbleterminal.dev/nthtml (local)
+## nimbleterminal.dev/nthtml v0.2.3
 
 ```
 MIT License
@@ -2879,7 +2879,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## nimbleterminal.dev/ntmediabox (local)
+## nimbleterminal.dev/ntmediabox v0.1.0
 
 ```
 Copyright (c) 2026 Neomantra Corp. All rights reserved.
@@ -3583,7 +3583,7 @@ For more information on this, and how to apply and follow the GNU AGPL, see
 <https://www.gnu.org/licenses/>.
 ```
 
-## nimbleterminal.dev/ntmediabox/pkg/mediabox (local)
+## nimbleterminal.dev/ntmediabox/pkg/mediabox v0.1.0
 
 ```
 MIT License
