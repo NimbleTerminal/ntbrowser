@@ -1,0 +1,75 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+# Both binaries must be installed together. ntbrowser is also the Linux stage.
+version: 2
+project_name: ntbrowser
+
+env:
+  - GOWORK=off
+  - CGO_ENABLED=0
+
+builds:
+  - id: ntbrowser
+    main: ./cmd/ntbrowser
+    binary: ntbrowser
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    flags: [-trimpath, -mod=readonly]
+    ldflags: [-s -w]
+    mod_timestamp: '{{ .CommitTimestamp }}'
+  - id: ntbrowser-media
+    dir: cmd/ntbrowser-media
+    main: .
+    binary: ntbrowser-media
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    flags: [-trimpath, -mod=readonly]
+    ldflags: [-s -w]
+    mod_timestamp: '{{ .CommitTimestamp }}'
+
+archives:
+  - ids: [ntbrowser, ntbrowser-media]
+    formats: [tar.gz]
+    name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
+    files:
+      - README.md
+      - CHANGELOG.md
+      - LICENSE
+      - LICENSE-COMMERCIAL.md
+      - THIRD_PARTY_NOTICES.md
+      - src: cmd/ntbrowser-media/THIRD_PARTY_NOTICES.md
+        dst: licenses/ntbrowser-media-THIRD_PARTY_NOTICES.md
+
+checksum:
+  name_template: checksums.txt
+
+# CI builds with --skip=publish, validates the archives, then publishes via gh.
+# This prevents incomplete packages from becoming release assets.
+changelog:
+  disable: true
+
+release:
+  github:
+    owner: NimbleTerminal
+    name: ntbrowser
+  prerelease: auto
+
+notarize:
+  macos:
+    - enabled: '{{ not .IsSnapshot }}'
+      ids: [ntbrowser]
+      sign:
+        certificate: '{{ .Env.MACOS_SIGN_P12 }}'
+        password: '{{ .Env.MACOS_SIGN_PASSWORD }}'
+      notarize: &apple_notary
+        issuer_id: '{{ .Env.MACOS_NOTARY_ISSUER_ID }}'
+        key_id: '{{ .Env.MACOS_NOTARY_KEY_ID }}'
+        key: '{{ .Env.MACOS_NOTARY_KEY }}'
+        wait: true
+        timeout: 20m
+    - enabled: '{{ not .IsSnapshot }}'
+      ids: [ntbrowser-media]
+      sign:
+        certificate: '{{ .Env.MACOS_SIGN_P12 }}'
+        password: '{{ .Env.MACOS_SIGN_PASSWORD }}'
+        entitlements: '{{ .Env.MEDIA_ENTITLEMENTS }}'
+      notarize: *apple_notary

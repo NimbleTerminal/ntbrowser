@@ -1,5 +1,15 @@
 name: check
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  workflow_call:
+    inputs:
+      ref:
+        description: Exact source commit to check for a release
+        type: string
+        required: true
+permissions:
+  contents: read
 env:
   GOWORK: 'off'
   CGO_ENABLED: '0'
@@ -8,25 +18,29 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # -race needs cgo on Linux, and every build here runs without it.
-        include:
-          - os: ubuntu-latest
-            race: ''
-          - os: macos-latest
-            race: -race
+        # Taskfile selects -race on macOS; Linux builds stay without cgo.
+        os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
-      - run: go test ${{ matrix.race }} ./...
+          cache-dependency-path: |
+            go.sum
+            cmd/ntbrowser-media/go.sum
+      - uses: go-task/setup-task@v2
+        with:
+          version: '3.x'
+      - run: test -z "$(gofmt -l .)"
+      - run: go mod tidy -diff
+      - run: go mod tidy -diff
+        working-directory: cmd/ntbrowser-media
+      - run: task check build build-nocjk
       - run: go vet ./...
-      - run: go test ${{ matrix.race }} ./...
         working-directory: cmd/ntbrowser-media
-      - run: go vet ./...
-        working-directory: cmd/ntbrowser-media
-      - run: go build -mod=readonly -o /dev/null .
-        working-directory: cmd/ntbrowser-media
-      - run: GOOS=js GOARCH=wasm go build ./dom ./jsvm ./loop ./netpolicy ./subres ./profile ./content
       - run: go test -run='^$' -fuzz=FuzzParseSerializeRoundTrip -fuzztime=30s ./dom/

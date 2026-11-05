@@ -23,6 +23,62 @@ ntvideo's default source-dimension limits. The opt-in real playback check is
 `NTVIDEO_TEST_FILE=/absolute/path/clip.mp4 task test`; it requires libmpv and OS
 confinement and checks file-limit rejection, recovery, and repeated playback.
 
+## Release binaries
+
+GitHub releases provide `tar.gz` archives for Linux and macOS on amd64 and
+arm64, plus `checksums.txt` (SHA-256). Install **both** `ntbrowser` and
+`ntbrowser-media` from the same archive into the same directory. The main
+executable also serves as the Linux confinement stage. Video playback needs
+libmpv installed separately; the libraries are not bundled. Release macOS
+binaries are signed and notarized; local/CI snapshots are unsigned.
+
+Stable releases also publish a macOS cask to `NimbleTerminal/homebrew-tap`:
+
+```sh
+brew install --cask nimbleterminal/tap/ntbrowser
+brew install mpv  # optional, for video playback
+```
+
+The cask installs both executables. Only the media helper has the
+`disable-library-validation` entitlement needed to load third-party libmpv;
+the main browser receives no additional hardened-runtime entitlements.
+
+CI runs checks and builds on Linux and macOS, including the nested media module,
+the WASM compile gate, no-CJK builds, formatting, module tidiness, and notices.
+The Release workflow packages and verifies all four target archives on pull
+requests and pushes to `main`, without publishing. `v*` tags trigger checks of
+the exact source commit before publishing binaries and the tagged changelog's
+release notes. Only the publishing job has repository write permission.
+
+For an existing tag such as `v0.1.0`, run **Actions → Release → Run workflow**
+from `main` and supply the tag. Automation comes from the selected workflow
+commit; application source and release notes come from the existing tag. This
+does not move tags or overwrite existing releases. An existing partial release
+must be inspected and resolved before retrying publication.
+
+Locally, install GoReleaser v2.16.0, actionlint, and Python 3.11+; run
+`task release-check release` to validate the workflow and create verified
+snapshot archives in `dist/`. Nothing is published by those tasks.
+
+Release maintainers must configure these GitHub Actions secrets (repository
+secrets or organization secrets granting this repository access):
+
+- `MACOS_SIGN_P12`: base64 Developer ID Application certificate and private key.
+- `MACOS_SIGN_PASSWORD`: certificate export password.
+- `MACOS_NOTARY_ISSUER_ID`, `MACOS_NOTARY_KEY_ID`, `MACOS_NOTARY_KEY`:
+  App Store Connect notarization API credentials, with the key base64 encoded.
+- `HOMEBREW_TAP_GITHUB_TOKEN`: token with contents write access to
+  `NimbleTerminal/homebrew-tap`.
+
+Signing and notarization are mandatory for releases. Both macOS binaries must
+finish notarization before archives and checksums are generated. The workflow
+validates archives before GitHub publication, then updates the stable cask using
+those archive hashes. Prereleases do not change the tap. If only tap publication
+fails, download and verify the published archives, generate the cask with
+`python3 scripts/release.py cask DIST TAG`, then retry
+`GH_TOKEN=... python3 scripts/publish_cask.py CASK TAG` with the tap token.
+Cask updates use GitHub's existing-file SHA check and never force-push.
+
 ## Usage
 
 ```

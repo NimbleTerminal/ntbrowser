@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add mandatory macOS signing/notarization and stable Homebrew cask publishing
+  alongside verified Linux/macOS release archives containing both executables.
+
+- Add Linux/macOS CI gates and release packaging for amd64/arm64. Archives
+  contain both executables and their license notices, with SHA-256 checksums.
+  Version tags publish after source checks and archive verification; manual
+  dispatch can package an existing tag without moving it.
+
 ## v0.1.0 (2026-11-05)
 
 - Initial release of `nimbleterminal.dev/ntbrowser`, a terminal reader and
