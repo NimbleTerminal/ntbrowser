@@ -247,7 +247,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## github.com/go-webgpu/goffi v0.6.7
+## github.com/go-webgpu/goffi v0.6.8
 
 ```
 MIT License
@@ -403,7 +403,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## github.com/xo/terminfo v1.3.0
+## github.com/xo/terminfo v1.3.1
 
 ```
 The MIT License (MIT)
@@ -2025,7 +2025,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## nimbleterminal.dev/ntpicture v0.1.4
+## nimbleterminal.dev/ntpicture v0.1.5
 
 ```
 MIT License
@@ -2066,7 +2066,7 @@ The artwork is embedded in the simple demo binary, including its WASM build.
 The generated demo site includes booba and ghostty-web runtime assets.
 Go dependency and browser runtime license texts are collected in
 THIRD_PARTY_NOTICES.md, generated with `task notices` and copied into the site.
-The browser licenses in `web/licenses/` were copied from go-booba's local
+The browser licenses in `web/licenses/` were copied from booba's local
 vendored ghostty-web, Ghostty, and pako sources; review them when updating the
 pinned booba runtime. `wasm_exec.js` retains its Go BSD license header.
 
@@ -2078,7 +2078,7 @@ these two fixtures. Animation decoder/player source and baseline tests are
 also adapted from Gloss under the same MIT license.
 ```
 
-## nimbleterminal.dev/ntvideo v0.4.0
+## nimbleterminal.dev/ntvideo v0.5.0
 
 ```
 MIT License

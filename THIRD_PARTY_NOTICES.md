@@ -392,7 +392,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## github.com/dop251/goja v0.0.0-20261031103838-cf2ff0ec0b31
+## github.com/dop251/goja v0.0.0-20261105002551-2413f2132ac8
 
 ```
 Copyright (c) 2016 Dmitry Panov
@@ -412,7 +412,7 @@ COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER I
 OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 ```
 
-## github.com/go-sourcemap/sourcemap v2.1.3+incompatible
+## github.com/go-sourcemap/sourcemap v2.1.4+incompatible
 
 ```
 Copyright (c) 2016 The github.com/go-sourcemap/sourcemap Contributors.
@@ -442,7 +442,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## github.com/google/pprof v0.0.0-20230207041349-798e818bf904
+## github.com/google/pprof v0.0.0-20261105003125-4bf881d7fb0b
 
 ```
 
@@ -799,7 +799,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## github.com/xo/terminfo v1.3.0
+## github.com/xo/terminfo v1.3.1
 
 ```
 The MIT License (MIT)
@@ -1783,7 +1783,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## nimbleterminal.dev/ntfonts v0.2.1
+## nimbleterminal.dev/ntfonts v0.3.1
 
 The embedded font subsets are SIL OFL-1.1, renamed internally to Gloss Text; the module source is MIT.
 
@@ -1832,8 +1832,9 @@ license is in `<family>.OFL.txt` and in THIRD_PARTY_NOTICES.md, generated with
 The symbol fallback combines Noto Sans Symbols 2 with missing arrows/math from
 Noto Sans Math, both pinned to the Google Fonts commit above. Their licenses
 are `notosanssymbols2.OFL.txt` and `notosansmath.OFL.txt`; `Licenses()` includes
-both texts in the fallback entry. The separate `cjk/` module ships its own OFL
-and generated notices for Noto Sans CJK SC.
+both texts in the fallback entry. The separate `cjk/`, `packs/`, `packs/emoji/`
+and `packs/emoji/sbix/` modules ship their own `sources.json`, OFL texts and
+generated `THIRD_PARTY_NOTICES.md` for their Noto fonts.
 
 The Go reference fonts (`Go-*.ttf`, `GoMono-*.ttf`) are unused and carry their
 own license in `LICENSE.gofont`.
@@ -2728,7 +2729,7 @@ FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
 ```
 
-## nimbleterminal.dev/ntfonts/cjk v0.1.0
+## nimbleterminal.dev/ntfonts/cjk v0.3.1
 
 Linked unless built with `-tags nocjk`. The embedded Noto Sans CJK SC subset is SIL OFL-1.1, renamed internally to Gloss Text CJKSC.
 
@@ -2852,7 +2853,7 @@ FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
 ```
 
-## nimbleterminal.dev/nthtml v0.2.2
+## nimbleterminal.dev/nthtml (local)
 
 ```
 MIT License
@@ -3608,7 +3609,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## nimbleterminal.dev/ntpicture v0.1.4
+## nimbleterminal.dev/ntpicture v0.1.5
 
 ```
 MIT License
@@ -3649,7 +3650,7 @@ The artwork is embedded in the simple demo binary, including its WASM build.
 The generated demo site includes booba and ghostty-web runtime assets.
 Go dependency and browser runtime license texts are collected in
 THIRD_PARTY_NOTICES.md, generated with `task notices` and copied into the site.
-The browser licenses in `web/licenses/` were copied from go-booba's local
+The browser licenses in `web/licenses/` were copied from booba's local
 vendored ghostty-web, Ghostty, and pako sources; review them when updating the
 pinned booba runtime. `wasm_exec.js` retains its Go BSD license header.
 
@@ -3661,7 +3662,7 @@ these two fixtures. Animation decoder/player source and baseline tests are
 also adapted from Gloss under the same MIT license.
 ```
 
-## nimbleterminal.dev/ntsvg v0.5.5
+## nimbleterminal.dev/ntsvg v0.6.0
 
 ```
 MIT License

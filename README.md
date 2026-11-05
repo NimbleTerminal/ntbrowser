@@ -4,6 +4,19 @@ A secure, non-JIT terminal web runtime: a hardened pure-Go JavaScript interprete
 
 `ntbrowser` is a terminal reader mode and small-application runtime. It takes an HTML page that may carry JavaScript, runs that JavaScript inside a pure-Go bytecode interpreter with no path to the operating system, lets the script change the page through a narrow proxy API, and shows the result through `nthtml`'s Bubble Tea viewer. The point is a "cognitive shield": the user gets the page's content and legitimate interactivity, and nothing the page does can reach files, sockets, the environment, or the terminal's escape-sequence surface.
 
+## Development dependencies
+
+Build with Go 1.26.8 and run `task check build build-nocjk`. Tasks set
+`GOWORK=off CGO_ENABLED=0`.
+
+For pre-release validation, `go.mod` uses sibling checkouts at `../nthtml`
+(tested HEAD `ba1e3de`) and `../nttypeset` (tested HEAD `fbc6ecd`). The existing
+`../ntmediabox` and `../ntconfine` replacements, including their nested packages,
+are also required. Replacements use the current contents of those trees; replace
+the nthtml/nttypeset overrides with released versions after validation.
+ntbrowser retains the WASM-capable Bubble Tea fork for its compile-only gate.
+Run `task notices` after dependency changes.
+
 ## Usage
 
 ```
