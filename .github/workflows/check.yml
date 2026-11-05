@@ -28,5 +28,5 @@ jobs:
         working-directory: cmd/ntbrowser-media
       - run: go build -mod=readonly -o /dev/null .
         working-directory: cmd/ntbrowser-media
-      - run: GOOS=js GOARCH=wasm go build ./dom ./jsvm ./loop ./netpolicy ./subres ./profile ./content ./mediaproc
+      - run: GOOS=js GOARCH=wasm go build ./dom ./jsvm ./loop ./netpolicy ./subres ./profile ./content
       - run: go test -run='^$' -fuzz=FuzzParseSerializeRoundTrip -fuzztime=30s ./dom/

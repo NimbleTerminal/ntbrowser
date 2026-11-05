@@ -14,6 +14,6 @@ Project rules for agents and humans. The design document `docs/design/2026-10-25
 - All Goja compilation goes through `goja.Parse(name, src, sandboxParserOptions()...)` + `goja.CompileAST`; never `goja.Compile`, `MustCompile`, `RunString`, `RunScript` in `jsvm` (spec decision table §6; `jsvm.TestOnlyHardenedCompilePath`).
 - Page-controlled text reaches the terminal only through `app.clean` (spec decision 7).
 - `nthtml.Model` is created with `nthtml.NewWithOptions(result, viewerOptions)` in `app` (ReflowTypeset off; `StableID` and zlib Kitty frames from the 2026-10-27 performance analysis: a re-flow or scroll step must not repaint the placeholder grid, `app.TestViewerKeepsKittyIDAndSendsZlib`); `document.Options.NoImage` stays false (spec §3, decision 19).
-- License MIT, "Copyright (c) 2024-2026 Neomantra Corp"; Taskfile header comment `# ntbrowser - Copyright (c) 2026 Neomantra Corp.` (nthtml convention).
+- License `AGPL-3.0-only WITH LicenseRef-NimbleTerminal-Linking-Exception OR LicenseRef-Neomantra-Commercial` (see `LICENSE` and `LICENSE-COMMERCIAL.md`); copyright notice `Copyright (c) 2026 Neomantra Corp. All rights reserved.`; Taskfile header comment `# ntbrowser - Copyright (c) 2026 Neomantra Corp.`.
 - `GOOS=js GOARCH=wasm go build ./dom ./jsvm ./loop ./netpolicy ./subres ./profile ./content` must succeed (spec decision 14: compile-only in v1).
 - Commit after every task; conventional-commit subjects (`feat:`, `test:`, `chore:`, `ci:`, `docs:`).
