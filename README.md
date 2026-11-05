@@ -17,6 +17,14 @@ the nthtml/nttypeset overrides with released versions after validation.
 ntbrowser retains the WASM-capable Bubble Tea fork for its compile-only gate.
 Run `task notices` after dependency changes.
 
+Media workers use ntconfine for OS confinement, ntmediabox for the streaming
+protocol, and ntvideo's shared worker decoder inside `ntbrowser-media`.
+The host rejects queued frames/statuses from before a seek or media replacement
+and passes the profile's file budget to the decoder. The worker also applies
+ntvideo's default source-dimension limits. The opt-in real playback check is
+`NTVIDEO_TEST_FILE=/absolute/path/clip.mp4 task test`; it requires libmpv and OS
+confinement and checks file-limit rejection, recovery, and repeated playback.
+
 ## Usage
 
 ```

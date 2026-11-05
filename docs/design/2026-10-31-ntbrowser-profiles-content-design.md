@@ -222,3 +222,20 @@ type Decoder interface{ /* helper side: one per kind */ }
 ## 9. Left to the builder
 
 The exact seccomp list, the generated macOS policy text, Go type names for gate values, wording of status lines, whether `Text` wraps at the terminal width, and how the progress line looks.
+
+## 10. Shared worker integration (2026-11-05)
+
+OS worker launch and policy construction use `ntconfine` directly. The helper
+continues to start before lockdown and the macOS re-exec still carries its socket.
+`ntmediabox.NewClientWithKill` owns connection termination, including failed
+handshakes, EOF, protocol errors, and explicit close; the kill callback runs once.
+Frames and statuses retain their command generation until the UI consumes them,
+so queued results from before a seek, stop, or replacement cannot update a new
+playback state.
+
+`ntbrowser-media` uses `ntvideo.NewWorkerDecoder` instead of a private Player
+adapter. Open requests carry the profile's media-byte limit; the shared decoder
+also bounds source dimensions using ntvideo's defaults and releases the active
+media on Stop. Software decoding, disabled audio, reader-initiated playback,
+and the existing profile gates remain in force. No render-protocol or caption
+controls are exposed by ntbrowser in this integration.

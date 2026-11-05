@@ -14,7 +14,7 @@ import (
 	"path/filepath"
 
 	"nimbleterminal.dev/ntbrowser/profile"
-	"nimbleterminal.dev/ntmediabox"
+	"nimbleterminal.dev/ntconfine"
 )
 
 // SandboxedArg marks the re-executed process; its value carries the state the
@@ -22,15 +22,15 @@ import (
 const SandboxedArg = "--sandboxed"
 
 // StageArg is the hidden first argument of the Linux helper stage.
-const StageArg = ntmediabox.StageArg
+const StageArg = ntconfine.StageArg
 
 // Helper is the running media helper. Conn is the main process's end of the
 // socket; its descriptor is carried across the macOS re-exec.
-type Helper = ntmediabox.Helper
+type Helper = ntconfine.Helper
 
 // HelperPath is ntbrowser-media beside this executable.
 func HelperPath() (string, error) {
-	path, err := ntmediabox.ResolveSibling("ntbrowser-media")
+	path, err := ntconfine.ResolveSibling("ntbrowser-media")
 	if err != nil {
 		return "", fmt.Errorf("media=video needs ntbrowser-media: %w", err)
 	}
@@ -42,7 +42,7 @@ func HelperPath() (string, error) {
 // The helper gets the socket as fd 3, an empty environment, no terminal, and a
 // sandbox narrower than the main process's own.
 func StartHelper(p profile.Profile, helper, tempDir string) (*Helper, error) {
-	pol := ntmediabox.DefaultPolicy(helper, tempDir)
+	pol := ntconfine.DefaultPolicy(helper, tempDir)
 	pol.AllowUnsandboxed = p.Enforcement == profile.EnforceBestEffort
 	stagePath, _ := os.Executable()
 	if sibling := filepath.Join(filepath.Dir(helper), "ntbrowser"); sibling != helper {
@@ -50,28 +50,28 @@ func StartHelper(p profile.Profile, helper, tempDir string) (*Helper, error) {
 			stagePath = sibling
 		}
 	}
-	h, err := ntmediabox.StartHelper(ntmediabox.HelperConfig{
+	h, err := ntconfine.StartHelper(ntconfine.HelperConfig{
 		Policy:     pol,
 		WorkerPath: helper,
 		WorkerArgs: []string{tempDir},
 		StagePath:  stagePath,
 	})
-	if errors.Is(err, ntmediabox.ErrUnavailable) {
+	if errors.Is(err, ntconfine.ErrUnavailable) {
 		return nil, ErrUnavailable
 	}
 	return h, err
 }
 
 // KillHelper ends a helper by process id, for a process that holds no Helper.
-func KillHelper(pid int) { ntmediabox.KillHelper(pid) }
+func KillHelper(pid int) { ntconfine.KillHelper(pid) }
 
 // MediaStage confines this process and replaces it with the helper. It
 // returns only on failure.
 func MediaStage(helper, arg string) error {
-	err := ntmediabox.RunStage([]string{StageArg, arg})
+	err := ntconfine.RunStage([]string{StageArg, arg})
 	if err != nil {
 		if st, statErr := os.Stat(arg); statErr == nil && st.IsDir() {
-			return ntmediabox.RunStagePolicy(ntmediabox.DefaultPolicy(helper, arg), helper, []string{arg})
+			return ntconfine.RunStagePolicy(ntconfine.DefaultPolicy(helper, arg), helper, []string{arg})
 		}
 	}
 	return err

@@ -14,7 +14,7 @@ import (
 	"syscall"
 
 	"nimbleterminal.dev/ntbrowser/profile"
-	"nimbleterminal.dev/ntmediabox"
+	"nimbleterminal.dev/ntconfine"
 )
 
 const sandboxExec = "/usr/bin/sandbox-exec"
@@ -63,7 +63,7 @@ func Policy(p profile.Profile, start, tempDir, exe string) string {
 // HelperPolicy confines the media helper: no network, no terminal, no file
 // writes; it reads libmpv and its libraries and the media directory.
 func HelperPolicy(helper, tempDir string) string {
-	return ntmediabox.HelperPolicy(ntmediabox.DefaultPolicy(helper, tempDir))
+	return ntconfine.HelperPolicy(ntconfine.DefaultPolicy(helper, tempDir))
 }
 
 // Reexec replaces the process with itself under sandbox-exec. args are the

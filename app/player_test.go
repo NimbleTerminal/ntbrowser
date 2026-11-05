@@ -6,12 +6,14 @@ package app
 import (
 	"errors"
 	"image"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -23,9 +25,10 @@ import (
 )
 
 type stubDecoder struct {
-	mu    sync.Mutex
-	ops   []string
-	state ntmediabox.State
+	mu      sync.Mutex
+	ops     []string
+	state   ntmediabox.State
+	request ntmediabox.OpenRequest
 }
 
 func (d *stubDecoder) add(s string) error {
@@ -34,9 +37,10 @@ func (d *stubDecoder) add(s string) error {
 	d.ops = append(d.ops, s)
 	return nil
 }
-func (d *stubDecoder) Load(ntmediabox.OpenRequest) error {
+func (d *stubDecoder) Load(req ntmediabox.OpenRequest) error {
 	d.mu.Lock()
 	d.state = ntmediabox.Paused
+	d.request = req
 	d.mu.Unlock()
 	return d.add("load")
 }
@@ -46,10 +50,10 @@ func (d *stubDecoder) Play() error {
 	d.mu.Unlock()
 	return d.add("play")
 }
-func (d *stubDecoder) Pause() error                    { return d.add("pause") }
-func (d *stubDecoder) Seek(t time.Duration) error      { return d.add("seek " + t.String()) }
+func (d *stubDecoder) Pause() error                     { return d.add("pause") }
+func (d *stubDecoder) Seek(t time.Duration) error       { return d.add("seek " + t.String()) }
 func (d *stubDecoder) SelectTrack(string, string) error { return nil }
-func (d *stubDecoder) SetCaptionOverlay(bool) error    { return nil }
+func (d *stubDecoder) SetCaptionOverlay(bool) error     { return nil }
 func (d *stubDecoder) Status() (ntmediabox.Status, error) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -501,5 +505,97 @@ func drain(t *testing.T, m *Model, cmd tea.Cmd) {
 			}
 		case <-time.After(200 * time.Millisecond): // a timer: not part of this drain
 		}
+	}
+}
+
+// A callback may already be queued when Open, Seek, or Stop advances the
+// generation. Check again on the UI thread before touching the current player.
+func TestPlayerDiscardsStaleMediaMessages(t *testing.T) {
+	a, b := net.Pipe()
+	t.Cleanup(func() { a.Close(); b.Close() })
+	go io.Copy(io.Discard, b)
+	bridge, err := NewMediaBridge(a, func(tea.Msg) {}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := newModel(t, NavFree)
+	m.SetMedia(bridge, t.TempDir())
+	m.startPlayer("first")
+	for _, advance := range []struct {
+		name string
+		fn   func()
+	}{
+		{"seek", func() { bridge.client.Seek(time.Second) }},
+		{"replace", func() { m.startPlayer("second") }},
+	} {
+		t.Run(advance.name, func(t *testing.T) {
+			old := bridge.client.Gen()
+			advance.fn()
+			gen := bridge.client.Gen()
+			if gen == old {
+				t.Fatal("generation did not advance")
+			}
+			m.onVideo(videoStatusMsg{ntmediabox.Status{Gen: gen, State: ntmediabox.Playing}})
+			m.onVideo(videoStatusMsg{ntmediabox.Status{Gen: old, State: ntmediabox.Failed, Err: "old failure"}})
+			if m.player.status.Gen != gen {
+				t.Fatal("stale status replaced current status")
+			}
+			before := m.player.frames
+			bridge.latest.Store(&ntmediabox.Frame{Gen: old, Image: image.NewRGBA(image.Rect(0, 0, 2, 2))})
+			m.onVideo(videoFrameMsg{})
+			if m.player.frames != before {
+				t.Fatal("stale frame was displayed")
+			}
+			bridge.latest.Store(&ntmediabox.Frame{Gen: gen, Image: image.NewRGBA(image.Rect(0, 0, 2, 2))})
+			m.onVideo(videoFrameMsg{})
+			if m.player.frames != before+1 {
+				t.Fatal("current frame was dropped")
+			}
+		})
+	}
+	m.Cleanup()
+}
+
+func TestPlayerPassesProfileMediaLimit(t *testing.T) {
+	srv := videoServer(t)
+	r := videoModel(t, srv.URL)
+	r.m.profile.MaxMediaBytes = 12345
+	run(t, r.m, srv.URL+"/v.mp4")
+	r.pump(t, func() bool { return r.d.saw("load") })
+	r.d.mu.Lock()
+	req := r.d.request
+	r.d.mu.Unlock()
+	if req.Limits.MaxFileBytes != 12345 || req.Name != r.m.player.name || req.Autoplay || req.Loop || len(req.Captions) != 0 {
+		t.Fatalf("unexpected worker request: %+v", req)
+	}
+}
+
+func TestBridgeClosesHelperExactlyOnce(t *testing.T) {
+	a, b := net.Pipe()
+	defer b.Close()
+	go io.Copy(io.Discard, b)
+	var kills atomic.Int32
+	bridge, err := NewMediaBridge(a, func(tea.Msg) {}, func() { kills.Add(1) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := newModel(t, NavFree)
+	m.SetMedia(bridge, "")
+	m.Cleanup()
+	m.Cleanup()
+	if got := kills.Load(); got != 1 {
+		t.Fatalf("helper killed %d times", got)
+	}
+}
+
+func TestBridgeKillsHelperOnHandshakeFailure(t *testing.T) {
+	a, b := net.Pipe()
+	b.Close()
+	var kills atomic.Int32
+	if _, err := NewMediaBridge(a, func(tea.Msg) {}, func() { kills.Add(1) }); err == nil {
+		t.Fatal("handshake succeeded")
+	}
+	if got := kills.Load(); got != 1 {
+		t.Fatalf("helper killed %d times", got)
 	}
 }

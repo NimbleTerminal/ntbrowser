@@ -41,21 +41,20 @@ type (
 type MediaBridge struct {
 	client  *ntmediabox.Client
 	send    func(tea.Msg)
-	latest  atomic.Pointer[image.RGBA]
+	latest  atomic.Pointer[ntmediabox.Frame]
 	pending atomic.Bool
 	dead    atomic.Bool
-	kill    func() // ends the helper process; a violation must stop it, not just the socket
 }
 
 // NewMediaBridge starts talking to the helper on conn; send must not block.
 func NewMediaBridge(conn io.ReadWriteCloser, send func(tea.Msg), kill func()) (*MediaBridge, error) {
-	b := &MediaBridge{send: send, kill: kill}
-	b.client = ntmediabox.NewClient(conn, func(s ntmediabox.Status) { send(videoStatusMsg{s}) }, func(img *image.RGBA) {
-		b.latest.Store(img)
+	b := &MediaBridge{send: send}
+	b.client = ntmediabox.NewClientWithKill(conn, func(s ntmediabox.Status) { send(videoStatusMsg{s}) }, func(frame ntmediabox.Frame) {
+		b.latest.Store(&frame)
 		if b.pending.CompareAndSwap(false, true) {
 			send(videoFrameMsg{})
 		}
-	})
+	}, kill)
 	if err := b.client.Handshake("video"); err != nil {
 		b.client.Close()
 		return nil, err
@@ -63,9 +62,6 @@ func NewMediaBridge(conn io.ReadWriteCloser, send func(tea.Msg), kill func()) (*
 	go func() {
 		<-b.client.Dead()
 		b.dead.Store(true)
-		if b.kill != nil {
-			b.kill()
-		}
 		send(videoDeadMsg{})
 	}()
 	return b, nil
@@ -81,9 +77,6 @@ func (m *Model) Cleanup() {
 	}
 	if m.bridge != nil {
 		m.bridge.client.Close()
-		if m.bridge.kill != nil {
-			m.bridge.kill()
-		}
 	}
 	if m.mediaDir == "" {
 		return
@@ -221,7 +214,10 @@ func (m *Model) startPlayer(name string) tea.Cmd {
 	m.status = ""
 	cmd := tea.Batch(closing, pic.Init(), pic.SetSize(m.cols, m.viewRows()))
 	m.sendSize()
-	m.bridge.client.Open(name)
+	m.bridge.client.OpenMedia(ntmediabox.OpenRequest{
+		Name:   name,
+		Limits: ntmediabox.Limits{MaxFileBytes: m.profile.MaxMediaBytes},
+	})
 	m.bridge.client.Play()
 	return cmd
 }
@@ -274,18 +270,18 @@ func (m *Model) onVideo(msg tea.Msg) tea.Cmd {
 			m.player.dead = true
 		}
 	case videoStatusMsg:
-		if m.player != nil {
+		if m.player != nil && v.status.Gen == m.bridge.client.Gen() {
 			m.player.status = v.status
 		}
 	case videoFrameMsg:
 		m.bridge.pending.Store(false)
-		img := m.bridge.latest.Swap(nil)
-		if m.player == nil || img == nil {
+		frame := m.bridge.latest.Swap(nil)
+		if m.player == nil || frame == nil || frame.Gen != m.bridge.client.Gen() {
 			return nil
 		}
 		m.player.frames++
 		m.sendSize()
-		return m.player.pic.SetImageImmutable(img)
+		return m.player.pic.SetImageImmutable(frame.Image)
 	}
 	return nil
 }
