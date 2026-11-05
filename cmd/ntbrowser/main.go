@@ -15,6 +15,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -23,6 +24,7 @@ import (
 	"runtime/debug"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -167,7 +169,9 @@ func decodeState(args []string) (state, bool, error) {
 	return st, true, json.Unmarshal(data, &st)
 }
 
-func main() {
+func main() { os.Exit(runMain()) }
+
+func runMain() int {
 	if len(os.Args) == 3 && os.Args[1] == sandbox.StageArg {
 		// Linux: this static binary locks down, then becomes the helper.
 		helper, err := sandbox.HelperPath()
@@ -175,7 +179,7 @@ func main() {
 			err = sandbox.MediaStage(helper, os.Args[2])
 		}
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return 1
 	}
 	st, sandboxed, err := decodeState(os.Args[1:])
 	if err == nil && !sandboxed {
@@ -186,29 +190,33 @@ func main() {
 		if !errors.Is(err, flag.ErrHelp) {
 			fmt.Fprintln(os.Stderr, err)
 		}
-		os.Exit(2)
+		return 2
 	}
 	c := st.Config
 	if c.ShowProfile {
 		fmt.Print(c.Profile.Table(sandbox.Probe()))
 		fmt.Println("strengths are what this machine should achieve; a running ntbrowser says if it did not")
-		return
+		return 0
 	}
 	if !sandboxed && c.Profile.UsesTemp() {
 		if st.TempDir, err = mediaTemp(); err != nil {
 			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+			return 1
 		}
 	}
-	conn, err := startMedia(&st, sandboxed)
+	if st.TempDir != "" {
+		defer os.Remove(st.TempDir)
+	}
+	conn, closeMedia, err := startMedia(&st, sandboxed)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return 1
 	}
+	defer closeMedia()
 	strengths, err := lockDown(st, sandboxed)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return 1
 	}
 	// Process-wide soft heap cap: Goja has no per-runtime memory limit, so
 	// the GC is told to work harder past this point and dom/nthtml limits
@@ -231,29 +239,30 @@ func main() {
 	mode, err := subres.ParseMode(string(c.Profile.Subresources))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(2)
+		return 2
 	}
 	subresCfg := subres.Config{Mode: mode}
 	l := loop.New(ctx, loop.Config{Profile: c.Profile, Width: c.Width, Script: script, Subresources: subresCfg, SubresourceTransport: app.SubresourceTransport(app.PolicyFor(c.Profile), subresCfg)}, sink)
 	go l.Run()
 
 	m := app.New(l, c.Profile, c.Start)
+	defer m.Cleanup()
 	program = tea.NewProgram(m)
 	m.SetEnforced(strengths["files"] == profile.StrengthOS)
 	if conn != nil {
-		bridge, err := app.NewMediaBridge(conn, program.Send, func() { sandbox.KillHelper(st.HelperPID) })
+		bridge, err := app.NewMediaBridge(conn, program.Send, closeMedia)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
+			return 1
 		}
 		m.SetMedia(bridge, st.TempDir)
 	}
 	_, err = program.Run()
-	m.Cleanup()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		return 1
 	}
+	return 0
 }
 
 // mediaTemp creates the private media directory. Its path is resolved because
@@ -272,29 +281,53 @@ func needsHelper(p profile.Profile) bool { return p.Media == profile.MediaVideo 
 // startMedia starts the media helper before lockdown, when the profile
 // allows video; afterwards the main process cannot start anything. The macOS
 // re-exec comes back with the socket's descriptor instead.
-func startMedia(st *state, sandboxed bool) (io.ReadWriteCloser, error) {
+func startMedia(st *state, sandboxed bool) (io.ReadWriteCloser, func(), error) {
 	c := st.Config
 	if !needsHelper(c.Profile) {
-		return nil, nil
+		return nil, func() {}, nil
 	}
 	if sandboxed {
-		return os.NewFile(uintptr(st.HelperFD), "media-helper"), nil
+		// FileConn restores nonblocking, deadline-capable I/O after re-exec.
+		file := os.NewFile(uintptr(st.HelperFD), "media-helper")
+		conn, err := net.FileConn(file)
+		file.Close()
+		if err != nil {
+			sandbox.KillHelper(st.HelperPID)
+			return nil, nil, err
+		}
+		return conn, sync.OnceFunc(func() {
+			conn.Close()
+			sandbox.KillHelper(st.HelperPID)
+			if p, err := os.FindProcess(st.HelperPID); st.HelperPID > 0 && err == nil {
+				_, _ = p.Wait()
+			}
+		}), nil
 	}
 	path, err := sandbox.HelperPath()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	h, err := sandbox.StartHelper(c.Profile, path, st.TempDir)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	st.HelperPID = h.PID()
 	if runtime.GOOS == "darwin" {
 		if st.HelperFD, err = h.InheritableFD(); err != nil {
-			return nil, err
+			h.Close()
+			return nil, nil, err
 		}
 	}
-	return h.Conn, nil
+	var inherited *os.File
+	if runtime.GOOS == "darwin" {
+		inherited = os.NewFile(uintptr(st.HelperFD), "media-helper-inherited")
+	}
+	return h.Conn, sync.OnceFunc(func() {
+		if inherited != nil {
+			inherited.Close()
+		}
+		h.Close()
+	}), nil
 }
 
 // startPath is the real path of a file: start URL, "" otherwise. Sandbox

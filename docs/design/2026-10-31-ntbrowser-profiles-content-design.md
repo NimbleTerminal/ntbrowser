@@ -239,3 +239,45 @@ also bounds source dimensions using ntvideo's defaults and releases the active
 media on Stop. Software decoding, disabled audio, reader-initiated playback,
 and the existing profile gates remain in force. No render-protocol or caption
 controls are exposed by ntbrowser in this integration.
+
+## 11. ntmediabox usage audit (2026-11-05)
+
+The streaming worker is the correct boundary for native video. A rendering
+worker is also appropriate for hostile pure-Go media: memory safety and input
+budgets do not make a synchronous decoder forcibly cancellable. The current
+implementation does **not** isolate all media rendering in subprocesses.
+
+| Path | Current execution | Appropriate worker boundary |
+| --- | --- | --- |
+| Click-to-play video | `ntbrowser-media`, streaming Client/Serve, native code only in the nested module | Keep the streaming protocol and startup-only launch |
+| Top-level still images | `app.decodeStill`, bounded in-process decoding | RenderClient; ntpicture's decoder worker accepts a preconnected client |
+| Fetched/data-URL images | `subres.decodeFetched` / `decodeDataURL`, bounded in-process decoding | Same still-image service; fetch and URL policy stay in the host |
+| Inline, fetched, and data-URL SVG; Mermaid | nthtml's DefaultDiagramRenderer / ntsvg in the host | RenderClient adapter covering both Mermaid conversion and SVG rasterization |
+| CSS data-URL backgrounds | nthtml decodes internally during layout | Must route through the worker too; changing only subres would leave this path local |
+| GIF/WebP animation | ntpicture animation player in-process, frame and pixel budgets | A persistent streaming decoder, or a separately designed stateful render session; a still-image worker would lose animation |
+| HTML/CSS layout and DOM/JS | Budgeted document rendering and interpreter in-process | Not interchangeable with nttypeset's worker: ntbrowser needs nthtml boxes, anchors, links, and mutable DOM correspondence |
+| Fonts | Embedded trusted font sources | No extra process solely for these sources; untrusted web fonts would require a new policy and audit |
+| PDF and other unknown responses | Refused without decoding | No worker needed until support is explicitly added |
+| Kitty encoding and terminal drawing | Host, using checked decoded pixels | Keep in the host; workers must never gain terminal access |
+
+The existing video integration now separates UI delivery from the protocol reader
+with bounded, coalesced notifications. A blocked Bubble Tea Send cannot prevent
+EOF/protocol-error handling. Startup retains Helper.Close for termination and
+reaping, including error exits. After macOS re-exec, the inherited socket is
+converted back to a deadline-capable connection and cleanup kills and waits for
+the inherited child. No helper is spawned after lockdown.
+
+A broader rendering-worker implementation needs a dedicated pure-Go helper,
+started before lockdown independently of `media=video` (inline page images and
+diagrams are not governed by the top-level media gate). It must not reuse the
+native helper for profiles with native-code off. Keep all network fetching and
+file admission in the host, pass bytes with explicit request/pixel/deadline
+limits, and retain existing subresource and page budgets. Cover all decode entry
+points above, with no silent local retry after worker failure. A timeout kills
+the session; with `process=off`, automatic respawn is not allowed. Define either
+a bounded pool created at startup or session-long degradation before enabling
+this boundary. Report actual worker enforcement independently of protocol checks.
+
+The render extension is a separate implementation decision; this audit does not
+claim that pure-Go image, animation, diagram, or HTML rendering is already
+process-isolated.

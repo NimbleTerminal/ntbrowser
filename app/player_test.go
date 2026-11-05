@@ -599,3 +599,33 @@ func TestBridgeKillsHelperOnHandshakeFailure(t *testing.T) {
 		t.Fatalf("helper killed %d times", got)
 	}
 }
+
+func TestBlockedUIDoesNotBlockHelperTermination(t *testing.T) {
+	a, b := net.Pipe()
+	defer b.Close()
+	blocked := make(chan struct{})
+	release := make(chan struct{})
+	defer close(release)
+	var once sync.Once
+	killed := make(chan struct{})
+	go ntmediabox.Serve(b, func(string) (ntmediabox.Decoder, error) { return &stubDecoder{}, nil })
+	bridge, err := NewMediaBridge(a, func(tea.Msg) {
+		once.Do(func() { close(blocked) })
+		<-release
+	}, func() { close(killed) })
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer bridge.client.Close()
+	select {
+	case <-blocked:
+	case <-time.After(2 * time.Second):
+		t.Fatal("no UI delivery")
+	}
+	b.Close()
+	select {
+	case <-killed:
+	case <-time.After(2 * time.Second):
+		t.Fatal("UI blocked protocol termination")
+	}
+}

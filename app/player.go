@@ -39,26 +39,53 @@ type (
 // MediaBridge turns a media helper's connection into Bubble Tea messages.
 // Frames are latest-wins: a slow terminal drops frames, it does not queue them.
 type MediaBridge struct {
-	client  *ntmediabox.Client
-	send    func(tea.Msg)
-	latest  atomic.Pointer[ntmediabox.Frame]
-	pending atomic.Bool
-	dead    atomic.Bool
+	client        *ntmediabox.Client
+	send          func(tea.Msg)
+	latest        atomic.Pointer[ntmediabox.Frame]
+	status        atomic.Pointer[ntmediabox.Status]
+	statusPending atomic.Bool
+	pending       atomic.Bool
+	dead          atomic.Bool
 }
 
-// NewMediaBridge starts talking to the helper on conn; send must not block.
+// NewMediaBridge starts talking to the helper on conn. UI delivery is kept
+// off the protocol reader so a blocked UI cannot stall helper I/O.
 func NewMediaBridge(conn io.ReadWriteCloser, send func(tea.Msg), kill func()) (*MediaBridge, error) {
 	b := &MediaBridge{send: send}
-	b.client = ntmediabox.NewClientWithKill(conn, func(s ntmediabox.Status) { send(videoStatusMsg{s}) }, func(frame ntmediabox.Frame) {
+	// At most one pending notification of each kind; payloads are latest-wins.
+	notifications := make(chan bool, 2) // true = status, false = frame
+	b.client = ntmediabox.NewClientWithKill(conn, func(s ntmediabox.Status) {
+		b.status.Store(&s)
+		if b.statusPending.CompareAndSwap(false, true) {
+			notifications <- true
+		}
+	}, func(frame ntmediabox.Frame) {
 		b.latest.Store(&frame)
 		if b.pending.CompareAndSwap(false, true) {
-			send(videoFrameMsg{})
+			notifications <- false
 		}
 	}, kill)
 	if err := b.client.Handshake("video"); err != nil {
 		b.client.Close()
 		return nil, err
 	}
+	go func() {
+		for {
+			select {
+			case status := <-notifications:
+				if status {
+					b.statusPending.Store(false)
+					if s := b.status.Swap(nil); s != nil {
+						send(videoStatusMsg{*s})
+					}
+				} else {
+					send(videoFrameMsg{})
+				}
+			case <-b.client.Dead():
+				return
+			}
+		}
+	}()
 	go func() {
 		<-b.client.Dead()
 		b.dead.Store(true)
