@@ -1,6 +1,8 @@
 # CHANGELOG
 
-## v0.1.0 (unreleased)
+## Unreleased
+
+## v0.1.0 (2026-11-05)
 
 - Initial release of `nimbleterminal.dev/ntbrowser`, a terminal reader and
   non-JIT web runtime using nthtml and a hardened Goja interpreter. Bounded DOM
