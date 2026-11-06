@@ -12,7 +12,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"net"
@@ -28,6 +27,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	flag "github.com/spf13/pflag"
 
 	"nimbleterminal.dev/ntbrowser/app"
 	"nimbleterminal.dev/ntbrowser/jsvm"
@@ -53,15 +53,16 @@ func parseArgs(args []string) (config, error) {
 	var c config
 	fs := flag.NewFlagSet("ntbrowser", flag.ContinueOnError)
 	name := fs.String("profile", "browse", "built-in profile: locked, reader, browse")
-	file := fs.String("profile-file", "", "JSON profile file (overrides -profile)")
+	file := fs.String("profile-file", "", "JSON profile file (overrides --profile)")
 	fs.BoolVar(&c.ShowProfile, "show-profile", false, "print the effective profile and exit")
 	allow := fs.String("allow", "", "comma-separated hosts for allowlist gates (leading dot = subdomains)")
 	private := fs.Bool("allow-private", false, "permit loopback/private addresses (development)")
-	external := fs.Bool("external-scripts", false, "fetch <script src> through the allowlist (same as -scripts external)")
+	external := fs.Bool("external-scripts", false, "fetch <script src> through the allowlist (same as --scripts external)")
 	nav := fs.String("nav", "", "link navigation: off, free, allowlist, confirm")
 	subres := fs.String("subresources", "", "stylesheets and images: off, origin, any")
 	fetch := fs.String("fetch", "", "fetch() from page script: off, origin, allowlist")
 	scripts := fs.String("scripts", "", "page script: off, inline, external")
+	dynamic := fs.String("dynamic-code", "", "eval and Function-family compilation: off, on (default off)")
 	clipboard := fs.String("clipboard", "", "selected-text copy: off, copy")
 	media := fs.String("media", "", "most a response may be shown as: off, image, animation, video (video also opens native-code and files=temp)")
 	maxMedia := fs.Int64("max-media-bytes", 0, "download cap for media")
@@ -69,7 +70,7 @@ func parseArgs(args []string) (config, error) {
 	fs.IntVar(&c.Width, "width", 800, "document pixel width")
 	fs.DurationVar(&c.Slice, "slice", 50*time.Millisecond, "JS time slice per callback")
 	fs.Uint64Var(&c.Seed, "seed", 0, "PRNG seed for Math.random, for reproducible runs (0 = time-based); the clock is never fixed, timers depend on it")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(legacyLongFlags(fs, args)); err != nil {
 		return c, err
 	}
 	p, ok := profile.Builtin(*name)
@@ -101,6 +102,9 @@ func parseArgs(args []string) (config, error) {
 	}
 	if *scripts != "" {
 		p.Scripts = profile.Scripts(*scripts)
+	}
+	if *dynamic != "" {
+		p.DynamicCode = profile.DynamicCode(*dynamic)
 	}
 	if *clipboard != "" {
 		p.Clipboard = profile.Clipboard(*clipboard)
@@ -189,9 +193,10 @@ func runMain() int {
 		st.Config, err = parseArgs(os.Args[1:])
 	}
 	if err != nil {
-		if !errors.Is(err, flag.ErrHelp) {
-			fmt.Fprintln(os.Stderr, err)
+		if errors.Is(err, flag.ErrHelp) {
+			return 0
 		}
+		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
 	c := st.Config

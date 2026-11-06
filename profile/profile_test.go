@@ -152,3 +152,32 @@ func TestClockRejectsInvalidResolution(t *testing.T) {
 		}
 	}
 }
+
+func TestDynamicCodeProfileGate(t *testing.T) {
+	for _, name := range []string{"locked", "reader", "browse"} {
+		p, _ := Builtin(name)
+		if p.AllowsDynamicCode() {
+			t.Fatalf("%s enables dynamic code", name)
+		}
+	}
+	for _, tc := range []struct {
+		src  string
+		open bool
+	}{
+		{`{}`, false}, {`{"dynamic-code":"on"}`, false}, {`{"scripts":"inline","dynamic-code":"on"}`, true}, {`{"base":"browse","dynamic-code":"off"}`, false},
+	} {
+		p, err := Parse([]byte(tc.src))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if p.AllowsDynamicCode() != tc.open {
+			t.Fatal(tc.src)
+		}
+		if !strings.Contains(p.Table(nil), "dynamic-code") {
+			t.Fatal("gate missing from table")
+		}
+	}
+	if _, err := Parse([]byte(`{"dynamic-code":"maybe"}`)); err == nil {
+		t.Fatal("invalid gate accepted")
+	}
+}

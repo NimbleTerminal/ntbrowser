@@ -10,6 +10,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
+	"nimbleterminal.dev/ntbrowser/jsvm"
 	"nimbleterminal.dev/ntbrowser/profile"
 )
 
@@ -73,4 +74,28 @@ func TestPerformanceAndAnimationFramesRespectProfileClock(t *testing.T) {
  requestAnimationFrame(t=>{if(t%1000!==0||performance.now()<t)throw Error("fine frame clock");console.log("coarse clocks")});
  </script>`)
 	waitLog(t, sink, "coarse clocks")
+}
+
+func TestDynamicCodeRespectsProfileAndFetchGate(t *testing.T) {
+	for _, on := range []bool{false, true} {
+		t.Run(map[bool]string{false: "off", true: "on"}[on], func(t *testing.T) {
+			p, _ := profile.Builtin("browse")
+			p.Fetch = profile.FetchOff
+			if on {
+				p.DynamicCode = profile.DynamicOn
+			}
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			sink := make(chanSink, 256)
+			// The loop must override even a conflicting low-level VM configuration.
+			l := New(ctx, Config{Profile: p, Width: 400, Script: jsvm.Config{AllowDynamicCode: !on}}, sink)
+			go l.Run()
+			l.LoadPage(`<script>try { eval('fetch("/x").then(()=>console.log("escaped"),()=>console.log("fetch refused"))'); } catch(e) { console.log(e.name); }</script>`, "https://example.test/", nil)
+			want := "EvalError"
+			if on {
+				want = "fetch refused"
+			}
+			waitLog(t, sink, want)
+		})
+	}
 }

@@ -77,6 +77,7 @@ New packages: `profile` (data, validation, printing; no system imports) and `con
    | `hosts` | list | what `allowlist` means |
    | `private-network` | `off`, `on` | loopback and private addresses |
    | `scripts` | `off`, `inline`, `external` | page script |
+   | `dynamic-code` | `off`, `on` | native direct/indirect eval and Function-family string compilation; off in every built-in |
    | `clock` | milliseconds | shared resolution for Date, performance and animation-frame timestamps (speculation timing) |
    | `files` | `off`, `start-page`, `temp` | `start-page` reads the one `file:` URL given at launch; `temp` adds the private media directory |
    | `native-code` | `off`, `on` | native code, which exists only in the media helper (decision 21); the main binary never loads any |
@@ -85,6 +86,18 @@ New packages: `profile` (data, validation, printing; no system imports) and `con
    | `clipboard` | `off`, `copy` | selected-text copy to the terminal clipboard |
    | `environment` | `off` | reserved: nothing in the sandbox reads the environment |
    | `process` | `off` | after startup the program starts no processes; there is no `on`. The media helper is started before lockdown (decision 22) |
+
+   **Dynamic-code extension (2026-11-06).** The gate defaults off, including in
+   `browse`. When off, eval and ordinary/async/generator function constructors
+   throw `EvalError`, including prototype `.constructor` paths. When on, the
+   engine's native intrinsics preserve lexical scope and execute inside the
+   existing runtime, with its parser source-map protection, call-stack limit,
+   watchdog and heap checks. They confer no network, file or navigation rights.
+   String timers remain unsupported. The gate is checked from the host Profile;
+   page code cannot enable it. Native dynamic compilation has no per-source size
+   hook and cannot be interrupted mid-parse/compile in the pinned Goja version;
+   the top-level 1 MiB script limit does not apply to generated strings. Time
+   interrupts take effect when execution resumes, and memory checks remain soft.
 
    **Anchor interface extension (2026-11-06).** URL/attribute/token-list bindings
    are local DOM operations and create no new authority. Reader activation uses
@@ -105,6 +118,7 @@ New packages: `profile` (data, validation, printing; no system imports) and `con
    | `subresources` | `off` | `origin` | `any` |
    | `fetch` | `off` | `off` | `allowlist` |
    | `scripts` | `off` | `off` | `inline` |
+   | `dynamic-code` | `off` | `off` | `off` |
    | `files` | `off` | `off` | `start-page` |
    | `clock` | n/a | n/a | today's value |
    | `native-code` | `off` | `off` | `off` |

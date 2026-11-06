@@ -121,7 +121,7 @@ What each hardening step defends against:
 | watchdog is pausable while the bridge runs a forced GC under budget pressure | Go-side work being billed to the script and producing false strikes |
 | `SetTimeSource` (10 ms), `SetRandSource` | timing side channels, fingerprinting, non-reproducible replays |
 | capture `JSON.parse`/`Promise` before scripts run | prototype pollution of host code paths |
-| `Delete("eval")` | surface reduction (not a boundary: `Function` remains, compiles into the same sandbox) |
+| Profile `dynamic-code` gate | Off blocks eval and Function-family constructors, including prototype paths. On retains native lexical eval and runtime parser hardening; see the profiles design §5 for generated-source budget limitations. |
 | `DefineDataProperty(..., writable=false, configurable=false)` for every host global | page swapping `fetch`/`document` with a Proxy that lies to later host calls |
 | `recover()` in `Run` | a Go panic in a binding tearing down the loop |
 | `SetPromiseRejectionTracker` | silent failures |
@@ -3890,7 +3890,7 @@ GOWORK=off go test -race -count=3 ./...      # ok: app, dom, jsvm, netpolicy, lo
 Tests included (and what they prove):
 
 - `jsvm.TestNoSystemImports` — `jsvm`/`dom` import none of `os`, `os/exec`, `net`, `net/http`, `syscall`, `io/fs`, `plugin`, `unsafe`.
-- `jsvm.TestGlobalSurface` — no `eval`/`require`/`process`/`XMLHttpRequest`/`WebSocket`/`Worker`/`WebAssembly`; host globals present.
+- `jsvm.TestGlobalSurface` — gated `eval`; no `require`/`process`/`XMLHttpRequest`/`WebSocket`/`Worker`/`WebAssembly`; host globals present.
 - `jsvm.TestWatchdogAndStrikes` — `for(;;){}` is interrupted; second strike disables scripting; later `Eval` returns `ErrDisabled`.
 - `jsvm.TestBridgeMutatesTreeNotPointers` — `textContent` with markup is escaped on serialization; a listener on an id-less element mints `nt-h-N`; `preventDefault` is observed by `Dispatch`.
 - `jsvm.TestConsoleStripsTerminalEscapes` — an OSC 52 clipboard sequence in `console.log` never reaches the host.
@@ -5497,11 +5497,12 @@ module nimbleterminal.dev/ntbrowser
 go 1.26.8
 
 require (
-	github.com/nlnwa/whatwg-url v0.6.2
 	charm.land/bubbles/v2 v2.2.1
 	charm.land/bubbletea/v2 v2.1.1
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/dop251/goja v0.0.0-20261105002551-2413f2132ac8
+	github.com/nlnwa/whatwg-url v0.6.2
+	github.com/spf13/pflag v1.1.0
 	golang.org/x/image v0.47.0
 	golang.org/x/net v0.62.0
 	nimbleterminal.dev/ntconfine v0.1.1
@@ -5518,6 +5519,7 @@ require (
 	github.com/NimbleMarkets/oksvg v0.1.6 // indirect
 	github.com/alecthomas/chroma/v2 v2.27.0 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
+	github.com/bits-and-blooms/bitset v1.24.6 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
 	github.com/charmbracelet/ultraviolet v0.0.0-20261023060817-a45b7c86333f // indirect
 	github.com/charmbracelet/x/term v0.2.2 // indirect

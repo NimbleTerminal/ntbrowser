@@ -322,6 +322,7 @@ func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) {
 		}
 		cfg := l.cfg.Script
 		cfg.Location = base
+		cfg.AllowDynamicCode = l.cfg.Profile.AllowsDynamicCode()
 		if ms := l.cfg.Profile.ClockMillis; ms > 0 {
 			cfg.ClockResolution = time.Duration(ms) * time.Millisecond
 		}

@@ -18,7 +18,8 @@ import (
 // (runtime.go: compile(name, src, strict, true, nil)); RunString/RunScript
 // use the runtime's options but would make the rule harder to audit. The
 // only allowed path is goja.Parse(name, src, parser.WithDisableSourceMaps)
-// followed by goja.CompileAST, in Sandbox.Eval.
+// followed by goja.CompileAST. Native dynamic compilation is separately gated
+// and tested in dynamic_test.go; it uses the runtime parser options.
 func TestOnlyHardenedCompilePath(t *testing.T) {
 	forbidden := map[string]bool{"Compile": true, "MustCompile": true, "RunString": true, "RunScript": true,
 		// NewGoError attaches the Go error as a reflected, writable `value` (spec §2 anti-goal).

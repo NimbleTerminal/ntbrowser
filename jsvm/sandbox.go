@@ -30,16 +30,17 @@ import (
 
 // Config bounds one page's scripting. Zero fields use the defaults below.
 type Config struct {
-	Slice           time.Duration // wall-clock budget per entry into JS (default 50ms)
-	Strikes         int           // slice overruns before scripting is disabled (default 3)
-	MaxCallStack    int           // default 512 frames
-	MaxTimers       int           // live timers (default 256)
-	MaxListeners    int           // total event listeners (default 1024)
-	HeapBudget      uint64        // process heap bytes after which this page is disabled (default 256 MiB)
-	ClockResolution time.Duration // minimum clock resolution (default 10ms), shared by Date, performance and rAF
-	Clock           func() time.Time
-	Rand            func() float64
-	Location        string // read-only location.href shown to scripts
+	AllowDynamicCode bool          // native eval and Function-family compilation; default false
+	Slice            time.Duration // wall-clock budget per entry into JS (default 50ms)
+	Strikes          int           // slice overruns before scripting is disabled (default 3)
+	MaxCallStack     int           // default 512 frames
+	MaxTimers        int           // live timers (default 256)
+	MaxListeners     int           // total event listeners (default 1024)
+	HeapBudget       uint64        // process heap bytes after which this page is disabled (default 256 MiB)
+	ClockResolution  time.Duration // minimum clock resolution (default 10ms), shared by Date, performance and rAF
+	Clock            func() time.Time
+	Rand             func() float64
+	Location         string // read-only location.href shown to scripts
 }
 
 // Host is what the loop gives the sandbox. Every method is called on the VM
@@ -224,12 +225,7 @@ func (s *Sandbox) harden() {
 	// Capture pristine built-ins before any script can monkey-patch them.
 	s.jsonParse, _ = goja.AssertFunction(vm.Get("JSON").ToObject(vm).Get("parse"))
 	s.promiseCtor = vm.Get("Promise").ToObject(vm)
-	// Strip dynamic-code entry points that reader-mode content has no use
-	// for. Direct eval is gone; the Function constructor remains reachable via
-	// Function.prototype.constructor, but it compiles into the same sandbox,
-	// so this is attack-surface reduction, not a security boundary.
-	global := vm.GlobalObject()
-	_ = global.Delete("eval")
+	s.configureDynamicCode()
 }
 
 // defineFrozen installs a host API as non-writable, non-configurable. Scripts

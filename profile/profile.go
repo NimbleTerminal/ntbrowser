@@ -24,6 +24,7 @@ type (
 	Subresources string
 	Fetch        string
 	Scripts      string
+	DynamicCode  string
 	Files        string
 	Media        string
 	Clipboard    string
@@ -43,6 +44,9 @@ const (
 	FetchOff       Fetch = "off"
 	FetchOrigin    Fetch = "origin"
 	FetchAllowlist Fetch = "allowlist"
+
+	DynamicOff DynamicCode = "off"
+	DynamicOn  DynamicCode = "on"
 
 	ScriptsOff      Scripts = "off"
 	ScriptsInline   Scripts = "inline"
@@ -80,6 +84,7 @@ type Profile struct {
 	Hosts          []string     `json:"hosts,omitempty"`
 	PrivateNetwork bool         `json:"private-network,omitempty"`
 	Scripts        Scripts      `json:"scripts,omitempty"`
+	DynamicCode    DynamicCode  `json:"dynamic-code,omitempty"`
 	ClockMillis    int          `json:"clock,omitempty"`
 	Files          Files        `json:"files,omitempty"`
 	NativeCode     bool         `json:"native-code,omitempty"`
@@ -150,6 +155,7 @@ func (p Profile) check() error {
 		oneOf("subresources", p.Subresources, SubOff, SubOrigin, SubAny),
 		oneOf("fetch", p.Fetch, FetchOff, FetchOrigin, FetchAllowlist),
 		oneOf("scripts", p.Scripts, ScriptsOff, ScriptsInline, ScriptsExternal),
+		oneOf("dynamic-code", p.DynamicCode, DynamicOff, DynamicOn),
 		oneOf("files", p.Files, FilesOff, FilesStartPage, FilesTemp),
 		oneOf("media", p.Media, MediaOff, MediaImage, MediaAnimation, MediaVideo),
 		oneOf("clipboard", p.Clipboard, ClipboardOff, ClipboardCopy),
@@ -211,6 +217,9 @@ func (p Profile) NavigationOpen() bool {
 
 // ScriptsOn reports whether page script runs.
 func (p Profile) ScriptsOn() bool { return p.Scripts == ScriptsInline || p.Scripts == ScriptsExternal }
+
+// AllowsDynamicCode requires both script execution and an explicit dynamic-code grant.
+func (p Profile) AllowsDynamicCode() bool { return p.ScriptsOn() && p.DynamicCode == DynamicOn }
 
 // AllowsSubresources reports whether stylesheets and images may load.
 func (p Profile) AllowsSubresources() bool {
@@ -278,6 +287,7 @@ func (p Profile) Table(s Strengths) string {
 		{"hosts", strings.Join(p.Hosts, ","), "what allowlist means"},
 		{"private-network", onOff(p.PrivateNetwork), "loopback and private addresses"},
 		{"scripts", orOff(p.Scripts), "page script"},
+		{"dynamic-code", orOff(p.DynamicCode), "eval and Function-family string compilation"},
 		{"clock", strconv.Itoa(p.ClockMillis) + "ms", "script clock resolution"},
 		{"files", orOff(p.Files), "start-page: the file: URL given at launch; temp adds the media directory"},
 		{"native-code", onOff(p.NativeCode), "only ever in the ntbrowser-media helper"},

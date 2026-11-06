@@ -140,6 +140,7 @@ A profile is a named set of positions for every gate out of the sandbox. It is f
 | `subresources` | off | origin | any |
 | `fetch` | off | off | allowlist |
 | `scripts` | off | off | inline |
+| `dynamic-code` | off | off | off |
 | `files` | off | off | start-page |
 | `native-code` | off | off | off |
 | `media` | off | image | animation |
@@ -152,25 +153,29 @@ No JIT and a coarse script clock make timing attacks harder, not impossible: not
 
 ## Flags
 
-Flags apply on top of the chosen profile.
+Flags apply on top of the chosen profile. Arguments use pflag syntax:
+`--name=value` or `--name value`, before or after the URL; `--` ends option
+parsing and `-h`/`--help` prints help. Existing single-dash long flags remain
+supported.
 
 | Flag | Meaning |
 | --- | --- |
-| `-profile locked\|reader\|browse` | Built-in profile (default `browse`) |
-| `-profile-file path` | JSON profile |
-| `-show-profile` | Print the effective profile and exit |
-| `-nav off\|free\|allowlist\|confirm` | Link navigation. `off` fetches only the start URL |
-| `-allow host[,host]` | Hosts for allowlist gates; a leading dot allows subdomains |
-| `-allow-private` | Permit loopback and private addresses (development only) |
-| `-subresources any\|origin\|off` | Stylesheets, images and CSS backgrounds |
-| `-fetch off\|origin\|allowlist` | `fetch()` from page script |
-| `-scripts off\|inline\|external` | Page script (`-external-scripts` is `-scripts external`) |
-| `-clipboard off\|copy` | Selected-text copy |
-| `-media off\|image\|animation\|video` | The most a top-level response may be shown as. Images inside a page are `-subresources`. `video` also opens `native-code` and `files=temp` |
-| `-max-media-bytes n` | Download cap for media (64 MiB) |
-| `-width px` | Initial document width; the terminal's pixel geometry takes over once known |
-| `-slice d` | JavaScript time budget per entry (50ms); three overruns disable the page |
-| `-seed n` | PRNG seed for `Math.random` (0 = time-based) |
+| `--profile locked\|reader\|browse` | Built-in profile (default `browse`) |
+| `--profile-file path` | JSON profile |
+| `--show-profile` | Print the effective profile and exit |
+| `--nav off\|free\|allowlist\|confirm` | Link navigation. `off` fetches only the start URL |
+| `--allow host[,host]` | Hosts for allowlist gates; a leading dot allows subdomains |
+| `--allow-private` | Permit loopback and private addresses (development only) |
+| `--subresources any\|origin\|off` | Stylesheets, images and CSS backgrounds |
+| `--fetch off\|origin\|allowlist` | `fetch()` from page script |
+| `--scripts off\|inline\|external` | Page script (`--external-scripts` is `--scripts external`) |
+| `--dynamic-code off\|on` | Native `eval` and Function-family compilation (default off) |
+| `--clipboard off\|copy` | Selected-text copy |
+| `--media off\|image\|animation\|video` | The most a top-level response may be shown as. Images inside a page are `--subresources`. `video` also opens `native-code` and `files=temp` |
+| `--max-media-bytes n` | Download cap for media (64 MiB) |
+| `--width px` | Initial document width; the terminal's pixel geometry takes over once known |
+| `--slice d` | JavaScript time budget per entry (50ms); three overruns disable the page |
+| `--seed n` | PRNG seed for `Math.random` (0 = time-based) |
 
 ## What a response becomes
 
@@ -300,3 +305,18 @@ Copyright (c) 2026 Neomantra Corp. All rights reserved.
 
 1. **Open-Source & Local CLI/Desktop Use:** Licensed under the **GNU Affero General Public License v3.0 only (`AGPL-3.0-only`)** with the **NimbleTerminal Open-Source Linking Exception (AGPLv3 Section 7)** in [`LICENSE`](LICENSE), allowing MIT-licensed modules from the `NimbleTerminal`, `NimbleMarkets`, and `wethinkt` organizations (including `ntvideo`, `ntpicture`, `ntpdf`, `ntsvg`, `nttypeset`, `gloss`, and `go-thinkt`) to import and link `ntbrowser` directly for local CLI and desktop execution while remaining 100% MIT-licensed.
 2. **Cloud, Hosted Sandbox & Closed-Source OEM Use:** Deploying, hosting, streaming, or executing `ntbrowser` (or tools powered by it) inside a commercial hosted service, remote terminal/multiplexer service, cloud AI agent sandbox, multi-tenant server, or closed-source commercial product requires either full **AGPLv3 Section 13** Corresponding Source disclosure of the covered work or a **Commercial OEM & Enterprise License from Neomantra Corp.** (see [`LICENSE-COMMERCIAL.md`](LICENSE-COMMERCIAL.md) or contact `licensing@neomantra.net`).
+
+
+**Dynamic JavaScript.** Enable native `eval` and ordinary, async and generator
+Function constructors with `ntbrowser --dynamic-code=on https://www.google.com/`
+or a profile containing `{"base":"browse","dynamic-code":"on"}`. The gate is
+off in every built-in profile; denied calls throw `EvalError`, including calls
+through prototype constructors. Direct eval retains lexical scope. Enabling
+this gate does not enable scripts when `scripts=off`, or grant additional
+network, file or navigation access. String timers remain unsupported.
+
+Generated code uses the same runtime, execution watchdog and heap checks, with
+source maps disabled. Goja does not expose a generated-source size limit or
+interruptible parsing/compilation: the 1 MiB host-script limit does not cap eval
+or Function strings, and the watchdog cannot interrupt their compilation.
+This opt-in is a profile capability, not an implementation of website CSP.

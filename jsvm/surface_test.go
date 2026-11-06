@@ -64,7 +64,7 @@ func TestGlobalSurface(t *testing.T) {
 	sort.Strings(names)
 	for _, n := range names {
 		switch n {
-		case "eval", "require", "process", "XMLHttpRequest", "WebSocket", "Worker", "SharedArrayBuffer", "Atomics", "importScripts", "WebAssembly":
+		case "require", "process", "XMLHttpRequest", "WebSocket", "Worker", "SharedArrayBuffer", "Atomics", "importScripts", "WebAssembly":
 			t.Errorf("forbidden global present: %s", n)
 		}
 	}
@@ -72,7 +72,7 @@ func TestGlobalSurface(t *testing.T) {
 	for _, n := range names {
 		have[n] = true
 	}
-	for _, want := range []string{"document", "fetch", "console", "setTimeout", "requestAnimationFrame", "location", "Image", "HTMLImageElement", "HTMLAnchorElement", "performance", "Performance"} {
+	for _, want := range []string{"document", "fetch", "console", "setTimeout", "requestAnimationFrame", "location", "Image", "HTMLImageElement", "HTMLAnchorElement", "performance", "Performance", "eval"} {
 		if !have[want] {
 			t.Errorf("missing host global %s", want)
 		}

@@ -8,6 +8,7 @@ require (
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/dop251/goja v0.0.0-20261105002551-2413f2132ac8
 	github.com/nlnwa/whatwg-url v0.6.2
+	github.com/spf13/pflag v1.1.0
 	golang.org/x/image v0.47.0
 	golang.org/x/net v0.62.0
 	nimbleterminal.dev/ntconfine v0.1.1
