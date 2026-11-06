@@ -66,8 +66,9 @@ type (
 	// Form marks a form submission (the host words its confirmation
 	// differently; the admission gate is the same as for links).
 	NavigateMsg struct {
-		Href string
-		Form bool
+		Href   string
+		Form   bool
+		Script bool // script-origin form submissions are not reader activation
 	}
 	LogMsg   struct{ Level, Line string }
 	TitleMsg struct{ Title string }
@@ -76,11 +77,13 @@ type (
 // Page is one navigation: tree + sandbox + policy. Replacing it discards the
 // whole JS heap, which is how cross-page isolation is achieved.
 type Page struct {
-	Tree    *dom.Tree
-	Sandbox *jsvm.Sandbox
-	Fetcher *netpolicy.Fetcher
-	Base    string
-	loaded  bool
+	pendingLocation  *ScriptNavigateMsg
+	locationRequests int
+	Tree             *dom.Tree
+	Sandbox          *jsvm.Sandbox
+	Fetcher          *netpolicy.Fetcher
+	Base             string
+	loaded           bool
 	// ctx bounds every request this page starts; cancel fires when the page
 	// is replaced or killed, so no completion outlives its runtime.
 	ctx         context.Context
@@ -148,6 +151,7 @@ type Config struct {
 
 type Loop struct {
 	frameNavigation atomic.Uint64
+	locationCommit  atomic.Uint64
 	resizeWidth     atomic.Int64
 	resizeWake      chan struct{}
 	cfg             Config
@@ -314,7 +318,7 @@ func (l *Loop) tryPost(fn func()) bool {
 // page's scripts in document order, fires DOMContentLoaded once every script
 // has run, and schedules the first frame. Safe to call from the UI goroutine:
 // it hands off without blocking.
-func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) {
+func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) uint64 {
 	l.currentFrame.Store(0)
 	gen := l.navGen.Add(1) // taken synchronously on the caller: call order == generation order
 	if fetcher == nil {
@@ -354,6 +358,16 @@ func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) {
 		page := &Page{Tree: tree, Fetcher: fetcher, Base: base, firstFrame: true, budgetWarned: map[string]bool{}, refused: map[string]bool{}, firing: map[dom.NodeID]bool{}, resetting: map[dom.NodeID]bool{}}
 		page.ctx, page.cancel = context.WithCancel(l.ctx)
 		page.paintCtx, page.paintCancel = context.WithCancel(l.ctx)
+		cfg.Navigate = nil
+		if l.cfg.Profile.ScriptsOn() && l.cfg.Profile.NavigationOpen() && l.cfg.Profile.ScriptNavigation != "" && l.cfg.Profile.ScriptNavigation != profile.ScriptNavOff {
+			cfg.Navigate = func(href, mode string) error {
+				if page.locationRequests >= l.cfg.Profile.ScriptNavBudget() {
+					return errors.New("script navigation request budget exceeded")
+				}
+				page.pendingLocation = &ScriptNavigateMsg{Href: href, Mode: mode, Source: page.Base, Navigation: gen}
+				return nil
+			}
+		}
 		page.Sandbox = jsvm.New(cfg, tree, (*host)(l))
 		page.Sandbox.SetFormHooks(l.formHooks(page))
 		l.page = page
@@ -367,6 +381,7 @@ func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) {
 	if !l.tryPost(task) {
 		go l.post(task)
 	}
+	return gen
 }
 
 // dropPage discards a page's runtime: scripting is closed so the Goja heap
@@ -661,6 +676,14 @@ func (l *Loop) afterTask() {
 		l.dropPage(l.page)
 	}
 	l.armTimer() // image handlers may have scheduled timers
+	if p := l.page; p.pendingLocation != nil {
+		v := *p.pendingLocation
+		p.pendingLocation = nil
+		if !p.killed {
+			p.locationRequests++
+			l.send(v)
+		}
+	}
 	l.reconcileFocus(l.page)
 	if l.page.Tree.Dirty() {
 		l.currentFrame.Store(0)

@@ -409,7 +409,7 @@ func (l *Loop) ImplicitSubmit(source string) {
 // submit event (unless fireEvent is false, as for form.submit()), then the
 // method, password, size and action checks, then a NavigateMsg the host
 // admits like a link. Refusals are reported without any value.
-func (l *Loop) submit(page *Page, form, submitter *dom.Node, fireEvent bool) {
+func (l *Loop) submit(page *Page, form, submitter *dom.Node, fireEvent bool, script ...bool) {
 	if !page.Tree.Attached(form) {
 		return
 	}
@@ -472,7 +472,7 @@ func (l *Loop) submit(page *Page, form, submitter *dom.Node, fireEvent bool) {
 		l.send(LogMsg{"warn", "form too large to submit"})
 		return
 	}
-	l.send(NavigateMsg{Href: u.String(), Form: true})
+	l.send(NavigateMsg{Href: u.String(), Form: true, Script: len(script) > 0 && script[0]})
 }
 
 // reset restores every control of form to its defaults after an
@@ -609,7 +609,7 @@ func (l *Loop) formHooks(page *Page) jsvm.FormHooks {
 			}
 			page.formTasks = append(page.formTasks, func() {
 				if f := page.Tree.Node(form); f != nil {
-					l.submit(page, f, page.Tree.Node(submitter), fireEvent)
+					l.submit(page, f, page.Tree.Node(submitter), fireEvent, true)
 				}
 			})
 		},

@@ -87,10 +87,14 @@ type Model struct {
 	closing           bool
 	start             string
 
-	current    *url.URL
-	history    []string
-	hIndex     int // index of current in history; -1 before the first load
-	pendingNav string
+	current        *url.URL
+	history        []string
+	hIndex         int // index of current in history; -1 before the first load
+	pendingNav     string
+	pendingScript  *scriptPlan
+	scriptNavCount int
+	documentNav    uint64
+	documentSeq    uint64
 
 	// resetView marks the next frame as the first of a new page: scroll is
 	// not carried over. pressCell/pressed turn a press+release on the same
@@ -164,9 +168,11 @@ func (m *Model) Init() tea.Cmd { return m.navigate(m.start, pushNew, true) }
 //
 // file: is accepted only for the start page the host asked for; links can
 // never produce it because document.ResolveURL rejects local schemes. The
-// page cannot navigate on its own (no location.assign); every navigation is
-// a user action, filtered by the NavMode in Update.
-func (m *Model) navigate(href string, hist int, anyOrigin bool) tea.Cmd {
+// page Location requests use the additional script-navigation gate in
+// location.go; reader navigation continues through NavMode in Update.
+func (m *Model) navigate(href string, hist int, anyOrigin bool, originOnly ...bool) tea.Cmd {
+	m.pendingNav = ""
+	m.pendingScript = nil
 	m.navSeq++
 	seq := m.navSeq
 	// file: is allowed for the page the user asked for on the command line,
@@ -178,6 +184,9 @@ func (m *Model) navigate(href string, hist int, anyOrigin bool) tea.Cmd {
 	}
 	firstPage := m.hIndex < 0
 	policy := m.policy
+	if len(originOnly) > 0 && originOnly[0] {
+		policy.AllowHosts = nil
+	}
 	policy.Origin, policy.AnyOrigin, policy.MaxBody = m.current, anyOrigin, 1<<20
 	policy.Timeout = navTimeout
 	gates := m.profile
@@ -223,7 +232,16 @@ func (m *Model) anyOriginFor() bool { return m.nav != NavAllowlist }
 
 // admit applies the NavMode to a link the page did not prevent, or to a form
 // submission (same gate, its own confirmation wording).
-func (m *Model) admit(href string, form bool) tea.Cmd {
+func (m *Model) admit(href string, form bool, script ...bool) tea.Cmd {
+	if len(script) > 0 && script[0] {
+		if m.pendingNav != "" {
+			return nil
+		}
+	} else {
+		m.scriptNavCount = 0
+		m.pendingNav = ""
+		m.pendingScript = nil
+	}
 	if m.downloading.Load() && href == m.navURL {
 		return nil // already on its way; anything else replaces the download
 	}
@@ -280,6 +298,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil // cancelled by the reader
 		}
 		if v.err != nil {
+			m.documentSeq = m.navSeq
 			m.status = clean("load failed: " + v.err.Error()) // errors echo page-controlled input
 			return m, nil
 		}
@@ -313,7 +332,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.profile.Fetch != profile.FetchAllowlist {
 			p.AllowHosts = nil // the page's own fetch(): the hosts are for allowlist only
 		}
-		m.loop.LoadPage(v.html, v.base.String(), netpolicy.New(p))
+		m.documentNav = m.loop.LoadPage(v.html, v.base.String(), netpolicy.New(p))
+		m.documentSeq = m.navSeq
 		m.status = clean("loading " + v.base.String())
 		return m, tea.Batch(cmds...)
 
@@ -409,6 +429,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		pan := m.viewer.Pan(crop.Min.X, crop.Min.Y)
 		return m, tea.Batch(cmd, pan, m.applyRing(false))
 
+	case loop.ScriptNavigateMsg:
+		return m, m.scriptNavigate(v)
 	case loop.NavigateMsg:
 		if !v.Form && m.chunkFragment(v.Href) {
 			return m, nil
@@ -418,7 +440,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, cmd
 			}
 		}
-		return m, m.admit(v.Href, v.Form)
+		return m, m.admit(v.Href, v.Form, v.Script)
 	case videoFrameMsg, videoStatusMsg, videoDeadMsg, videoProgressMsg:
 		return m, m.onVideo(msg)
 	case loop.FocusMsg:
@@ -515,9 +537,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch v.String() {
 			case "enter":
 				href := m.pendingNav
+				plan := m.pendingScript
+				m.pendingScript = nil
 				m.pendingNav = ""
+				if plan != nil {
+					m.scriptNavCount = 0
+					return m, m.executeScriptNavigation(*plan)
+				}
 				return m, m.navigate(href, pushNew, true) // the reader confirmed: any origin
 			case "esc":
+				m.pendingScript = nil
 				m.pendingNav = ""
 				m.status = clean("stayed on " + m.current.String())
 				return m, nil
@@ -543,6 +572,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "alt+right":
 				return m, m.step(+1)
 			case "ctrl+r":
+				m.scriptNavCount = 0
 				if m.current != nil {
 					return m, m.navigate(m.current.String(), m.hIndex, m.anyOriginFor())
 				}
@@ -621,6 +651,7 @@ func (m *Model) viewRows() int { return max(1, m.rows-2-m.panelRows()) }
 // step moves through history. Pages are always re-fetched (no cache) so a
 // Back never shows state a script produced earlier.
 func (m *Model) step(delta int) tea.Cmd {
+	m.scriptNavCount = 0
 	i := m.hIndex + delta
 	if i < 0 || i >= len(m.history) {
 		return nil

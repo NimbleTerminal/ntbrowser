@@ -197,3 +197,21 @@ func TestCookieGateDefaultsClosed(t *testing.T) {
 		t.Fatal("accepted unsupported cookie policy")
 	}
 }
+
+func TestScriptNavigationConfiguration(t *testing.T) {
+	for _, name := range []string{"browse", "reader", "locked"} {
+		p, _ := Builtin(name)
+		if p.ScriptNavigation != "" && p.ScriptNavigation != ScriptNavOff {
+			t.Fatal(name)
+		}
+	}
+	for _, bad := range []string{`{"script-navigation":"free"}`, `{"script-navigation-limit":-1}`, `{"script-navigation-limit":101}`} {
+		if _, err := Parse([]byte(bad)); err == nil {
+			t.Fatal(bad)
+		}
+	}
+	p, err := Parse([]byte(`{"base":"browse","script-navigation":"origin","script-navigation-limit":3}`))
+	if err != nil || p.ScriptNavBudget() != 3 || p.ScriptNavigation != ScriptNavOrigin {
+		t.Fatal(p, err)
+	}
+}

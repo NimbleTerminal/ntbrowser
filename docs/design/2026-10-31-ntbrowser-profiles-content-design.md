@@ -71,6 +71,8 @@ New packages: `profile` (data, validation, printing; no system imports) and `con
 
    | Gate | Values | Covers |
    |---|---|---|
+   | `script-navigation` | `off`, `origin`, `allowlist`, `confirm` | Location requests; intersection with navigate; off by default |
+   | `script-navigation-limit` | 0/default 8 or 1–100 | document request count and automatic chain budget |
    | `navigate` | `off`, `allowlist`, `confirm`, `free` | top-level navigation. `off`: only the start URL given at launch is fetched, and nothing after it |
    | `subresources` | `off`, `origin`, `any` | stylesheets and images, including detached script-created `Image` requests |
    | `fetch` | `off`, `origin`, `allowlist` | `fetch()` from page script |
@@ -367,3 +369,29 @@ or new filesystem permissions. Diagnostics do not record cookie headers or
 store contents (page-generated console text can of course include JS-visible
 values). The source specifications are [RFC 6265 §5](https://httpwg.org/specs/rfc6265.html#user-agent-requirements) and [HTML document.cookie](https://html.spec.whatwg.org/multipage/dom.html#dom-document-cookie);
 this remains a documented subset rather than full browser cookie conformance.
+
+
+## Location extension (2026-11-06)
+
+This revises the architecture's reader-only navigation assumption specifically
+for Location. `script-navigation` is independent of and intersects `navigate`.
+Off is the zero value and all built-ins. Origin forbids cross-origin targets
+and redirects even if hosts are allowlisted; allowlist permits the current
+origin plus configured hosts; confirm requires a reader decision for every
+request. The existing navigation gate remains authoritative: off denies,
+allowlist never becomes free after confirmation, confirm requires a prompt
+before crossing origin. All requests use the vetted network path; file/data/
+javascript URLs and embedded credentials are refused before host dispatch.
+
+Bindings expose only plain-string navigation callbacks, bound by the loop to
+the current page/generation. The host checks generation, source URL, and whether
+a newer navigation is already in flight. Requests are coalesced per VM turn;
+per-document emissions and automatic chains are capped (default eight, max 100).
+Reader navigation/confirmation resets the chain budget. Pending prompts cannot
+be replaced by scripts. Denials and requests are captured without opening any
+new diagnostic capability. URL input length is bounded at 2048 bytes.
+
+Replace/reload reuse the current history slot on successful load. Fragment
+changes commit on the owning VM goroutine without refetching. These features
+do not implement the full History platform or navigation events, ancestorOrigins,
+frames, or cross-window Location semantics. Source: [HTML Location interface](https://html.spec.whatwg.org/multipage/nav-history-apis.html#the-location-interface).

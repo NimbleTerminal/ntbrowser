@@ -30,16 +30,17 @@ import (
 
 // Config bounds one page's scripting. Zero fields use the defaults below.
 type Config struct {
-	CookieRead       func() string // host-only capability, bound to the current document URL
-	CookieWrite      func(string)  // nil makes document.cookie writes inert
-	AllowDynamicCode bool          // native eval and Function-family compilation; default false
-	Slice            time.Duration // wall-clock budget per entry into JS (default 50ms)
-	Strikes          int           // slice overruns before scripting is disabled (default 3)
-	MaxCallStack     int           // default 512 frames
-	MaxTimers        int           // live timers (default 256)
-	MaxListeners     int           // total event listeners (default 1024)
-	HeapBudget       uint64        // process heap bytes after which this page is disabled (default 256 MiB)
-	ClockResolution  time.Duration // minimum clock resolution (default 10ms), shared by Date, performance and rAF
+	Navigate         func(href, mode string) error // host-authorized navigation; nil is closed
+	CookieRead       func() string                 // host-only capability, bound to the current document URL
+	CookieWrite      func(string)                  // nil makes document.cookie writes inert
+	AllowDynamicCode bool                          // native eval and Function-family compilation; default false
+	Slice            time.Duration                 // wall-clock budget per entry into JS (default 50ms)
+	Strikes          int                           // slice overruns before scripting is disabled (default 3)
+	MaxCallStack     int                           // default 512 frames
+	MaxTimers        int                           // live timers (default 256)
+	MaxListeners     int                           // total event listeners (default 1024)
+	HeapBudget       uint64                        // process heap bytes after which this page is disabled (default 256 MiB)
+	ClockResolution  time.Duration                 // minimum clock resolution (default 10ms), shared by Date, performance and rAF
 	Clock            func() time.Time
 	Rand             func() float64
 	Location         string // read-only location.href shown to scripts
@@ -246,9 +247,7 @@ func (s *Sandbox) installGlobals() {
 	defineFrozen(global, "console", s.consoleObject())
 	defineFrozen(global, "document", s.documentObject())
 	defineFrozen(global, "fetch", vm.ToValue(s.fetch))
-	location := vm.NewObject()
-	defineFrozen(location, "href", vm.ToValue(s.cfg.Location))
-	defineFrozen(global, "location", location)
+	s.installLocation()
 	navigator := vm.NewObject()
 	defineFrozen(navigator, "cookieEnabled", vm.ToValue(s.cfg.CookieRead != nil && s.cfg.CookieWrite != nil))
 	defineFrozen(navigator, "userAgent", vm.ToValue("ntbrowser"))

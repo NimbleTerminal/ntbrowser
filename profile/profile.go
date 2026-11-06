@@ -20,19 +20,25 @@ import (
 )
 
 type (
-	Navigate     string
-	Subresources string
-	Fetch        string
-	Scripts      string
-	DynamicCode  string
-	Cookies      string
-	Files        string
-	Media        string
-	Clipboard    string
-	Enforcement  string
+	Navigate         string
+	ScriptNavigation string
+	Subresources     string
+	Fetch            string
+	Scripts          string
+	DynamicCode      string
+	Cookies          string
+	Files            string
+	Media            string
+	Clipboard        string
+	Enforcement      string
 )
 
 const (
+	ScriptNavOff       ScriptNavigation = "off"
+	ScriptNavOrigin    ScriptNavigation = "origin"
+	ScriptNavAllowlist ScriptNavigation = "allowlist"
+	ScriptNavConfirm   ScriptNavigation = "confirm"
+
 	NavOff       Navigate = "off"
 	NavAllowlist Navigate = "allowlist"
 	NavConfirm   Navigate = "confirm"
@@ -81,23 +87,25 @@ const defaultClockMillis = 10
 // Profile is one position for each gate. Code compares against the open
 // values, so an empty field is closed.
 type Profile struct {
-	Cookies        Cookies      `json:"cookies,omitempty"`
-	Diagnostics    bool         `json:"diagnostics,omitempty"`
-	Name           string       `json:"name,omitempty"`
-	Navigate       Navigate     `json:"navigate,omitempty"`
-	Subresources   Subresources `json:"subresources,omitempty"`
-	Fetch          Fetch        `json:"fetch,omitempty"`
-	Hosts          []string     `json:"hosts,omitempty"`
-	PrivateNetwork bool         `json:"private-network,omitempty"`
-	Scripts        Scripts      `json:"scripts,omitempty"`
-	DynamicCode    DynamicCode  `json:"dynamic-code,omitempty"`
-	ClockMillis    int          `json:"clock,omitempty"`
-	Files          Files        `json:"files,omitempty"`
-	NativeCode     bool         `json:"native-code,omitempty"`
-	Media          Media        `json:"media,omitempty"`
-	MaxMediaBytes  int64        `json:"max-media-bytes,omitempty"`
-	Clipboard      Clipboard    `json:"clipboard,omitempty"`
-	Enforcement    Enforcement  `json:"enforcement,omitempty"`
+	ScriptNavigation      ScriptNavigation `json:"script-navigation,omitempty"`
+	ScriptNavigationLimit int              `json:"script-navigation-limit,omitempty"`
+	Cookies               Cookies          `json:"cookies,omitempty"`
+	Diagnostics           bool             `json:"diagnostics,omitempty"`
+	Name                  string           `json:"name,omitempty"`
+	Navigate              Navigate         `json:"navigate,omitempty"`
+	Subresources          Subresources     `json:"subresources,omitempty"`
+	Fetch                 Fetch            `json:"fetch,omitempty"`
+	Hosts                 []string         `json:"hosts,omitempty"`
+	PrivateNetwork        bool             `json:"private-network,omitempty"`
+	Scripts               Scripts          `json:"scripts,omitempty"`
+	DynamicCode           DynamicCode      `json:"dynamic-code,omitempty"`
+	ClockMillis           int              `json:"clock,omitempty"`
+	Files                 Files            `json:"files,omitempty"`
+	NativeCode            bool             `json:"native-code,omitempty"`
+	Media                 Media            `json:"media,omitempty"`
+	MaxMediaBytes         int64            `json:"max-media-bytes,omitempty"`
+	Clipboard             Clipboard        `json:"clipboard,omitempty"`
+	Enforcement           Enforcement      `json:"enforcement,omitempty"`
 }
 
 // Builtin returns a built-in profile: locked, reader or browse.
@@ -153,10 +161,14 @@ func oneOf[T ~string](gate string, v T, allowed ...T) error {
 }
 
 func (p Profile) check() error {
+	if p.ScriptNavigationLimit < 0 || p.ScriptNavigationLimit > 100 {
+		return fmt.Errorf("profile: script-navigation-limit must be 0 (default) or 1..100")
+	}
 	if p.ClockMillis < 0 || int64(p.ClockMillis) > (1<<63-1)/int64(time.Millisecond) {
 		return fmt.Errorf("profile: clock resolution is negative or exceeds the supported duration")
 	}
 	for _, err := range []error{
+		oneOf("script-navigation", p.ScriptNavigation, ScriptNavOff, ScriptNavOrigin, ScriptNavAllowlist, ScriptNavConfirm),
 		oneOf("navigate", p.Navigate, NavOff, NavAllowlist, NavConfirm, NavFree),
 		oneOf("subresources", p.Subresources, SubOff, SubOrigin, SubAny),
 		oneOf("fetch", p.Fetch, FetchOff, FetchOrigin, FetchAllowlist),
@@ -288,6 +300,8 @@ func (p Profile) Table(s Strengths) string {
 		name = "(unnamed)"
 	}
 	rows := [][3]string{
+		{"script-navigation", orOff(p.ScriptNavigation), "Location requests; intersects navigate gate"},
+		{"script-navigation-limit", strconv.Itoa(p.ScriptNavBudget()), "automatic navigations per reader-initiated chain"},
 		{"navigate", orOff(p.Navigate), "top-level links; off = only the start URL"},
 		{"subresources", orOff(p.Subresources), "stylesheets and images inside a page"},
 		{"fetch", orOff(p.Fetch), "fetch() from page script"},
@@ -320,4 +334,11 @@ func (p Profile) Table(s Strengths) string {
 		fmt.Fprintf(&b, "  %-16s %-12s %-13s %s\n", r[0], r[1], st, r[2])
 	}
 	return b.String()
+}
+
+func (p Profile) ScriptNavBudget() int {
+	if p.ScriptNavigationLimit > 0 {
+		return p.ScriptNavigationLimit
+	}
+	return 8
 }

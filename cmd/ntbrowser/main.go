@@ -66,6 +66,8 @@ func parseArgs(args []string) (config, error) {
 	subres := fs.String("subresources", "", "stylesheets and images: off, origin, any")
 	fetch := fs.String("fetch", "", "fetch() from page script: off, origin, allowlist")
 	scripts := fs.String("scripts", "", "page script: off, inline, external")
+	scriptNav := fs.String("script-navigation", "", "Location navigation: off, origin, allowlist, confirm")
+	scriptNavLimit := fs.Int("script-navigation-limit", 0, "automatic navigations per reader-initiated chain (default 8; max 100)")
 	cookieMode := fs.String("cookies", "", "cookies: off, session (default off; memory only)")
 	dynamic := fs.String("dynamic-code", "", "eval and Function-family compilation: off, on (default off)")
 	clipboard := fs.String("clipboard", "", "selected-text copy: off, copy")
@@ -113,6 +115,12 @@ func parseArgs(args []string) (config, error) {
 	}
 	if *scripts != "" {
 		p.Scripts = profile.Scripts(*scripts)
+	}
+	if *scriptNav != "" {
+		p.ScriptNavigation = profile.ScriptNavigation(*scriptNav)
+	}
+	if fs.Changed("script-navigation-limit") {
+		p.ScriptNavigationLimit = *scriptNavLimit
 	}
 	if *cookieMode != "" {
 		p.Cookies = profile.Cookies(*cookieMode)

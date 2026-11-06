@@ -211,3 +211,13 @@ func TestCookieFlag(t *testing.T) {
 		t.Fatal("accepted unknown policy")
 	}
 }
+
+func TestScriptNavigationFlags(t *testing.T) {
+	c, err := parseArgs([]string{"https://example.test/", "--script-navigation=origin", "--script-navigation-limit=3"})
+	if err != nil || c.Profile.ScriptNavigation != profile.ScriptNavOrigin || c.Profile.ScriptNavBudget() != 3 {
+		t.Fatal(c, err)
+	}
+	if _, err := parseArgs([]string{"--script-navigation-limit=101", "https://example.test/"}); err == nil {
+		t.Fatal("unbounded navigation budget")
+	}
+}

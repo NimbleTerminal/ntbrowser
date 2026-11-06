@@ -137,6 +137,7 @@ A profile is a named set of positions for every gate out of the sandbox. It is f
 | | `locked` | `reader` | `browse` (default) |
 | --- | --- | --- | --- |
 | `navigate` | off | confirm | free |
+| `script-navigation` | off | off | off |
 | `subresources` | off | origin | any |
 | `fetch` | off | off | allowlist |
 | `scripts` | off | off | inline |
@@ -171,6 +172,8 @@ supported.
 | `--fetch off\|origin\|allowlist` | `fetch()` from page script |
 | `--scripts off\|inline\|external` | Page script (`--external-scripts` is `--scripts external`) |
 | `--diagnostics path` | Capture bounded JSONL diagnostics to a new owner-only file |
+| `--script-navigation off\|origin\|allowlist\|confirm` | Location navigation, additionally constrained by `--nav` |
+| `--script-navigation-limit n` | Automatic navigation chain limit (default 8, maximum 100) |
 | `--cookies off\|session` | In-memory cookies for this browser session (default off) |
 | `--dynamic-code off\|on` | Native `eval` and Function-family compilation (default off) |
 | `--clipboard off\|copy` | Selected-text copy |
@@ -389,5 +392,43 @@ Partitioned cookies are rejected. Cookie/Set-Cookie headers remain unavailable
 to page JavaScript; the cookie store adds headers only after network admission.
 Cookies do not grant navigation, network, storage, or script execution rights.
 
-This adds the cookie API; it does not implement `location.replace`, sessionStorage,
-or the rest of a full browser challenge environment.
+Cookies and Location do not implement sessionStorage or the rest of a full
+browser challenge environment.
+
+
+## Location and script navigation
+
+`location` and `document.location` share one Location object. URL getters,
+string conversion, `origin`, component setters, `href`, `assign()`, `replace()`
+and `reload()` are available. Navigation is off by default and denied calls
+throw an error named `SecurityError`. Enable the narrowest needed scope:
+
+```sh
+bin/ntbrowser --script-navigation=origin --script-navigation-limit=4 --cookies=session --dynamic-code=on --scripts=external https://www.google.com/
+```
+
+- `origin`: only the current HTTP(S) origin, including redirects; `--allow` cannot widen it.
+- `allowlist`: the current origin plus `--allow` hosts, including redirects.
+- `confirm`: every Location request requires Enter; scripts cannot replace the pending prompt.
+- `off`: no Location navigation. URL getters remain available.
+
+The existing `--nav` gate also applies: off blocks all requests; allowlist still
+limits confirmed destinations; confirm prompts for cross-origin requests even
+when script-navigation is allowlist. Non-HTTP(S) destinations and URL credentials
+are always refused. URL inputs are capped at 2048 bytes. No Location path grants
+filesystem access, private-network access, or permission to execute JavaScript URLs.
+
+Assignments are coalesced to the last request per VM turn. A document may emit
+at most the configured number of requests, and the host limits automatic chains
+across documents (default 8, configurable 1–100; JSON zero uses the default).
+Reader navigation, Back/Forward, reload, or explicit confirmation resets the
+host chain budget. Stale-document and in-flight-load requests are discarded.
+Navigation results and denials appear in diagnostic captures.
+
+Assign appends history on success; replace and reload reuse the current entry.
+Same-document fragments update the URL and reveal the target without a fetch.
+As elsewhere in ntbrowser, Back/Forward refetch the selected history entry.
+This is not a complete navigation platform: no frames/cross-window Location,
+History API, hashchange/popstate/beforeunload events, or ancestorOrigins list.
+The location URL remains the committed document URL while a load or confirmation
+is pending. Destination-policy refusals are reported asynchronously by the host.
