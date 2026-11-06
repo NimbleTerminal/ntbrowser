@@ -5,7 +5,7 @@ go 1.26.8
 require (
 	nimbleterminal.dev/ntbrowser v0.0.0
 	nimbleterminal.dev/ntmediabox v0.1.0
-	nimbleterminal.dev/ntvideo v0.5.0
+	nimbleterminal.dev/ntvideo v0.5.1
 )
 
 require (

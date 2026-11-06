@@ -2078,7 +2078,7 @@ these two fixtures. Animation decoder/player source and baseline tests are
 also adapted from Gloss under the same MIT license.
 ```
 
-## nimbleterminal.dev/ntvideo v0.5.0
+## nimbleterminal.dev/ntvideo v0.5.1
 
 ```
 MIT License

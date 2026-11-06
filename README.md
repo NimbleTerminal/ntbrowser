@@ -9,8 +9,8 @@ A secure, non-JIT terminal web runtime: a hardened pure-Go JavaScript interprete
 Build with Go 1.26.8 and run `task check build build-nocjk`. Tasks set
 `GOWORK=off CGO_ENABLED=0`.
 
-Dependencies use published module versions, including nthtml v0.2.3 and
-nttypeset v0.1.9. No sibling library checkouts are required. The media helper's
+Dependencies use published module versions, including nthtml v0.3.0 and
+nttypeset v0.2.0. No sibling library checkouts are required. The media helper's
 replacement of ntbrowser points to this repository's root module.
 ntbrowser retains the WASM-capable Bubble Tea fork for its compile-only gate.
 Run `task notices` after dependency changes.

@@ -48,5 +48,5 @@ nimbleterminal.dev/ntmediabox/pkg/mediabox v0.1.0 h1:TN2jvp/YSyLvP3tNUyV7etVcpkR
 nimbleterminal.dev/ntmediabox/pkg/mediabox v0.1.0/go.mod h1:xhqy84YnNQvoSKQjSvJSSku2mKCP4tzI44fgOu4NlgU=
 nimbleterminal.dev/ntpicture v0.1.5 h1:C7X4ELgziPy/a9nr4AoPORpGvtmbn3sdNzOZdM/PO78=
 nimbleterminal.dev/ntpicture v0.1.5/go.mod h1:7UV/ypmD630ctf/v9I9dA/ty/25SL6Ms7+Fs7LQc1CQ=
-nimbleterminal.dev/ntvideo v0.5.0 h1:gYzvRXIsjds1ETbrCtj1uHVzRknJq5elZ/8vGjF4XNA=
-nimbleterminal.dev/ntvideo v0.5.0/go.mod h1:Sm7NzmDgxisQwITZojGb1UzyZol3F6o6d4Zca1ZhJdE=
+nimbleterminal.dev/ntvideo v0.5.1 h1:tmUIiZRY8exznR8Ca7VthEQkBJdF5k3fWHG2f4pkO9A=
+nimbleterminal.dev/ntvideo v0.5.1/go.mod h1:Sm7NzmDgxisQwITZojGb1UzyZol3F6o6d4Zca1ZhJdE=
