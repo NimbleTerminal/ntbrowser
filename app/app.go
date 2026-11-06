@@ -66,20 +66,24 @@ type shutdownReadyMsg struct{}
 const shutdownGrace = 150 * time.Millisecond
 
 type Model struct {
-	loop        *loop.Loop
-	viewer      *nthtml.Model
-	profile     profile.Profile  // frozen at launch
-	policy      netpolicy.Policy // template derived from it; Origin is set per navigation
-	nav         NavMode
-	cols        int
-	rows        int
-	gen         uint64
-	chunk       loop.ChunkInfo
-	chunkFailed bool
-	title       string
-	status      string
-	closing     bool
-	start       string
+	loop              *loop.Loop
+	viewer            *nthtml.Model
+	cssPainted        bool
+	viewerInitialized bool
+	layoutWidth       int
+	profile           profile.Profile  // frozen at launch
+	policy            netpolicy.Policy // template derived from it; Origin is set per navigation
+	nav               NavMode
+	cols              int
+	rows              int
+	gen               uint64
+	lastFrame         uint64
+	chunk             loop.ChunkInfo
+	chunkFailed       bool
+	title             string
+	status            string
+	closing           bool
+	start             string
 
 	current    *url.URL
 	history    []string
@@ -128,6 +132,7 @@ type Model struct {
 // cells. Zlib frames encode about three times faster than PNG and are
 // cheaper for the terminal to decode. ReflowTypeset stays off (decision 19).
 var viewerOptions = nthtml.ModelOptions{
+	HostPainted: true,
 	Picture: ntpicture.Options{
 		StableID: true,
 		Render:   ntpicture.Config{KittyFormat: ntpicture.KittyFormatZlib},
@@ -254,6 +259,7 @@ func (m *Model) admit(href string, form bool) tea.Cmd {
 }
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	defer m.syncViewport()
 	if m.closing {
 		if _, ok := msg.(shutdownReadyMsg); ok {
 			return m, tea.Quit
@@ -309,14 +315,36 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.status = clean("loading " + v.base.String())
 		return m, tea.Batch(cmds...)
 
-	case loop.FrameMsg:
-		// Frames arrive from the render worker; drop anything older than
-		// what is on screen so a slow render cannot regress the view.
-		if v.Gen <= m.gen {
+	case nthtml.PaintRequest:
+		if v.Owner == m.viewer && m.cssPainted && v.Revision == m.gen {
+			m.loop.Paint(v)
+		}
+		return m, nil
+	case nthtml.PaintReady:
+		if v.Request.Owner != m.viewer || !m.cssPainted {
 			return m, nil
 		}
-		m.gen = v.Gen
-		oldChunk, chunkWasFailed := m.chunk, m.chunkFailed
+		cmd := m.viewer.Update(v)
+		if err := m.viewer.Err(); err != nil {
+			m.status = clean("paint: " + err.Error())
+		} else if strings.HasPrefix(m.status, "paint:") {
+			m.status = ""
+		}
+		return m, cmd
+	case loop.FrameMsg:
+		if v.Navigation != 0 && !m.loop.NavigationCurrent(v.Navigation) {
+			return m, nil
+		}
+		// Frames arrive from the render worker; drop anything older than
+		// what is on screen so a slow render cannot regress the view.
+		if v.Gen <= m.lastFrame {
+			return m, nil
+		}
+		m.lastFrame = v.Gen
+		if v.Err == nil || v.Chunk.Count > 0 {
+			m.gen = v.Gen
+		}
+		oldChunk := m.chunk
 		m.chunk, m.chunkFailed = v.Chunk, v.Err != nil && v.Chunk.Count > 0
 		if v.Err != nil {
 			m.status = clean("render: " + v.Err.Error())
@@ -329,16 +357,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch {
 		case len(warnings) > 0:
 			m.status = clean(strings.Join(warnings, "; ")) // warnings replace the status; a log line survives the next frame
-		case chunkWasFailed && strings.HasPrefix(m.status, "render:"):
+		case strings.HasPrefix(m.status, "render:") || strings.HasPrefix(m.status, "paint:"):
 			m.status = ""
 		case m.resetView && !strings.HasPrefix(m.status, "focus: "):
 			m.status = "" // the page's first frame: "loading …" is over (a focus line set by the page stays)
+		}
+		if v.Painted != nil {
+			return m, m.installCSSFrame(v)
+		}
+		if v.Chunk.Count == 0 {
+			m.status = "render: missing initial CSS band"
+			return m, nil
 		}
 		if m.viewer == nil {
 			// viewerOptions leaves ReflowTypeset off, which is what the host
 			// wants: the loop re-flows on Resize, at its own width, off the
 			// UI goroutine; the viewer must never re-render on its own.
-			m.viewer = nthtml.NewWithOptions(v.Result, viewerOptions)
+			opts := viewerOptions
+			opts.HostPainted = false
+			m.viewer = nthtml.NewWithOptions(v.Result, opts)
 			m.resetView = false
 			cmd := tea.Batch(m.viewer.Init(), m.viewer.SetBounds(0, 0, m.cols, m.viewRows()))
 			m.loop.Resize(documentWidth(m.viewer))
@@ -371,6 +408,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !v.Form && m.chunkFragment(v.Href) {
 			return m, nil
 		}
+		if !v.Form {
+			if cmd, ok := m.cssFragment(v.Href); ok {
+				return m, cmd
+			}
+		}
 		return m, m.admit(v.Href, v.Form)
 	case videoFrameMsg, videoStatusMsg, videoDeadMsg, videoProgressMsg:
 		return m, m.onVideo(msg)
@@ -389,18 +431,12 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.status = clean(fmt.Sprintf("[%s] %s", v.Level, v.Line)) // jsvm strips console text; error strings may still echo page input
 
 	case nthtml.LinkMsg:
-		if v.Owner != m.viewer {
+		if v.Owner != m.viewer || !m.frameInputReady() {
 			return m, nil
 		}
 		// Keyboard (Tab/Enter) and mouse activation of links both arrive
 		// here; the page's click listeners decide the default action first.
-		if m.chunk.Count > 0 {
-			if !m.chunkFailed {
-				m.loop.LinkActivatedAt(m.gen, v.Link)
-			}
-		} else {
-			m.loop.LinkActivated(v.Link)
-		}
+		m.loop.LinkActivatedAt(m.gen, v.Link)
 		return m, nil
 	case nthtml.CopyMsg:
 		if m.profile.Clipboard != profile.ClipboardCopy {
@@ -412,7 +448,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.overlay() {
 			return m, nil // nothing reaches the page beneath a picture or video
 		}
-		m.pressed = v.Button == tea.MouseLeft
+		m.pressed = v.Button == tea.MouseLeft && m.frameInputReady()
 		if m.chunk.Count > 0 {
 			m.pressed = m.pressed && m.chunkMouseReady()
 		}
@@ -424,33 +460,25 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		p := image.Pt(v.X, v.Y)
 		click := m.pressed && p == m.pressCell
+		if m.cssPainted && (!m.frameInputReady() || m.pressGen != m.gen) {
+			m.pressed = false
+			v.Button = tea.MouseRight
+			return m, m.viewer.Update(v)
+		}
 		m.pressed = false
 		if click && m.viewer != nil {
-			if m.chunk.Count > 0 {
-				if m.pressGen == m.gen && m.chunkMouseReady() {
-					if link, ok := m.viewer.LinkAtCell(p); ok {
-						m.loop.LinkActivatedAt(m.gen, link)
-					} else if area, ok := m.viewer.CellToDocument(p); ok {
-						m.loop.ClickAtFrame(m.gen, area)
-					}
-				}
-				// Finish selection state with a non-activating release. The
-				// host owns chunk links (including fragments), so the widget
-				// must not scroll before the page can preventDefault. Run any
-				// graphics commands it returns; discarding one can strand a
-				// pending picture render.
-				release := v
-				release.Button = tea.MouseRight
-				return m, m.viewer.Update(release)
-			}
-			// A link under the cell is nthtml's: it emits LinkMsg for this
-			// same release and the loop handles it once. Anything else is an
-			// element click the viewer knows nothing about.
-			if _, isLink := m.viewer.LinkAtCell(p); !isLink {
-				if area, ok := cellToDocument(m.viewer, p); ok {
-					m.loop.ClickAt(area)
+			if m.pressGen == m.gen && m.frameInputReady() {
+				if link, ok := m.viewer.LinkAtCell(p); ok {
+					m.loop.LinkActivatedAt(m.gen, link)
+				} else if area, ok := m.viewer.CellToDocument(p); ok {
+					m.loop.ClickAtFrame(m.gen, area)
 				}
 			}
+			// Finish selection without a second activation. The host owns link
+			// dispatch so scripts can preventDefault before fragment navigation.
+			release := v
+			release.Button = tea.MouseRight
+			return m, m.viewer.Update(release)
 		}
 
 	case tea.MouseWheelMsg:
@@ -521,7 +549,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// The terminal keeps its own navigation keys; the page gets a copy
 			// as keydown and cannot swallow them. Text typed into the viewer's
 			// / search box never reaches the page.
-			m.loop.Input(v)
+			if m.frameInputReady() {
+				m.loop.InputAt(m.gen, v)
+			}
 			if m.chunkKey(v.String()) {
 				return m, nil
 			}

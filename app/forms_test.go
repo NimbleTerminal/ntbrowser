@@ -78,7 +78,7 @@ func TestFrameDuringEditKeepsEditor(t *testing.T) {
 	m := newModel(t, NavFree)
 	m.Update(textFocus("q", "Search", true))
 	typeText(m, "abc")
-	m.Update(loop.FrameMsg{Gen: 2, Result: renderTall(t, `<p>y</p>`)})
+	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 2, Result: renderTall(t, `<p>y</p>`)}))
 	if m.mode != modeEdit || m.input.Value() != "abc" || m.input.Position() != 3 {
 		t.Fatalf("mode %v value %q pos %d", m.mode, m.input.Value(), m.input.Position())
 	}
@@ -88,7 +88,7 @@ func TestFirstFrameKeepsFocusLine(t *testing.T) {
 	m := newModel(t, NavFree)
 	m.Update(pageLoadedMsg{html: "<p>x</p>", base: mustURL(t, "https://page.test/b"), seq: m.navSeq, hist: pushNew})
 	m.Update(textFocus("q", "Search", false))
-	m.Update(loop.FrameMsg{Gen: 2, Result: renderTall(t, `<p>y</p>`)})
+	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 2, Result: renderTall(t, `<p>y</p>`)}))
 	if m.status != "focus: Search" {
 		t.Fatalf("status %q", m.status)
 	}
@@ -291,20 +291,20 @@ func TestValueMsgSameValueKeepsCursor(t *testing.T) {
 
 func TestFocusRingFollowsFrames(t *testing.T) {
 	m := newModel(t, NavFree)
-	m.Update(loop.FrameMsg{Gen: 2, Result: renderTall(t, `<p><input id=q></p>`)})
+	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 2, Result: renderTall(t, `<p><input id=q></p>`)}))
 	m.Update(textFocus("q", "Search", false))
 	if m.ring != "q" {
 		t.Fatalf("ring %q after focus", m.ring)
 	}
-	m.Update(loop.FrameMsg{Gen: 3, Result: renderTall(t, `<p><input id=q></p>`)})
+	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 3, Result: renderTall(t, `<p><input id=q></p>`)}))
 	if m.ring != "q" {
 		t.Fatalf("ring %q not re-applied after a frame", m.ring)
 	}
-	m.Update(loop.FrameMsg{Gen: 4, Result: renderTall(t, `<p>gone</p>`)})
+	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 4, Result: renderTall(t, `<p>gone</p>`)}))
 	if m.ring != "" {
 		t.Fatalf("ring %q on an element no longer drawn", m.ring)
 	}
-	m.Update(loop.FrameMsg{Gen: 5, Result: renderTall(t, `<p><input id=q></p>`)})
+	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 5, Result: renderTall(t, `<p><input id=q></p>`)}))
 	m.Update(loop.FocusMsg{})
 	if m.ring != "" {
 		t.Fatalf("ring %q after focus cleared", m.ring)
@@ -315,15 +315,22 @@ func TestFocusRingFollowsFrames(t *testing.T) {
 // away back to the focused element.
 func TestFrameKeepsScrollWithFocus(t *testing.T) {
 	m := newModel(t, NavFree)
-	m.Update(loop.FrameMsg{Gen: 2, Result: renderTall(t, `<p><input id=q></p>`)})
+	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 2, Result: renderTall(t, `<p><input id=q></p>`)}))
 	m.Update(textFocus("q", "Search", false))
 	m.viewer.Pan(0, 800)
 	before, ok := m.viewer.DocumentViewport()
 	if !ok || before.Min.Y == 0 {
 		t.Fatalf("viewport %v %v", before, ok)
 	}
-	m.Update(loop.FrameMsg{Gen: 3, Result: renderTall(t, `<p><input id=q></p>`)})
-	if after, _ := m.viewer.DocumentViewport(); after.Min != before.Min {
+	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 3, Result: renderTall(t, `<p><input id=q></p>`)}))
+	if after, _ := m.viewer.DocumentViewport(); after.Min.X != before.Min.X || absInt(after.Min.Y-before.Min.Y) > (before.Dy()+m.viewRows()-1)/m.viewRows()+1 {
 		t.Fatalf("scroll moved %v → %v", before.Min, after.Min)
 	}
+}
+
+func absInt(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
 }

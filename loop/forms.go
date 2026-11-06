@@ -50,10 +50,13 @@ type (
 
 // FocusNext moves focus to the next (or previous) element in the page's
 // focus order and reports it as a reader action.
-func (l *Loop) FocusNext(backward bool) {
+func (l *Loop) FocusNext(backward bool) { l.FocusNextAt(0, backward) }
+
+// FocusNextAt rejects focus traversal queued against a superseded DOM/frame.
+func (l *Loop) FocusNextAt(gen uint64, backward bool) {
 	l.tryPost(func() {
 		page := l.page
-		if page == nil || page.killed {
+		if page == nil || page.killed || gen != 0 && (!l.FrameCurrent(gen) || page.Tree.Dirty()) {
 			return
 		}
 		order := l.focusOrder(page)
@@ -287,10 +290,13 @@ func ignoreDisabled(err error) error {
 // Activate performs the default action of the focused element (Enter or
 // Space in browse mode): follow a link, toggle a checkbox or radio, press a
 // button. Text fields and selects are the host's (edit mode, chooser).
-func (l *Loop) Activate() {
+func (l *Loop) Activate() { l.ActivateAt(0) }
+
+// ActivateAt rejects activation queued against a superseded DOM/frame.
+func (l *Loop) ActivateAt(gen uint64) {
 	l.tryPost(func() {
 		page := l.page
-		if page == nil || page.killed {
+		if page == nil || page.killed || gen != 0 && (!l.FrameCurrent(gen) || page.Tree.Dirty()) {
 			return
 		}
 		n := page.Tree.Node(page.Sandbox.Active())

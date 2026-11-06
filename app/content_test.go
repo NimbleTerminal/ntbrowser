@@ -71,7 +71,7 @@ func contentModel(t *testing.T, p profile.Profile, start string) *Model {
 	go l.Run()
 	m := New(l, p, start)
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	m.Update(loop.FrameMsg{Gen: 1, Result: renderTall(t, `<p>x</p>`)})
+	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 1, Result: renderTall(t, `<p>x</p>`)}))
 	return m
 }
 

@@ -154,9 +154,9 @@ func TestFrameWithoutWarningsKeepsStatus(t *testing.T) {
 	go l.Run()
 	m := New(l, testProfile(nil, false, NavFree), "")
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	m.Update(loop.FrameMsg{Gen: 1, Result: renderTall(t, `<p>x</p>`)})
+	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 1, Result: renderTall(t, `<p>x</p>`)}))
 	m.Update(loop.LogMsg{Level: "log", Line: "hello from the page"})
-	m.Update(loop.FrameMsg{Gen: 2, Result: renderTall(t, `<p>y</p>`)})
+	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 2, Result: renderTall(t, `<p>y</p>`)}))
 	if !strings.Contains(m.status, "hello from the page") {
 		t.Fatalf("frame wiped the status line: %q", m.status)
 	}
@@ -175,7 +175,7 @@ func TestFirstFrameClearsLoadingStatus(t *testing.T) {
 	if !strings.HasPrefix(m.status, "loading ") {
 		t.Fatalf("status after load: %q", m.status)
 	}
-	m.Update(loop.FrameMsg{Gen: 1, Result: renderTall(t, `<p>x</p>`)})
+	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 1, Result: renderTall(t, `<p>x</p>`)}))
 	if strings.HasPrefix(m.status, "loading ") {
 		t.Fatalf("first frame left the loading status: %q", m.status)
 	}

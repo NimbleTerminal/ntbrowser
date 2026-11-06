@@ -14,6 +14,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"nimbleterminal.dev/ntbrowser/loop"
+	"nimbleterminal.dev/nthtml"
 )
 
 // TestSearchFormEndToEnd drives the whole path a reader takes: load a page
@@ -61,13 +62,20 @@ func TestSearchFormEndToEnd(t *testing.T) {
 					}
 					m.Update(loaded)
 				}
+				switch msg.(type) {
+				case loop.FrameMsg, nthtml.PaintReady:
+					drive(m, cmd)
+				}
 				if done(msg) {
 					return
 				}
 			}
 		}
 	}
-	isFrame := func(msg tea.Msg) bool { f, ok := msg.(loop.FrameMsg); return ok && f.Result != nil }
+	isFrame := func(msg tea.Msg) bool {
+		f, ok := msg.(loop.FrameMsg)
+		return ok && f.Result != nil && f.Result.Bounds().Dx() == documentWidth(m.viewer) && m.frameInputReady()
+	}
 	pump("first frame", isFrame)
 
 	m.Update(tea.KeyPressMsg{Code: tea.KeyTab})

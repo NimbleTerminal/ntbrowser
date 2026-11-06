@@ -5,9 +5,12 @@ package app
 
 import (
 	"context"
+	"nimbleterminal.dev/nthtml"
+	"nimbleterminal.dev/nthtml/document"
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -57,12 +60,12 @@ func TestViewerKeepsKittyIDAndSendsZlib(t *testing.T) {
 	go l.Run()
 	m := New(l, testProfile(nil, false, NavFree), "")
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 26})
-	_, cmd := m.Update(loop.FrameMsg{Gen: 1, Result: renderTall(t, `<p>v1</p>`)})
+	_, cmd := m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 1, Result: renderTall(t, `<p>v1</p>`)}))
 	drive(m, cmd)
 	// A Kitty-capable terminal with 1×1 px cells: tiny frames, same code path.
 	drive(m, m.viewer.Picture().SetTerminal(true, 1, 1))
 
-	_, cmd = m.Update(loop.FrameMsg{Gen: 2, Result: renderTall(t, `<p>v2</p>`)})
+	_, cmd = m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 2, Result: renderTall(t, `<p>v2</p>`)}))
 	out := drive(m, cmd)
 	view := m.viewer.View()
 	if !strings.Contains(view, "\U0010EEEE") {
@@ -76,9 +79,80 @@ func TestViewerKeepsKittyIDAndSendsZlib(t *testing.T) {
 		t.Fatalf("frame not zlib-compressed: %q", apc[:min(80, len(apc))])
 	}
 
-	_, cmd = m.Update(loop.FrameMsg{Gen: 3, Result: renderTall(t, `<p>v3 (re-flow)</p>`)})
+	_, cmd = m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 3, Result: renderTall(t, `<p>v3 (re-flow)</p>`)}))
 	drive(m, cmd)
 	if m.viewer.View() != view {
 		t.Fatal("re-flow changed the placeholder grid: the Kitty image id is not stable")
+	}
+}
+
+func TestCSSViewportWorkerIntegration(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sink := make(chan tea.Msg, 256)
+	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400, Fonts: document.MinimalFonts, MinFrame: time.Millisecond}, chanSink(sink))
+	go l.Run()
+	m := New(l, testProfile(nil, false, NavFree), "")
+	m.Update(tea.WindowSizeMsg{Width: 40, Height: 15})
+	l.LoadPage(`<body style="background:#def"><a href="/old">old</a>`+strings.Repeat(`<p style="height:1000px">long CSS text</p>`, 40), "https://example.test/", nil)
+	first := chunkAppFrame(t, m, sink)
+	if first.Err != nil || first.Result.Image != nil || first.Painted == nil || !m.cssPainted {
+		t.Fatalf("missing CSS band: %v", first.Err)
+	}
+	before, _ := m.viewer.DocumentViewport()
+	drive(m, m.viewer.Pan(0, 8000))
+	if got, _ := m.viewer.DocumentViewport(); got != before {
+		t.Fatal("pending paint changed presented viewport")
+	}
+	var ready nthtml.PaintReady
+	timeout := time.NewTimer(5 * time.Second)
+	defer timeout.Stop()
+	for ready.Image == nil {
+		select {
+		case msg := <-sink:
+			if p, ok := msg.(nthtml.PaintReady); ok {
+				ready = p
+			} else {
+				_, cmd := m.Update(msg)
+				drive(m, cmd)
+			}
+		case <-timeout.C:
+			t.Fatal("paint not delivered")
+		}
+	}
+	_, cmd := m.Update(ready)
+	drive(m, cmd)
+	after, _ := m.viewer.DocumentViewport()
+	if after.Min.Y <= before.Min.Y || m.gen != first.Gen {
+		t.Fatal("band paint replaced layout or failed to scroll")
+	}
+	// A replacement navigation invalidates the old DOM before its frame arrives.
+	l.LoadPage("<p>replacement page</p>", "https://example.test/new", nil)
+	if m.frameInputReady() {
+		t.Fatal("old page still accepts hits")
+	}
+	m.Update(nthtml.LinkMsg{Owner: m.viewer, Link: first.Result.Links[0]})
+	second := chunkAppFrame(t, m, sink)
+	if second.Err != nil {
+		t.Fatal(second.Err)
+	}
+	view, _ := m.viewer.DocumentViewport()
+	m.Update(ready)
+	if got, _ := m.viewer.DocumentViewport(); got != view || m.viewer.Result() != second.Result {
+		t.Fatal("late paint replaced new page")
+	}
+}
+
+func TestCSSPaintFailureRetainsLayoutAndFrame(t *testing.T) {
+	m := newModel(t, NavFree)
+	previous, gen := m.viewer.Result(), m.gen
+	m.Update(loop.FrameMsg{Gen: gen + 1, Err: context.DeadlineExceeded})
+	if m.viewer.Result() != previous || m.gen != gen {
+		t.Fatal("failed layout replaced good frame")
+	}
+	// A failure is still an ordering boundary: an older successful frame cannot win.
+	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: gen, Result: renderTall(t, "older")}))
+	if m.viewer.Result() != previous {
+		t.Fatal("failure allowed stale frame")
 	}
 }

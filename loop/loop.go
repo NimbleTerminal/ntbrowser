@@ -32,6 +32,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/dop251/goja"
+	"nimbleterminal.dev/nthtml"
 	"nimbleterminal.dev/nthtml/document"
 
 	"nimbleterminal.dev/ntbrowser/dom"
@@ -48,9 +49,11 @@ type Sink interface{ Send(tea.Msg) }
 // Messages the loop sends to the Bubble Tea model.
 type (
 	FrameMsg struct {
-		Gen    uint64 // monotonically increasing; stale frames are dropped by the host
-		Result *document.Result
-		Err    error
+		Painted    *nthtml.PaintedResult // CSS layout and initial band, installed atomically
+		Navigation uint64
+		Gen        uint64 // monotonically increasing; stale frames are dropped by the host
+		Result     *document.Result
+		Err        error
 		// Warnings are the loader's (a refused stylesheet, an oversize
 		// image); Result.Warnings stay nthtml's. Page-controlled text:
 		// the host passes them through app.clean.
@@ -80,9 +83,11 @@ type Page struct {
 	loaded  bool
 	// ctx bounds every request this page starts; cancel fires when the page
 	// is replaced or killed, so no completion outlives its runtime.
-	ctx    context.Context
-	cancel context.CancelFunc
-	killed bool // runtime dropped (heap or strike budget); the last frame stays
+	ctx         context.Context
+	cancel      context.CancelFunc
+	paintCtx    context.Context
+	paintCancel context.CancelFunc
+	killed      bool // runtime dropped (heap or strike budget); the last frame stays
 	// boxes are the painted boxes of the last frame shown for this page,
 	// used to map a document-pixel hit back to an element (Box.Anchor = id).
 	boxes []document.Box
@@ -141,17 +146,24 @@ type Config struct {
 }
 
 type Loop struct {
-	cfg    Config
-	sink   Sink
-	inbox  chan func()
-	outbox chan tea.Msg
-	ctx    context.Context
+	frameNavigation atomic.Uint64
+	resizeWidth     atomic.Int64
+	resizeWake      chan struct{}
+	cfg             Config
+	sink            Sink
+	inbox           chan func()
+	outbox          chan tea.Msg
+	ctx             context.Context
 
 	page   *Page
 	timers timerHeap
 	nextID int
 	frames []frameCB
 
+	currentFrame   atomic.Uint64
+	renderJobs     chan func(*paintWorker)
+	paintWake      chan struct{}
+	paintQueue     paintQueue
 	gen            atomic.Uint64
 	navGen         atomic.Uint64 // LoadPage calls, so a stale load can never win
 	renderInFlight bool
@@ -180,6 +192,11 @@ func New(ctx context.Context, cfg Config, sink Sink) *Loop {
 	}
 	cfg.Subresources = cfg.Subresources.WithDefaults()
 	l := &Loop{ctx: ctx, cfg: cfg, sink: sink, inbox: make(chan func(), cfg.Inbox), outbox: make(chan tea.Msg, cfg.Outbox), timerT: stoppedTimer(), frameTimer: stoppedTimer()}
+	l.resizeWake = make(chan struct{}, 1)
+	l.renderJobs = make(chan func(*paintWorker), 1)
+	l.paintWake = make(chan struct{}, 1)
+	l.paintQueue.viewport = nthtml.PaintViewport{Cols: 80, Rows: 24}
+	go l.runRenderer()
 	go l.forward()
 	return l
 }
@@ -192,6 +209,13 @@ func (l *Loop) Run() {
 			return
 		case task := <-l.inbox:
 			task()
+		case <-l.resizeWake:
+			width := int(l.resizeWidth.Load())
+			if width > 0 && width != l.cfg.Width {
+				l.cfg.Width = width
+				l.pendingFrame = true
+				l.scheduleFrame()
+			}
 		case <-l.timerT.C:
 			l.fireTimers()
 		case <-l.frameTimer.C:
@@ -276,6 +300,7 @@ func (l *Loop) tryPost(fn func()) bool {
 // has run, and schedules the first frame. Safe to call from the UI goroutine:
 // it hands off without blocking.
 func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) {
+	l.currentFrame.Store(0)
 	gen := l.navGen.Add(1) // taken synchronously on the caller: call order == generation order
 	if fetcher == nil {
 		fetcher = netpolicy.New(netpolicy.Policy{}) // the zero policy denies everything; never a nil dereference on a worker
@@ -285,6 +310,7 @@ func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) {
 			return // a newer LoadPage exists; whichever order the handoffs ran in, it wins
 		}
 		if l.page != nil {
+			l.page.paintCancel()
 			l.dropPage(l.page)
 		}
 		l.timers = nil
@@ -306,6 +332,7 @@ func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) {
 		}
 		page := &Page{Tree: tree, Fetcher: fetcher, Base: base, started: time.Now(), firstFrame: true, budgetWarned: map[string]bool{}, refused: map[string]bool{}, firing: map[dom.NodeID]bool{}, resetting: map[dom.NodeID]bool{}}
 		page.ctx, page.cancel = context.WithCancel(l.ctx)
+		page.paintCtx, page.paintCancel = context.WithCancel(l.ctx)
 		page.Sandbox = jsvm.New(cfg, tree, (*host)(l))
 		page.Sandbox.SetFormHooks(l.formHooks(page))
 		l.page = page
@@ -394,9 +421,12 @@ func (l *Loop) report(err error) {
 // back to document) and lets it bubble. It is dropped before reaching the VM
 // when the page registered no keydown listener, so an idle page costs
 // nothing.
-func (l *Loop) Input(key tea.KeyPressMsg) {
+func (l *Loop) Input(key tea.KeyPressMsg) { l.InputAt(0, key) }
+
+// InputAt rejects keys queued against a superseded DOM/frame.
+func (l *Loop) InputAt(gen uint64, key tea.KeyPressMsg) {
 	l.tryPost(func() {
-		if l.page == nil || !l.page.Sandbox.HasListeners("keydown") {
+		if l.page == nil || gen != 0 && (!l.FrameCurrent(gen) || l.page.Tree.Dirty()) || !l.page.Sandbox.HasListeners("keydown") {
 			return
 		}
 		_, err := l.page.Sandbox.Dispatch(jsvm.Event{Type: "keydown", Key: domKeyName(key)})
@@ -428,10 +458,10 @@ var domKeys = map[string]string{
 // against the page base goes back to the host, which owns navigation.
 func (l *Loop) LinkActivated(link document.Link) { l.LinkActivatedAt(0, link) }
 
-// LinkActivatedAt rejects input from a chunk that has already been replaced.
+// LinkActivatedAt rejects activation against a superseded DOM/frame.
 func (l *Loop) LinkActivatedAt(gen uint64, link document.Link) {
 	l.tryPost(func() {
-		if l.page == nil || gen != 0 && l.page.frameGen != gen {
+		if l.page == nil || gen != 0 && (!l.FrameCurrent(gen) || l.page.frameGen != gen || l.page.Tree.Dirty()) {
 			return
 		}
 		href := document.ResolveURL(l.page.Base, link.Href)
@@ -464,10 +494,10 @@ func (l *Loop) LinkActivatedAt(gen uint64, link document.Link) {
 // nearest <a> supplies the default navigation.
 func (l *Loop) ClickAt(area image.Rectangle) { l.ClickAtFrame(0, area) }
 
-// ClickAtFrame keeps chunk-local coordinates paired with their frame.
+// ClickAtFrame keeps displayed CSS or chunk-local coordinates paired with their DOM/frame.
 func (l *Loop) ClickAtFrame(gen uint64, area image.Rectangle) {
 	l.tryPost(func() {
-		if l.page == nil || gen != 0 && l.page.frameGen != gen {
+		if l.page == nil || gen != 0 && (!l.FrameCurrent(gen) || l.page.frameGen != gen || l.page.Tree.Dirty()) {
 			return
 		}
 		var best *document.Box
@@ -554,15 +584,16 @@ func (l *Loop) anchorFor(link document.Link) *dom.Node {
 	return byHref[0]
 }
 
-// Resize changes the layout width and forces a re-flow of the current tree.
+// Resize coalesces the latest width outside the input inbox and forces reflow.
 func (l *Loop) Resize(widthPx int) {
-	l.tryPost(func() {
-		if widthPx > 0 && widthPx != l.cfg.Width {
-			l.cfg.Width = widthPx
-			l.pendingFrame = true
-			l.scheduleFrame()
-		}
-	})
+	if widthPx <= 0 {
+		return
+	}
+	l.resizeWidth.Store(int64(widthPx))
+	select {
+	case l.resizeWake <- struct{}{}:
+	default:
+	}
 }
 
 // Dropped reports how many inputs/log lines were shed under back-pressure.
@@ -593,6 +624,9 @@ func (l *Loop) afterTask() {
 		}
 	}
 	l.reconcileFocus(l.page)
+	if l.page.Tree.Dirty() {
+		l.currentFrame.Store(0)
+	}
 	if l.page.Tree.Dirty() || l.pendingFrame {
 		l.scheduleFrame()
 	}
@@ -618,7 +652,7 @@ func (l *Loop) startRender() {
 		return
 	}
 	page := l.page
-	opts := document.Options{Width: l.cfg.Width, Limits: l.cfg.RenderLimit, Fonts: l.cfg.Fonts, FallbackFaces: fallbackFaces}
+	opts := document.Options{NoImage: !l.cfg.Chunked, Width: l.cfg.Width, Limits: l.cfg.RenderLimit, Fonts: l.cfg.Fonts, FallbackFaces: fallbackFaces}
 	var loaderWarnings []string
 	var injected []string // hrefs whose sheet is in this snapshot
 	if page.subres != nil {
@@ -634,6 +668,9 @@ func (l *Loop) startRender() {
 		opts.BackgroundImages = page.subres.BackgroundImages() // worker reads is written again
 	}
 	rebuildChunks := page.Tree.Dirty()
+	if rebuildChunks {
+		l.currentFrame.Store(0)
+	}
 	chunkState, chunkReq := page.chunkState, page.chunkReq
 	useChunks := l.cfg.Chunked
 	var html string
@@ -645,14 +682,21 @@ func (l *Loop) startRender() {
 	l.renderInFlight = true
 	l.lastFrame = time.Now()
 	gen := l.gen.Add(1)
-	go func() {
-		ctx, cancel := context.WithTimeout(l.ctx, 2*time.Second)
+	navigation := l.navGen.Load()
+	viewport := l.viewport()
+	if page.firstFrame {
+		viewport.Origin = image.Point{}
+		viewport.ZoomSteps = 0
+	}
+	l.renderJobs <- func(worker *paintWorker) {
+		ctx, cancel := context.WithTimeout(page.paintCtx, paintDeadline)
 		defer cancel()
 		// Parse and Render enforce nthtml's own byte/node/pixel budgets; a
 		// hostile tree fails here with document.ErrLimit instead of
 		// exhausting memory. One parse per frame also yields the CSS
 		// background sources (decision 21).
 		var res *document.Result
+		var painted *nthtml.PaintedResult
 		var backgrounds []string
 		var chunkInfo ChunkInfo
 		if useChunks {
@@ -696,13 +740,38 @@ func (l *Loop) startRender() {
 				loaderWarnings = append(loaderWarnings, "page too large with images; rendered without them")
 			}
 		}
+		if !useChunks && err == nil && res != nil {
+			var painter *document.Painter
+			var plan nthtml.PaintPlan
+			painter, err = res.NewPainter(ctx)
+			if err == nil {
+				plan, err = nthtml.PlanPaint(res, viewport)
+				if err == nil {
+					var band *image.RGBA
+					band, err = painter.Paint(ctx, plan.Area, plan.Scale)
+					if err == nil {
+						painted = &nthtml.PaintedResult{Result: res, Revision: gen, Plan: plan, Image: band}
+						worker.close()
+						worker.painter, worker.result, worker.revision, worker.ctx = painter, res, gen, page.paintCtx
+					}
+				}
+				if err != nil {
+					painter.Close()
+				}
+			}
+		}
 		if useChunks && err != nil && doc == nil {
 			chunkState = nil
 		}
 		l.post(func() {
 			l.renderInFlight = false
-			if l.page != page {
+			if l.page != page || navigation != l.navGen.Load() {
 				return // frame for a page we navigated away from
+			}
+			if opts.Width != l.cfg.Width {
+				l.currentFrame.Store(0)
+				l.pendingFrame = true
+				return
 			}
 			if useChunks {
 				page.chunkState = chunkState
@@ -737,7 +806,7 @@ func (l *Loop) startRender() {
 			if useChunks && err != nil {
 				page.boxes, page.result = nil, nil
 			}
-			if res != nil {
+			if res != nil && err == nil {
 				page.boxes, page.result = res.Boxes, res
 				l.autofocus(page)
 			}
@@ -750,11 +819,18 @@ func (l *Loop) startRender() {
 				}
 				loaderWarnings = append(loaderWarnings, page.subres.Warnings()...)
 			}
-			page.frameGen = gen
-			l.send(FrameMsg{Gen: gen, Result: res, Err: err, Warnings: loaderWarnings, Chunk: chunkInfo})
+			if err == nil || useChunks {
+				page.frameGen = gen
+				if !page.Tree.Dirty() {
+					l.currentFrame.Store(gen)
+					l.frameNavigation.Store(navigation)
+				}
+				page.firstFrame = false
+			}
+			l.send(FrameMsg{Painted: painted, Navigation: navigation, Gen: gen, Result: res, Err: err, Warnings: loaderWarnings, Chunk: chunkInfo})
 			l.runFrameCallbacks()
 		})
-	}()
+	}
 }
 
 // startSubresources opens the page's subresource session and arms the

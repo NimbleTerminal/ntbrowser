@@ -2,8 +2,8 @@
 
 Status: upstream API published as [nthtml v0.4.0](https://github.com/NimbleTerminal/nthtml/releases/tag/v0.4.0)
 at `84caa4b`, including implementation `24f51fa` and review fixes `9bb6fd6`.
-Verified downloadable through the public Go module proxy. Not yet adopted by
-ntbrowser. Semantic `-chunked` mode ships independently. Date: 2026-11-05.
+Verified downloadable through the public Go module proxy and adopted by
+ntbrowser as the default CSS painting path. Semantic `-chunked` mode ships independently. Date: 2026-11-05.
 
 ## Implementation checkpoint
 
@@ -19,17 +19,39 @@ includes stale completions, error recovery, mode changes, source focus, fraction
 scales, pixel budgets, 64x zoom, Kitty zlib/StableID behavior, and equivalence to
 `Result.Paint` for styled content. On one Apple M5 Max sample, a warm 400×200 band
 on a 1,100-paragraph layout took 0.491 ms versus 0.609 ms uncached, with 174 versus
-248 allocations. Cold indexing took 0.683 ms. Production CJK font throughput
-remains to be measured; synthetic host-fallback correctness is covered.
+248 allocations. Cold indexing took 0.683 ms. Production CJK benchmark results from ntbrowser are recorded below.
 
 Host-painted mode supports width fit. Paint scale is clamped while logical zoom
 is retained; the transport fills the planned grid to absorb raster rounding
 without scale-dependent letterboxes. Existing viewer callers retain their API
 and behavior. These choices are documented in the upstream integration contract.
 
-Next: implement the ntbrowser adoption checklist below using published nthtml
-v0.4.0, including the production CJK painter benchmark before rollout. The default CSS renderer still uses
-`NoImage: false`; this checkpoint does not supersede that current requirement.
+ntbrowser now uses `NoImage: true`, atomic first-band frames, and a single worker
+that owns the painter and closes it on replacement/navigation/shutdown. A latest
+request slot bounds queued paint work; paints use a two-second deadline.
+`app.Update` routes paint messages before normal viewer dispatch. DOM mutation
+invalidates input immediately, independently of whether an older frame is still
+visible. Failed layouts retain the installed frame and painter. The current
+implementation supersedes the former `NoImage: false` rule in AGENTS.md and
+architecture §3/decision 19. Validation passed: `task check build build-nocjk`
+(race tests in both modules, nocjk, WASM, notices, vet, and builds), with
+additional targeted race tests after the final navigation guard review.
+
+Production `ntfonts/cjk/scregular` benchmark (Apple M5 Max, Go 1.26.8,
+800×400 bands at scale 1, Latin plus Chinese, zero missing glyphs,
+`GOWORK=off CGO_ENABLED=0 go test ./loop -run '^$' -bench BenchmarkCJKViewportPaint -benchtime=200ms`):
+
+| Fixture | Painter | Time/band | Bytes/band | Allocations/band |
+| --- | --- | --- | --- | --- |
+| 100 paragraphs | Uncached | 1.407 ms | 9,931,417 | 296 |
+| 100 paragraphs | Cold | 1.371 ms | 10,144,987 | 383 |
+| 100 paragraphs | Warm | 0.932 ms | 1,322,377 | 138 |
+| 1,100 paragraphs | Uncached | 1.476 ms | 9,929,911 | 292 |
+| 1,100 paragraphs | Cold | 1.508 ms | 10,328,034 | 981 |
+| 1,100 paragraphs | Warm | 0.936 ms | 1,322,365 | 138 |
+
+These are local samples, not latency guarantees. The full layout remains eager
+and bounded; only raster residency and per-band work change.
 
 Review fixes in `9bb6fd6` track the submitted picture plan/revision separately,
 force upload after a TTY-mode replacement, reconcile stale install geometry, and
@@ -46,7 +68,7 @@ implementation of nthtml's CSS renderer. Switching ntbrowser to it changes CSS
 behavior, source geometry, and selection semantics. In particular, the adapter
 ignores CSS background images and repeats ancestor decoration across chunks.
 
-ntbrowser's existing CSS renderer builds a complete `document.Result`, including
+Before adoption, ntbrowser's CSS renderer built a complete `document.Result`, including
 a whole-page raster, on its render worker. nthtml's viewer can transmit bands of
 that raster to Kitty, but the whole raster remains resident. Terminal transport
 banding does not bound the source raster allocation.
@@ -68,8 +90,7 @@ logic slices a complete source image rather than requesting regional painting.
 ## Proposed nthtml viewer contract
 
 Add an explicit host-painted mode; existing callers retain their behavior. Keep
-document extent separate from the bounds of the resident raster. This requires
-an nthtml release before ntbrowser can enable the CSS path.
+document extent separate from the bounds of the resident raster. The required API is published in nthtml v0.4.0.
 
 ### Atomic layout and initial band
 
@@ -150,8 +171,7 @@ full-op scans for ordinary narrow bands.
 ### ntbrowser adoption and superseded rules
 
 Keep layout and paint off the UI and VM goroutines. Retain DOM snapshots,
-security gates, subresource allowlists and global source identities. When the
-upstream release is integrated, update these exact contracts together:
+security gates, subresource allowlists and global source identities. The adoption updates these exact contracts together:
 
 - `AGENTS.md`: the `document.Options.NoImage stays false` constraint and the
   viewer/Kitty transport requirement.
@@ -163,8 +183,8 @@ upstream release is integrated, update these exact contracts together:
   the host-painted API, retaining its StableID/zlib assertions. Add asynchronous
   band and stale-completion tests rather than weakening this transport gate.
 
-The current semantic mode does not change the default CSS path's `NoImage`
-rule and does not need this future upstream interface.
+Semantic mode continues to supply complete chunk rasters and does not use the
+host-painted CSS interface.
 
 ## Limits and validation
 

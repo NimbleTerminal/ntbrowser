@@ -82,7 +82,7 @@ func TestFrameWarningsReachStatus(t *testing.T) {
 	go l.Run()
 	m := New(l, testProfile(nil, false, NavFree), "")
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	m.Update(loop.FrameMsg{Gen: 1, Result: res, Warnings: []string{"stylesheet \"x.css\": denied"}})
+	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 1, Result: res, Warnings: []string{"stylesheet \"x.css\": denied"}}))
 	if !strings.Contains(m.status, `stylesheet "x.css"`) {
 		t.Fatalf("status %q", m.status)
 	}
@@ -107,11 +107,11 @@ func TestSkippedSVGElementsStayOutOfStatus(t *testing.T) {
 	m := New(l, testProfile(nil, false, NavFree), "")
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m.Update(loop.LogMsg{Level: "log", Line: "hello from the page"})
-	m.Update(loop.FrameMsg{Gen: 1, Result: res})
+	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 1, Result: res}))
 	if strings.Contains(m.status, "skipped") || !strings.Contains(m.status, "hello from the page") {
 		t.Fatalf("skip note replaced the status: %q", m.status)
 	}
-	m.Update(loop.FrameMsg{Gen: 2, Result: res, Warnings: []string{"stylesheet \"x.css\": denied"}})
+	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 2, Result: res, Warnings: []string{"stylesheet \"x.css\": denied"}}))
 	if m.status != `stylesheet "x.css": denied` {
 		t.Fatalf("status %q", m.status)
 	}

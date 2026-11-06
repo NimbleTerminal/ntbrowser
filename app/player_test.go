@@ -475,7 +475,7 @@ func (m *Model) onResizeForTest(w, h int) tea.Cmd {
 
 func frame(t *testing.T, m *Model, gen uint64, body string) tea.Cmd {
 	t.Helper()
-	_, cmd := m.Update(loop.FrameMsg{Gen: gen, Result: renderTall(t, body)})
+	_, cmd := m.Update(cssFrame(t, m, loop.FrameMsg{Gen: gen, Result: renderTall(t, body)}))
 	return cmd
 }
 

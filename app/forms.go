@@ -208,7 +208,9 @@ func (m *Model) formKey(k tea.KeyPressMsg) (handled bool, cmd tea.Cmd) {
 		switch key {
 		case "tab", "shift+tab":
 			cmd := m.commit()
-			m.loop.FocusNext(key == "shift+tab")
+			if m.frameInputReady() {
+				m.loop.FocusNextAt(m.gen, key == "shift+tab")
+			}
 			return true, cmd
 		case "esc":
 			return true, m.commit()
@@ -232,7 +234,9 @@ func (m *Model) formKey(k tea.KeyPressMsg) (handled bool, cmd tea.Cmd) {
 		if after := m.editorValue(); after != before {
 			m.loop.SetValue(m.focus.Source, after, false)
 		}
-		m.loop.Input(k) // the page's keydown copy; it cannot cancel text entry (decision 6)
+		if m.frameInputReady() {
+			m.loop.InputAt(m.gen, k)
+		} // the page's keydown copy; it cannot cancel text entry (decision 6)
 		return true, cmd
 	case modeChoose:
 		c := m.focus.Control
@@ -261,8 +265,12 @@ func (m *Model) formKey(k tea.KeyPressMsg) (handled bool, cmd tea.Cmd) {
 	// to the viewer's own link focus (decision 1).
 	switch key {
 	case "tab", "shift+tab":
-		m.loop.FocusNext(key == "shift+tab")
-		m.loop.Input(k)
+		if m.frameInputReady() {
+			m.loop.FocusNextAt(m.gen, key == "shift+tab")
+		}
+		if m.frameInputReady() {
+			m.loop.InputAt(m.gen, k)
+		}
 		return true, nil
 	case "enter":
 		if m.focus.Source == "" {
@@ -280,14 +288,20 @@ func (m *Model) formKey(k tea.KeyPressMsg) (handled bool, cmd tea.Cmd) {
 				}
 			}
 		default:
-			m.loop.Activate()
+			if m.frameInputReady() {
+				m.loop.ActivateAt(m.gen)
+			}
 		}
-		m.loop.Input(k)
+		if m.frameInputReady() {
+			m.loop.InputAt(m.gen, k)
+		}
 		return true, nil
 	case "space":
 		switch m.focus.Control.Kind {
 		case "checkbox", "radio", "button":
-			m.loop.Activate()
+			if m.frameInputReady() {
+				m.loop.ActivateAt(m.gen)
+			}
 			return true, nil
 		}
 	}

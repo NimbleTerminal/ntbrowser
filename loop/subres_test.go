@@ -523,18 +523,20 @@ func TestRuleBudgetIsDocumentOrder(t *testing.T) {
 	}
 }
 
-func TestHeightOverflowRetriesWithoutImages(t *testing.T) {
+func TestLongPageKeepsImagesWithViewportPainting(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(serve("image/png", pngBytes(t, 2, 2, color.RGBA{0, 0, 255, 255}))))
 	defer srv.Close()
 	l, sink := newSubresLoop(t, subres.Config{})
-	// 200 sized images stack past nthtml's 16,384 px height cap; their alt
-	// placeholders do not, so the retry without images must succeed.
+	// A page beyond the former full-raster height cap keeps its CSS images.
 	l.LoadPage(strings.Repeat(`<p><img src="/p.png" alt="big" width="10" height="100"></p>`, 200), srv.URL+"/", nil)
 	f := frameWhere(t, sink, 5*time.Second, func(f FrameMsg) bool {
-		return f.Err == nil && strings.Contains(strings.Join(f.Warnings, "\n"), "without them")
+		return f.Err == nil && len(imgBoxes(f.Result)) == 200
 	})
-	if n := len(imgBoxes(f.Result)); n != 0 {
-		t.Fatalf("%d image boxes survived the retry without images", n)
+	if f.Result.Image != nil || f.Painted == nil || f.Painted.Plan.Area.Dy() >= f.Result.Bounds().Dy() {
+		t.Fatal("long page retained a whole-page raster")
+	}
+	if strings.Contains(strings.Join(f.Warnings, "\n"), "without them") {
+		t.Fatal("viewport rendering dropped images")
 	}
 }
 
@@ -598,17 +600,18 @@ func TestBackgroundImageFetchedAndPainted(t *testing.T) {
 	defer origin.Close()
 	l, sink := newSubresLoop(t, subres.Config{Mode: subres.ModeAny})
 	l.LoadPage(`<link rel="stylesheet" href="`+cdn.URL+`/css/t.css"><div id="v" class="v"></div><div id="s" class="s"></div><p>x</p>`, origin.URL+"/", nil)
-	sample := func(res *document.Result, id string) (color.RGBA, bool) {
-		pt, ok := res.Anchors[id]
-		if !ok || res.Image == nil {
+	sample := func(f FrameMsg, id string) (color.RGBA, bool) {
+		pt, ok := f.Result.Anchors[id]
+		if !ok || f.Painted == nil {
 			return color.RGBA{}, false
 		}
-		c := res.Image.RGBAAt(pt.X+10, pt.Y+10)
+		p := f.Painted
+		c := p.Image.RGBAAt(int(float64(pt.X+10-p.Plan.Area.Min.X)*p.Plan.Scale), int(float64(pt.Y+10-p.Plan.Area.Min.Y)*p.Plan.Scale))
 		return c, true
 	}
 	frameWhere(t, sink, 5*time.Second, func(f FrameMsg) bool {
-		v, ok1 := sample(f.Result, "v")
-		s, ok2 := sample(f.Result, "s")
+		v, ok1 := sample(f, "v")
+		s, ok2 := sample(f, "s")
 		return ok1 && ok2 && isBlue(v) && isGreen(s)
 	})
 	if cdnHits.get("/css/arrow.png") != 1 || cdnHits.get("/css/dot.svg") != 1 {

@@ -9,7 +9,7 @@ A secure, non-JIT terminal web runtime: a hardened pure-Go JavaScript interprete
 Build with Go 1.26.8 and run `task check build build-nocjk`. Tasks set
 `GOWORK=off CGO_ENABLED=0`.
 
-Dependencies use published module versions, including nthtml v0.3.0 and
+Dependencies use published module versions, including nthtml v0.4.0 and
 nttypeset v0.2.0. No sibling library checkouts are required. The media helper's
 replacement of ntbrowser points to this repository's root module.
 ntbrowser retains the WASM-capable Bubble Tea fork for its compile-only gate.
@@ -33,7 +33,7 @@ ntbrowser -chunked https://example.com/long-document
 
 `-chunked` uses nthtml's HTML-to-nttypeset adapter. It has reduced CSS support:
 CSS background images are omitted, ancestor decoration repeats across chunks,
-and layout follows semantic reading order. The default CSS renderer is unchanged.
+and layout follows semantic reading order. Default CSS layout semantics are unchanged.
 
 Use `[` / `]` for previous/next chunk and `Ctrl+Home` / `Ctrl+End` for first/last.
 In raster mode, scrolling again at a chunk's top or bottom also crosses to its
@@ -54,8 +54,13 @@ it; the last readable image remains visible until another chunk succeeds.
 DOM, stylesheet, image, and width changes rebuild the index, preserving a stable
 source anchor when available. No new profile gates are opened.
 
-CSS-preserving viewport painting is a separate upstream work item described in
-[the viewport rendering proposal](docs/design/2026-11-05-ntbrowser-viewport-rendering-design.md).
+The default CSS renderer uses nthtml v0.4.0 viewport painting: full bounded CSS
+layout, with only a bounded raster band resident. A serial worker paints the
+first band with each layout and handles later scroll/zoom requests with a
+two-second deadline. Search, selection, focus and hit-testing retain global CSS
+coordinates. While painting is pending, the previous band stays visible; input
+against an outdated DOM is rejected. DOM/layout limits still apply, and TTY uses
+the whole text layout. See [the viewport design](docs/design/2026-11-05-ntbrowser-viewport-rendering-design.md).
 It requires a future nthtml viewer API; the `-chunked` flag does not enable it.
 
 ## Release binaries

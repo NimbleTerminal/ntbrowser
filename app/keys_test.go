@@ -23,7 +23,7 @@ func newModel(t *testing.T, nav NavMode) *Model {
 	go l.Run()
 	m := New(l, testProfile([]string{"cdn.test"}, false, nav), "")
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	m.Update(loop.FrameMsg{Gen: 1, Result: renderTall(t, `<p>x</p>`)})
+	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 1, Result: renderTall(t, `<p>x</p>`)}))
 	m.current = mustURL(t, "https://page.test/a")
 	m.history, m.hIndex = []string{"https://page.test/a"}, 0
 	return m
@@ -89,7 +89,7 @@ func TestDegenerateTerminalSizes(t *testing.T) {
 	m := newModel(t, NavFree)
 	for _, sz := range []tea.WindowSizeMsg{{Width: 0, Height: 0}, {Width: 1, Height: 1}, {Width: 1, Height: 3}} {
 		m.Update(sz)
-		m.Update(loop.FrameMsg{Gen: uint64(10 + sz.Width), Result: renderTall(t, `<p>y</p>`)})
+		m.Update(cssFrame(t, m, loop.FrameMsg{Gen: uint64(10 + sz.Width), Result: renderTall(t, `<p>y</p>`)}))
 		if v := m.View(); v.Content == "" {
 			t.Fatalf("empty view at %+v", sz)
 		}
