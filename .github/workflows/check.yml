@@ -36,11 +36,4 @@ jobs:
       - uses: go-task/setup-task@v2
         with:
           version: '3.x'
-      - run: test -z "$(gofmt -l .)"
-      - run: go mod tidy -diff
-      - run: go mod tidy -diff
-        working-directory: cmd/ntbrowser-media
-      - run: task check build build-nocjk
-      - run: go vet ./...
-        working-directory: cmd/ntbrowser-media
-      - run: go test -run='^$' -fuzz=FuzzParseSerializeRoundTrip -fuzztime=30s ./dom/
+      - run: task ci

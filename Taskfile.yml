@@ -22,6 +22,49 @@ tasks:
     cmds:
       - task --list-all
 
+  ci:
+    desc: Run formatting, module, test, vet, WASM, notices, build, and fuzz checks
+    cmds:
+      - task: fmt-check
+      - task: go-tidy-check
+      - task: go-verify
+      - task: check
+      - task: build
+      - task: build-nocjk
+      - task: fuzz
+
+  fmt-check:
+    desc: Check Go formatting in both modules without changing files
+    cmds:
+      - |
+        set -eu
+        files=$(gofmt -l .)
+        if [ -n "$files" ]; then
+          printf '%s\n' "$files"
+          exit 1
+        fi
+
+  go-tidy-check:
+    desc: Check dependency files in both modules without changing them
+    cmds:
+      - go mod tidy -diff
+      - go -C cmd/ntbrowser-media mod tidy -diff
+
+  go-verify:
+    desc: Verify downloaded dependencies in both modules
+    cmds:
+      - go mod verify
+      - go -C cmd/ntbrowser-media mod verify
+
+  fuzz:
+    desc: 'Fuzz DOM parsing and serialization (DURATION=30s)'
+    vars:
+      DURATION: '{{default "30s" .DURATION}}'
+    env:
+      NTBROWSER_FUZZ_DURATION: '{{.DURATION}}'
+    cmds:
+      - go test -mod=readonly -run='^$' -fuzz=FuzzParseSerializeRoundTrip -fuzztime="$NTBROWSER_FUZZ_DURATION" -parallel=2 ./dom/
+
   build:
     desc: Build everything and the binary into bin/
     cmds:
@@ -61,9 +104,10 @@ tasks:
       - cmp cmd/ntbrowser-media/THIRD_PARTY_NOTICES.md dist/MEDIA_NOTICES.md
 
   vet:
-    desc: go vet
+    desc: Run go vet in both modules
     cmds:
       - go vet ./...
+      - go -C cmd/ntbrowser-media vet ./...
 
   test-sandbox-linux:
     desc: Run the sandbox tests on a Linux kernel in Docker
@@ -79,7 +123,7 @@ tasks:
       - go build {{.WASM_PKGS}}
 
   check:
-    desc: vet, test, wasm
+    desc: Vet, tests, nocjk, WASM, and dependency notices
     cmds:
       - task: vet
       - task: test

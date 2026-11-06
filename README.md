@@ -6,8 +6,11 @@ A secure, non-JIT terminal web runtime: a hardened pure-Go JavaScript interprete
 
 ## Development dependencies
 
-Build with Go 1.26.8 and run `task check build build-nocjk`. Tasks set
-`GOWORK=off CGO_ENABLED=0`.
+Use Go 1.26.8 and run `task ci` for the full local and GitHub Actions gate:
+formatting, module tidy/verification, vet and tests for both modules, `nocjk`,
+WASM compilation, notices, builds, and a 30-second DOM fuzz run. Tasks set
+`GOWORK=off CGO_ENABLED=0`. Override the fuzz duration with `task ci DURATION=10s`;
+`task check` remains available for checks without builds or fuzzing.
 
 Dependencies use published module versions, including nthtml v0.5.0 and
 nttypeset v0.3.0. No sibling library checkouts are required. The media helper's
