@@ -623,6 +623,11 @@ func (l *Loop) afterTask() {
 			fn()
 		}
 	}
+	l.updateImages()
+	if l.page.Sandbox.Disabled() && !l.page.killed {
+		l.dropPage(l.page)
+	}
+	l.armTimer() // image handlers may have scheduled timers
 	l.reconcileFocus(l.page)
 	if l.page.Tree.Dirty() {
 		l.currentFrame.Store(0)
@@ -839,7 +844,7 @@ func (l *Loop) startRender() {
 // (spec §7.5).
 func (l *Loop) startSubresources(page *Page) {
 	cfg := l.cfg.Subresources
-	if l.cfg.SubresourceTransport == nil || cfg.Mode == subres.ModeOff {
+	if !l.cfg.Profile.AllowsSubresources() || l.cfg.SubresourceTransport == nil || cfg.Mode == subres.ModeOff {
 		return
 	}
 	post := func(fn func()) {

@@ -72,7 +72,7 @@ New packages: `profile` (data, validation, printing; no system imports) and `con
    | Gate | Values | Covers |
    |---|---|---|
    | `navigate` | `off`, `allowlist`, `confirm`, `free` | top-level navigation. `off`: only the start URL given at launch is fetched, and nothing after it |
-   | `subresources` | `off`, `origin`, `any` | stylesheets, images |
+   | `subresources` | `off`, `origin`, `any` | stylesheets and images, including detached script-created `Image` requests |
    | `fetch` | `off`, `origin`, `allowlist` | `fetch()` from page script |
    | `hosts` | list | what `allowlist` means |
    | `private-network` | `off`, `on` | loopback and private addresses |

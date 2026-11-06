@@ -147,16 +147,15 @@ func (s *Session) discoverImage(key string, background bool) {
 	if _, seen := m[key]; seen {
 		return
 	}
-	e := &imageEntry{}
-	m[key] = e
 	if s.imageCount >= s.cfg.MaxImages {
-		e.state = failed
 		if !s.warnedImageCap {
 			s.warnedImageCap = true
 			s.warn("more than %d images; the rest are ignored", s.cfg.MaxImages)
 		}
 		return
 	}
+	e := &imageEntry{}
+	m[key] = e
 	s.imageCount++
 	if strings.HasPrefix(strings.ToLower(key), "data:") {
 		s.queue = append(s.queue, job{key: key, background: background})
@@ -441,4 +440,23 @@ func (s *Session) Warnings() []string {
 func (s *Session) Close() {
 	s.closed = true
 	s.cancel()
+}
+
+// ImageStatus starts (or joins) an ordinary image request and reports its
+// decoded dimensions. It shares the renderer's cache, concurrency and pixel
+// budgets. Calls and completions belong to the session's owning goroutine.
+func (s *Session) ImageStatus(src string) (width, height int, done bool) {
+	if s.closed || s.cfg.Mode == ModeOff {
+		return 0, 0, true
+	}
+	s.Discover(nil, []string{src}, nil)
+	e := s.images[src]
+	if e == nil || e.state == failed {
+		return 0, 0, true
+	}
+	if e.state == pending {
+		return 0, 0, false
+	}
+	b := e.img.Bounds()
+	return b.Dx(), b.Dy(), true
 }

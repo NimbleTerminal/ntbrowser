@@ -47,6 +47,9 @@ func (s *Sandbox) wrap(n *dom.Node) goja.Value {
 	}
 	w := s.vm.NewObject()
 	_ = w.SetPrototype(s.elemProto)
+	if n.Tag() == "img" {
+		_ = w.SetPrototype(s.imageProto)
+	}
 	_ = w.DefineDataPropertySymbol(s.nodeSym, s.vm.ToValue(int(n.ID())), goja.FLAG_FALSE, goja.FLAG_FALSE, goja.FLAG_FALSE)
 	s.weakW[n.ID()] = weak.Make(w)
 	// The cleanup closure must not reference w (it would never be collected).
@@ -91,7 +94,7 @@ func (s *Sandbox) reap() {
 	}
 	for _, root := range s.tree.DetachedRoots() {
 		if !s.anyLiveWrapper(root) {
-			dom.Walk(root, func(n *dom.Node) { s.forgetCounts(n.ID()); delete(s.weakW, n.ID()) })
+			dom.Walk(root, func(n *dom.Node) { s.forgetCounts(n.ID()); delete(s.weakW, n.ID()); delete(s.images, n.ID()) })
 			s.tree.Release(root)
 		}
 	}
@@ -103,6 +106,9 @@ func (s *Sandbox) reap() {
 func (s *Sandbox) anyLiveWrapper(root *dom.Node) bool {
 	alive := false
 	dom.Walk(root, func(n *dom.Node) {
+		if st := s.images[n.ID()]; st != nil && st.pin != nil {
+			alive = true
+		}
 		if !alive && s.liveWrapper(n.ID()) != nil {
 			alive = true
 		}
@@ -254,11 +260,21 @@ func (s *Sandbox) buildElementProto() *goja.Object {
 		return vm.ToValue(ok)
 	})
 	s.method(p, "setAttribute", func(c goja.FunctionCall) goja.Value {
-		s.must(s.tree.SetAttr(s.node(c.This), c.Argument(0).String(), c.Argument(1).String()))
+		n := s.node(c.This)
+		name := c.Argument(0).String()
+		s.must(s.tree.SetAttr(n, name, c.Argument(1).String()))
+		if strings.EqualFold(name, "src") {
+			s.imageChanged(n)
+		}
 		return goja.Undefined()
 	})
 	s.method(p, "removeAttribute", func(c goja.FunctionCall) goja.Value {
-		s.tree.RemoveAttr(s.node(c.This), c.Argument(0).String())
+		n := s.node(c.This)
+		name := c.Argument(0).String()
+		s.tree.RemoveAttr(n, name)
+		if strings.EqualFold(name, "src") {
+			s.imageChanged(n)
+		}
 		return goja.Undefined()
 	})
 	s.method(p, "appendChild", func(c goja.FunctionCall) goja.Value {
@@ -609,6 +625,9 @@ type Event struct {
 	// NoBubble limits dispatch to the target (focus, blur); the zero value
 	// bubbles to the document, as every other event here does.
 	NoBubble bool
+	// AllowDetached is reserved for host-delivered image load/error events.
+	AllowDetached bool
+	NonCancelable bool
 }
 
 // Dispatch runs listeners from the target up to the document (bubbling
@@ -623,7 +642,7 @@ func (s *Sandbox) Dispatch(ev Event) (prevented bool, err error) {
 	target := s.tree.Root()
 	switch {
 	case ev.Target != 0:
-		if target = s.tree.Node(ev.Target); target == nil || !s.tree.Attached(target) {
+		if target = s.tree.Node(ev.Target); target == nil || (!s.tree.Attached(target) && !ev.AllowDetached) {
 			return false, nil
 		}
 	case ev.Type == "keydown" || ev.Type == "keyup":
@@ -654,13 +673,17 @@ func (s *Sandbox) Dispatch(ev Event) (prevented bool, err error) {
 		stopped := false
 		e := vm.NewObject()
 		defineFrozen(e, "type", vm.ToValue(ev.Type))
+		defineFrozen(e, "bubbles", vm.ToValue(!ev.NoBubble))
+		defineFrozen(e, "cancelable", vm.ToValue(!ev.NonCancelable))
 		defineFrozen(e, "target", s.wrap(target))
 		defineFrozen(e, "key", vm.ToValue(ev.Key))
 		defineFrozen(e, "href", vm.ToValue(ev.Href))
 		_ = e.Set("defaultPrevented", false)
 		defineFrozen(e, "preventDefault", vm.ToValue(func(goja.FunctionCall) goja.Value {
-			prevented = true
-			_ = e.Set("defaultPrevented", true)
+			if !ev.NonCancelable {
+				prevented = true
+				_ = e.Set("defaultPrevented", true)
+			}
 			return goja.Undefined()
 		}))
 		defineFrozen(e, "stopPropagation", vm.ToValue(func(goja.FunctionCall) goja.Value { stopped = true; return goja.Undefined() }))

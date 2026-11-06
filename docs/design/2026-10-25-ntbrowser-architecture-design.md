@@ -1822,6 +1822,22 @@ func (t *Tree) Listeners(typ string) []*Node {
 
 ### 7b. Bindings (`jsvm/bindings.go`)
 
+2026-11-06 extension: `jsvm/images.go` implements the basic `HTMLImageElement`
+lifecycle for parsed, created and detached images. The `Image` factory and
+`HTMLImageElement` prototype expose the surface and limits documented in README.
+Image work is reconciled after VM tasks by `Sandbox.UpdateImages`; the loop
+checks the profile's subresources gate and joins `subres.Session.ImageStatus`.
+No socket, decoder or worker sees a JS value. Session completion wakes the owning
+loop; events and promise settlement re-enter the watchdog. Source revisions
+invalidate stale completions and pending decode promises. Pending images pin
+their wrappers, then return to the weak-wrapper lifetime model after completion.
+Pending decode promises are capped at `Config.MaxListeners`; image nodes use the
+existing DOM budget. Image count, pixel, concurrency and timeout budgets are
+shared with the renderer, including detached requests. Navigation closes the
+session and drops image state. Rejected over-count URLs are not retained in the
+session cache, keeping that cache bounded under repeated script assignments.
+
+
 Exposed surface — `document`: `getElementById`, `querySelector(All)` (tag, `#id`, `.class`, descendant chains), `createElement`, `createTextNode`, `body`, `documentElement`, `activeElement`, `title`, `add/removeEventListener`. Elements: `tagName`, `nodeType`, `isConnected`, `id`, `className`, `classList`, `textContent`/`innerText`, `parentElement`, `parentNode`, `firstChild`, `childNodes`, `children`, `get/set/has/removeAttribute`, `appendChild`, `insertBefore`, `removeChild`, `remove`, `querySelector(All)`, `add/removeEventListener`, `focus`, `blur`. Events: `type`, `target`, `currentTarget`, `key`, `href`, `preventDefault`, `stopPropagation`, `defaultPrevented`. `on*` attributes are inert. Lifetime rules are in the header comment of `bindings.go` and decision 12.
 
 `jsvm/bindings.go`

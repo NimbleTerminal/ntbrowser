@@ -76,9 +76,14 @@ type Sandbox struct {
 	disabled bool
 	running  bool
 
-	elemProto *goja.Object
-	nodeSym   *goja.Symbol // wrapper -> NodeID
-	listSym   *goja.Symbol // wrapper -> {type: [listeners]}
+	imageProto    *goja.Object
+	images        map[dom.NodeID]*imageState
+	imageDecodes  int
+	imageSequence uint64
+	imageHandlers *goja.Symbol
+	elemProto     *goja.Object
+	nodeSym       *goja.Symbol // wrapper -> NodeID
+	listSym       *goja.Symbol // wrapper -> {type: [listeners]}
 	// weakW holds every wrapper weakly; strong pins listener-bearing wrappers
 	// of attached nodes. See bindings.go for the lifetime rules.
 	weakW  map[dom.NodeID]weak.Pointer[goja.Object]
@@ -184,7 +189,13 @@ func New(cfg Config, tree *dom.Tree, host Host) *Sandbox {
 	s.nodeSym = goja.NewSymbol("ntbrowser.node")
 	s.listSym = goja.NewSymbol("ntbrowser.listeners")
 	s.elemProto = s.buildElementProto()
+	s.installImages()
 	s.installGlobals()
+	dom.Walk(tree.Root(), func(n *dom.Node) {
+		if n.Tag() == "img" {
+			s.imageChanged(n)
+		}
+	})
 	return s
 }
 
@@ -317,6 +328,8 @@ func (s *Sandbox) Disabled() bool { return s.disabled }
 func (s *Sandbox) Close() {
 	s.disabled = true
 	s.wd.disarm()
+	s.images = nil
+	s.imageProto = nil
 	s.vm = nil
 	s.wd.vm = nil
 	s.elemProto, s.docObj, s.promiseCtor, s.jsonParse = nil, nil, nil, nil

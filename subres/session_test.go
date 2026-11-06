@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"image"
 	"image/color"
 	"image/gif"
@@ -601,5 +602,25 @@ func TestPercentEncodedSVGDataURL(t *testing.T) {
 	im := s.Images()[key]
 	if im == nil || im.Bounds().Size() != image.Pt(6, 6) {
 		t.Fatalf("percent-encoded SVG data URL not decoded: %v", im)
+	}
+}
+
+func TestImageStatusDoesNotRetainOverBudgetKeys(t *testing.T) {
+	cfg := testCfg()
+	cfg.MaxImages = 1
+	ft := newFake(func(context.Context, netpolicy.Request) (netpolicy.Response, error) {
+		return netpolicy.Response{}, errors.New("failed")
+	})
+	s, r := newTestSession(t, cfg, ft)
+	s.ImageStatus("/first")
+	r.settle(t, func() bool { _, _, done := s.ImageStatus("/first"); return done })
+	for i := 0; i < 1000; i++ {
+		w, h, done := s.ImageStatus(fmt.Sprintf("/over/%d", i))
+		if !done || w != 0 || h != 0 {
+			t.Fatal("over-cap image accepted")
+		}
+	}
+	if len(s.images) != 1 || ft.total() != 1 {
+		t.Fatalf("unbounded rejected requests: entries=%d requests=%d", len(s.images), ft.total())
 	}
 }

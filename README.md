@@ -186,6 +186,26 @@ Decoding runs in a separate binary, `ntbrowser-media`, built beside `ntbrowser`.
 
 `Tab`/`Shift+Tab` move focus through links and form controls · `Enter` opens the focused link or presses the focused button · `Space` toggles a focused checkbox or radio · `⌫` or `⌥←` back · `⌥→` forward · `^R` reload · `/` search · `q` quit. Mouse clicks reach page elements; the page cannot swallow these keys.
 
+**JavaScript images.** `new Image(width, height)`, `document.createElement("img")`,
+and parsed `<img>` elements share an `HTMLImageElement` prototype. Supported:
+`src`, `alt`, `width`, `height`, `complete`, `naturalWidth`, `naturalHeight`,
+`currentSrc`, `decode()`, and `load`/`error` through `onload`/`onerror` or
+`addEventListener`. Detached images load too, through the **subresources** gate
+and the same bounded cache as rendered images. Events are asynchronous,
+non-bubbling and non-cancelable; replacement sources invalidate old completions.
+Failed or superseded decodes reject with an error named `EncodingError`.
+
+This is the basic image lifecycle from the
+[HTML standard](https://html.spec.whatwg.org/multipage/embedded-content.html#the-img-element),
+not full browser image compatibility. Responsive selection (`srcset`, `sizes`,
+`<picture>`), CORS/credential modes, referrer-policy overrides, lazy loading and
+fetch-priority hints are not implemented. Dimensions report the explicit HTML
+attribute or decoded size, not CSS layout measurements. Decoding uses the
+existing bounded still-image decoder (including its SVG sizing rules); failures
+are cached for the page, and `EncodingError` is not a `DOMException` instance.
+Inline HTML event-handler attributes remain inert. These APIs alone do not
+make Google Search compatible.
+
 **Forms.** Moving focus to a text field (Tab or a click), or `Enter` on it, opens an editor in the status line (a 6-row panel for a textarea); the page shows the value as you type. In the editor, `Enter` submits the form, `Tab`/`Shift+Tab` move on, `Esc` returns to browsing with focus kept, and `^C` still quits; `q` and `/` are text. A page's script can move focus but never starts typing for you. `Enter` on a select opens a chooser (`↑`/`↓`, `Enter` to set, `Space` toggles in a multiple select, `Esc` cancels). GET forms submit through the same navigation gate as links (`-nav confirm` asks "Submit form to <host>?"). POST forms, and GET forms with a filled-in password field, are not submitted; the status line says why.
 
 ## Security model
