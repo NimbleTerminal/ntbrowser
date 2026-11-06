@@ -44,3 +44,31 @@ func TestAttributeSelectorUnsupportedAndBounds(t *testing.T) {
 		}
 	}
 }
+
+func TestParsedScriptsRetainedWithinDOMBudgets(t *testing.T) {
+	tr := mustParse(t, `<script nonce="x">alert(1)</script><script type="application/json">{}</script>`, Limits{})
+	nodes, err := tr.Query(tr.Root(), "script[nonce]", true)
+	if err != nil || len(nodes) != 1 || !nodes[0].ParserScript() || TextContent(nodes[0]) != "alert(1)" {
+		t.Fatal("script DOM missing", err)
+	}
+	if strings.Contains(tr.Serialize(), "script") || strings.Contains(tr.Serialize(), "alert(1)") {
+		t.Fatal("script leaked to renderer")
+	}
+	if _, err := Parse(strings.NewReader(`<script>`+strings.Repeat("x", 2048)+`</script>`), Limits{TotalBytes: 1024}); err == nil {
+		t.Fatal("script bypassed DOM byte budget")
+	}
+}
+
+func TestLongParsedScriptUsesBoundedTextNodes(t *testing.T) {
+	source := strings.Repeat("/*π*/", 14000)
+	tr := mustParse(t, "<script>"+source+"</script>", Limits{})
+	if len(tr.Scripts) != 1 || tr.Scripts[0].Inline != source {
+		t.Fatal("script changed while splitting")
+	}
+	nodes, _ := tr.Query(tr.Root(), "script", true)
+	for _, child := range nodes[0].Children() {
+		if len(child.Text()) > DefaultLimits.TextBytes {
+			t.Fatal("oversize text node")
+		}
+	}
+}

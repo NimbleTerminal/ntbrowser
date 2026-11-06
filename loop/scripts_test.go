@@ -143,3 +143,14 @@ func TestDynamicAsyncBypassesOrderedWait(t *testing.T) {
 	release <- struct{}{}
 	waitLog(t, sink, "SLOW")
 }
+
+func TestParsedScriptInsertionAnchorBootstrap(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/javascript")
+		fmt.Fprint(w, `if(document.getElementsByTagName("script").length!==2)throw Error("script list missing");console.log("PASS:anchor-bootstrap")`)
+	}))
+	defer server.Close()
+	l, sink, f := scriptTestLoop(t, externalProfile, server.URL)
+	l.LoadPage(`<script nonce="fixture">var added=document.createElement("script");added.src="/bootstrap.js";var nonce=document.querySelector("script[nonce]");added.nonce=nonce.nonce;var first=document.getElementsByTagName("script")[0];first.parentNode.insertBefore(added,first);</script>`, server.URL+"/", f)
+	waitLog(t, sink, "PASS:anchor-bootstrap")
+}

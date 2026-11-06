@@ -71,6 +71,8 @@ const (
 )
 
 type Node struct {
+	parserScript bool
+
 	id       NodeID
 	kind     Kind
 	tag      string // lower-case; empty for text nodes
@@ -87,6 +89,8 @@ type Node struct {
 }
 
 type Attr struct{ Name, Value string }
+
+func (n *Node) ParserScript() bool { return n.parserScript }
 
 func (n *Node) ID() NodeID        { return n.id }
 func (n *Node) Kind() Kind        { return n.kind }
@@ -126,7 +130,7 @@ type Tree struct {
 	bytes    int // Σ nodeCost over live nodes; ≥ len(Serialize())
 	dirty    bool
 	title    string
-	// Scripts collected during Parse, in document order. They are stripped
+	// Scripts collected during Parse, in document order. They are omitted
 	// from the serialized HTML so nthtml never sees them (defense in depth;
 	// nthtml also never executes scripts).
 	Scripts []Script
@@ -162,8 +166,8 @@ func limits(l Limits) Limits {
 }
 
 // Parse builds a Tree from HTML using golang.org/x/net/html (already a
-// dependency of nthtml). Script bodies are collected into t.Scripts and are
-// not part of the tree. Input must already be bounded by the caller.
+// dependency of nthtml). Script bodies are collected into t.Scripts and
+// retained in the tree but omitted from rendering. Input must already be bounded by the caller.
 func Parse(r io.Reader, l Limits) (*Tree, error) {
 	t := &Tree{limits: limits(l), nodes: map[NodeID]*Node{}, detached: map[NodeID]*Node{}, styles: map[string]*injectedStyle{}}
 	t.root = t.newNode(Element, "#document")
@@ -185,6 +189,27 @@ func (t *Tree) ingest(parent *Node, src *html.Node, depth int) error {
 		case html.DoctypeNode, html.CommentNode:
 			continue
 		case html.TextNode:
+			// Parsed scripts may exceed the per-text-node cap. Keep exact text in
+			// bounded chunks, charging every chunk to the ordinary node/byte budgets.
+			if parent.tag == "script" && len(c.Data) > t.limits.TextBytes {
+				text := cleanText(c.Data)
+				for len(text) > 0 {
+					end := min(len(text), t.limits.TextBytes)
+					for end < len(text) && end > 0 && !utf8.RuneStart(text[end]) {
+						end--
+					}
+					if end == 0 {
+						return fmt.Errorf("%w: script text rune exceeds text limit", ErrLimit)
+					}
+					n, err := t.NewText(text[:end])
+					if err != nil {
+						return err
+					}
+					t.attach(parent, n)
+					text = text[end:]
+				}
+				continue
+			}
 			if strings.TrimSpace(c.Data) == "" && parent.tag != "pre" {
 				if parent.tag == "#document" || parent.tag == "html" || parent.tag == "head" {
 					continue
@@ -197,23 +222,6 @@ func (t *Tree) ingest(parent *Node, src *html.Node, depth int) error {
 			t.attach(parent, n)
 		case html.ElementNode:
 			switch c.DataAtom {
-			case atom.Script:
-				s := Script{}
-				for _, a := range c.Attr {
-					if strings.EqualFold(a.Key, "src") {
-						s.Src = a.Val
-					}
-					if strings.EqualFold(a.Key, "type") && !isJSType(a.Val) {
-						s.Src, s.Inline = "", "" // JSON/template blocks are not code
-						goto skip
-					}
-				}
-				if s.Src == "" && c.FirstChild != nil {
-					s.Inline = c.FirstChild.Data
-				}
-				t.Scripts = append(t.Scripts, s)
-			skip:
-				continue
 			case atom.Title:
 				if c.FirstChild != nil {
 					t.title = c.FirstChild.Data
@@ -246,6 +254,18 @@ func (t *Tree) ingest(parent *Node, src *html.Node, depth int) error {
 			t.attach(parent, n)
 			if err := t.ingest(n, c, depth+1); err != nil {
 				return err
+			}
+			if n.tag == "script" {
+				n.parserScript = true
+				typ, _ := n.Attr("type")
+				if isJSType(typ) {
+					src, _ := n.Attr("src")
+					sc := Script{Src: src}
+					if src == "" {
+						sc.Inline = TextContent(n)
+					}
+					t.Scripts = append(t.Scripts, sc)
+				}
 			}
 		}
 	}

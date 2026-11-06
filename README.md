@@ -530,8 +530,9 @@ metadata is rejected rather than ignored, and reflected `crossOrigin`,
 `referrerPolicy` and `nonce` do not grant additional authority. There is no CSP
 implementation. Dynamic scripts do not delay `DOMContentLoaded`; `defer` has
 no extra scheduling effect on them. `document.currentScript` identifies a
-running dynamic script; parser scripts are still extracted from the tree and
-report null. Script elements are omitted from rendered HTML.
+running dynamic script; parser-script execution still reports null. Parsed
+script nodes remain discoverable but never replay through insertion or mutation.
+All script elements are omitted from rendered HTML.
 
 DOM queries support attribute-presence selectors such as `[nonce]`,
 `script[nonce]`, `.item[data-ready]`, and descendant combinations. Empty-valued
@@ -540,3 +541,14 @@ are bounded to 4096 bytes, eight descendant parts and eight presence tests per
 part. Attribute value operators, namespaces, escapes and general compound CSS
 selectors remain unsupported. This follows the presence-selector semantics in
 [Selectors Level 4](https://www.w3.org/TR/selectors-4/#attribute-representation).
+
+`document.getElementsByTagName()` and `element.getElementsByTagName()` return
+live `HTMLCollection` objects: `length`, indexed access, `item()`, `namedItem()`,
+and iteration reflect current descendants in document order. `*` matches all
+elements; an element query excludes itself. Collections retain detached roots
+while reachable, and lookups stay within the existing bounded DOM. This bridge
+uses HTML case-insensitive tag matching; namespace-sensitive SVG/XML matching
+and arbitrary collection expandos are not implemented. Parsed scripts (including
+data blocks) now count against DOM node/text budgets and are available for nonce
+lookup and insertion anchors. Their execution plan remains separate from the
+rendered tree.

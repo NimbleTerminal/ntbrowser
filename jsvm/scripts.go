@@ -138,7 +138,7 @@ func (s *Sandbox) installScripts() {
 // prepareScript is called at insertion/connected src or text mutation, never by
 // the renderer. Started state prevents moves, removals and src edits replaying it.
 func (s *Sandbox) prepareScript(n *dom.Node) {
-	if n == nil || n.Tag() != "script" || !s.tree.Attached(n) || !s.cfg.DynamicScripts || s.disabled {
+	if n == nil || n.Tag() != "script" || n.ParserScript() || !s.tree.Attached(n) || !s.cfg.DynamicScripts || s.disabled {
 		return
 	}
 	st := s.scriptState(n)

@@ -5575,8 +5575,11 @@ non-preemptibility and Go-side work retain the existing soft-budget caveats.
 ### Dynamic script adoption (2026-11-06)
 
 DOM-created classic script elements are now supported under the profiles design’s
-dynamic classic-script extension. Parsed scripts remain extracted; created
-script nodes remain in the mutable tree but are omitted from serialization.
+dynamic classic-script extension. Parsed and created script nodes remain in the mutable tree but are omitted
+from serialization. Parsed executable sources retain a separate execution plan;
+parsed nodes never replay through dynamic insertion or mutation. Their text and
+nodes count against the existing DOM budgets. Live tag collections retain their
+root wrapper and recompute matches from the bounded tree on access.
 Inserted inline source requires dynamic-code and shares the active watchdog;
 external requests require scripts=external and the existing page fetch policy.
 See the profiles document for lifecycle, caps, MIME restrictions and limitations.

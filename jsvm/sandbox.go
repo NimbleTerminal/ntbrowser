@@ -79,6 +79,8 @@ type FetchResponse struct {
 }
 
 type Sandbox struct {
+	collectionProto *goja.Object
+
 	performanceOrigin float64
 	performanceNow    func() float64
 	vm                *goja.Runtime
@@ -208,6 +210,7 @@ func New(cfg Config, tree *dom.Tree, host Host) *Sandbox {
 	s.installAnchors()
 	s.installImages()
 	s.installScripts()
+	s.installCollections()
 	s.installGlobals()
 	s.installStorage()
 	s.installPerformance()
@@ -344,6 +347,7 @@ func (s *Sandbox) Close() {
 	s.wd.disarm()
 	s.images = nil
 	s.scriptProto, s.scriptHandlers, s.scripts = nil, nil, nil
+	s.collectionProto = nil
 	s.cfg.LoadScript = nil
 	s.imageProto = nil
 	s.anchorProto = nil

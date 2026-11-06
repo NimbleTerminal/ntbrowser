@@ -317,6 +317,12 @@ func (s *Sandbox) buildElementProto() *goja.Object {
 		return s.wrap(child)
 	})
 	s.method(p, "remove", func(c goja.FunctionCall) goja.Value { s.detach(s.node(c.This)); return goja.Undefined() })
+	s.method(p, "getElementsByTagName", func(c goja.FunctionCall) goja.Value {
+		if len(c.Arguments) == 0 {
+			panic(vm.NewTypeError("missing tag name"))
+		}
+		return s.tagCollection(c.This, s.node(c.This), c.Argument(0).String())
+	})
 	s.method(p, "querySelector", func(c goja.FunctionCall) goja.Value { return s.query(s.node(c.This), c.Argument(0).String(), false) })
 	s.method(p, "querySelectorAll", func(c goja.FunctionCall) goja.Value { return s.query(s.node(c.This), c.Argument(0).String(), true) })
 	s.method(p, "addEventListener", func(c goja.FunctionCall) goja.Value {
@@ -357,7 +363,7 @@ func (s *Sandbox) insert(parent, child, ref *dom.Node) {
 }
 
 func (s *Sandbox) detach(n *dom.Node) {
-	if !s.tree.Attached(n) || n.Parent() == nil {
+	if n.Parent() == nil {
 		return
 	}
 	s.onDetach(n)
@@ -481,6 +487,15 @@ func (s *Sandbox) documentObject() *goja.Object {
 	// the root node, so it gets the same node symbol.
 	_ = d.DefineDataPropertySymbol(s.nodeSym, vm.ToValue(int(s.tree.Root().ID())), goja.FLAG_FALSE, goja.FLAG_FALSE, goja.FLAG_FALSE)
 	s.strong[s.tree.Root().ID()] = d
+	s.method(d, "getElementsByTagName", func(c goja.FunctionCall) goja.Value {
+		if c.This != d {
+			panic(vm.NewTypeError("not a Document"))
+		}
+		if len(c.Arguments) == 0 {
+			panic(vm.NewTypeError("missing tag name"))
+		}
+		return s.tagCollection(d, s.tree.Root(), c.Argument(0).String())
+	})
 	s.method(d, "getElementById", func(c goja.FunctionCall) goja.Value { return s.wrap(s.tree.ByID(c.Argument(0).String())) })
 	s.method(d, "querySelector", func(c goja.FunctionCall) goja.Value { return s.query(s.tree.Root(), c.Argument(0).String(), false) })
 	s.method(d, "querySelectorAll", func(c goja.FunctionCall) goja.Value { return s.query(s.tree.Root(), c.Argument(0).String(), true) })
