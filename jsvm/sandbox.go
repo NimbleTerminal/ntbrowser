@@ -31,6 +31,7 @@ import (
 
 // Config bounds one page's scripting. Zero fields use the defaults below.
 type Config struct {
+	MaxCodecBytes  int                 // text codec input/output cap per call (default 2 MiB)
 	DynamicScripts bool                // host-authorized classic script insertion
 	LoadScript     func(ScriptRequest) // VM-thread admission; completion through CompleteScript
 
@@ -198,6 +199,9 @@ func New(cfg Config, tree *dom.Tree, host Host) *Sandbox {
 	if cfg.MaxCallStack <= 0 {
 		cfg.MaxCallStack = 512
 	}
+	if cfg.MaxCodecBytes <= 0 {
+		cfg.MaxCodecBytes = defaultCodecLimit
+	}
 	if cfg.MaxTimers <= 0 {
 		cfg.MaxTimers = 256
 	}
@@ -227,6 +231,7 @@ func New(cfg Config, tree *dom.Tree, host Host) *Sandbox {
 	s.installGlobals()
 	s.installStorage()
 	s.installPerformance()
+	s.installEncoding()
 	dom.Walk(tree.Root(), func(n *dom.Node) {
 		if n.Tag() == "img" {
 			s.imageChanged(n)

@@ -673,3 +673,23 @@ collection, and all pending timeouts are cleared on page close. This follows the
 for the supported tree. Shadow DOM retargeting, inline handler attributes,
 full specialized/legacy event interfaces, and new browser event producers
 (including a full window-load lifecycle) remain outside this implementation.
+
+### Text encoding
+
+`TextEncoder` provides UTF-8 `encode()` and `encodeInto()`, with standard
+replacement of lone UTF-16 surrogates and partial writes that never split a
+Unicode scalar. `TextDecoder` supports UTF-8, UTF-16LE and UTF-16BE (including
+their standard labels), `fatal`, `ignoreBOM`, and streaming `decode()` calls.
+It accepts ArrayBuffers and byte ranges from typed arrays/DataViews; detached
+buffers and spoofed views are rejected. Legacy character encodings and
+TextEncoderStream/TextDecoderStream are not implemented. Unsupported labels
+throw RangeError, rather than silently decoding as UTF-8.
+
+These follow the supported portions of the
+[Encoding Standard](https://encoding.spec.whatwg.org/#api) and grant no network,
+filesystem or storage access. `jsvm.Config.MaxCodecBytes` defaults to 2 MiB:
+encoder input is capped in UTF-16 code units, decoder input (including pending
+stream bytes) and conversion output in bytes. Oversized calls throw RangeError;
+`encodeInto` preflights the write so a limit failure leaves its destination
+unchanged. Private decoder state is bounded by the same cap and reclaimed with
+the decoder. The existing per-entry watchdog and heap limit still apply.

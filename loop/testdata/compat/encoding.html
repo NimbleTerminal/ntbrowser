@@ -1,0 +1,23 @@
+<!doctype html>
+<!-- Copyright (c) 2026 Neomantra Corp. All rights reserved. -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only WITH LicenseRef-NimbleTerminal-Linking-Exception OR LicenseRef-Neomantra-Commercial -->
+<html><head><title>Text codec compatibility</title></head><body>
+<p id="result">waiting</p>
+<script>
+window.addEventListener('DOMContentLoaded', function () {
+  const encoder = new TextEncoder();
+  const bytes = encoder.encode('hello 😀');
+  const decoder = new TextDecoder('utf-8', {fatal: true});
+  const prefix = decoder.decode(bytes.subarray(0, 8), {stream: true});
+  const text = prefix + decoder.decode(bytes.subarray(8));
+  if (text !== 'hello 😀') throw Error('streamed text mismatch');
+  const target = new EventTarget();
+  target.addEventListener('decoded', function (event) {
+    if (event.detail !== text || event.isTrusted) throw Error('event payload');
+    document.getElementById('result').textContent = 'compat-ready';
+    console.log('PASS:encoding');
+  }, {once: true});
+  target.dispatchEvent(new CustomEvent('decoded', {detail: text}));
+}, {once: true});
+</script>
+</body></html>

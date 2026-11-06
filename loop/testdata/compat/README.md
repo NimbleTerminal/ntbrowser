@@ -32,3 +32,7 @@ in-process HTTP server that completes the second download first. Related tests
 cover async progress past an ordered wait, script/profile and origin denials,
 MIME refusal, and cancellation when navigating away. Run them with
 `GOWORK=off CGO_ENABLED=0 go test ./loop -run 'TestDynamicScript|TestDynamicAsync'`.
+
+`encoding.html` exercises window DOMContentLoaded, UTF-8 encode/streamed decode,
+and CustomEvent delivery through the real loop with both closed and enabled
+optional permissions. It makes no network requests.

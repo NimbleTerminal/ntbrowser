@@ -1857,6 +1857,15 @@ session and drops image state. Rejected over-count URLs are not retained in the
 session cache, keeping that cache bounded under repeated script assignments.
 
 
+**Text codecs (2026-11-06).** `jsvm/encoding.go` adds local UTF-8 encoding and
+UTF-8/UTF-16 decoding with streaming, fatal errors and BOM handling. No host gate
+is opened. Captured intrinsic buffer getters validate actual typed-array/DataView
+ranges and reject detached buffers; page-controlled properties cannot supply
+bounds. Decoder state uses the private VM WeakMap. MaxCodecBytes (default 2 MiB)
+bounds input code units/bytes, pending decoder bytes and per-call output before
+native loops/allocations grow unbounded. encodeInto checks its write before
+mutation. Legacy encodings and TransformStream codec interfaces are not exposed.
+
 **Event API revision (2026-11-06).** The event implementation in `jsvm/events.go`,
 `event_objects.go`, `event_special.go` and `event_abort.go` supersedes the minimal
 bubbling implementation illustrated below. Window, document, nodes and standalone

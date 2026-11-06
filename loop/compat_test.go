@@ -87,6 +87,7 @@ func TestCompatibilityFixtures(t *testing.T) {
 					}
 				}
 			}
+			load("encoding", "https://compat.test/encoding.html", "encoding", false, true)
 			if !enabled {
 				load("closed", "https://compat.test/", "closed", false, false)
 				return
