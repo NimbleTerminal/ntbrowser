@@ -1,6 +1,34 @@
 # CSS-preserving viewport rendering
 
-Status: next upstream work item; semantic `-chunked` mode ships independently. Date: 2026-11-05.
+Status: upstream implementation committed on nthtml branch
+`feat/host-painted-viewport` at `24f51fa`; not yet published or adopted by
+ntbrowser. Semantic `-chunked` mode ships independently. Date: 2026-11-05.
+
+## Implementation checkpoint
+
+The upstream branch adds `ModelOptions.HostPainted`, `PlanPaint`, atomic
+`SetPaintedResult`, cancellable `PaintRequest`/`PaintReady` messages, band-local
+search/selection/focus overlays, and global viewport/hit-test mapping. A reusable
+`document.Painter` provides bounded font caches and a y-bucket operation index.
+The integration contract and compiled example live in nthtml's
+`docs/host-painted.md` and `model_paint_example_test.go`.
+
+Native tests, vet, builds, and the WASM compile check passed. Regression coverage
+includes stale completions, error recovery, mode changes, source focus, fractional
+scales, pixel budgets, 64x zoom, Kitty zlib/StableID behavior, and equivalence to
+`Result.Paint` for styled content. On one Apple M5 Max sample, a warm 400×200 band
+on a 1,100-paragraph layout took 0.491 ms versus 0.609 ms uncached, with 174 versus
+248 allocations. Cold indexing took 0.683 ms. Production CJK font throughput
+remains to be measured; synthetic host-fallback correctness is covered.
+
+Host-painted mode supports width fit. Paint scale is clamped while logical zoom
+is retained; the transport fills the planned grid to absorb raster rounding
+without scale-dependent letterboxes. Existing viewer callers retain their API
+and behavior. These choices are documented in the upstream integration contract.
+
+Next: publish the upstream API, then implement the ntbrowser adoption checklist
+below using that published dependency. The default CSS renderer still uses
+`NoImage: false`; this checkpoint does not supersede that current requirement.
 
 ## Problem
 
