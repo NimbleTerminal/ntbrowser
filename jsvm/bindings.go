@@ -6,7 +6,6 @@ package jsvm
 import (
 	"errors"
 	"runtime"
-	"strconv"
 	"strings"
 	"time"
 	"weak"
@@ -17,8 +16,8 @@ import (
 )
 
 // Element wrappers are ordinary JS objects whose prototype carries the
-// methods. The only state on a wrapper is a symbol-keyed integer NodeID and
-// a symbol-keyed bag of event listeners. Every method resolves the ID through
+// methods. A wrapper carries a symbol-keyed integer NodeID; event state lives
+// in a private WeakMap, inaccessible to page code. Every method resolves the ID through
 // the Tree on each call, so no Go pointer is ever reachable from JavaScript
 // (ToValue is never called on a *dom.Node or any struct).
 //
@@ -42,6 +41,9 @@ func (s *Sandbox) wrap(n *dom.Node) goja.Value {
 	if n == nil {
 		return goja.Null()
 	}
+	if n == s.tree.Root() && s.docObj != nil {
+		return s.docObj
+	}
 	if w := s.liveWrapper(n.ID()); w != nil {
 		return w
 	}
@@ -57,6 +59,7 @@ func (s *Sandbox) wrap(n *dom.Node) goja.Value {
 		_ = w.SetPrototype(s.scriptProto)
 	}
 	_ = w.DefineDataPropertySymbol(s.nodeSym, s.vm.ToValue(int(n.ID())), goja.FLAG_FALSE, goja.FLAG_FALSE, goja.FLAG_FALSE)
+	s.registerEventTarget(w, n.ID())
 	s.weakW[n.ID()] = weak.Make(w)
 	// The cleanup closure must not reference w (it would never be collected).
 	// It references the sandbox, which holds w only weakly.
@@ -95,8 +98,8 @@ func (s *Sandbox) reap() {
 	for _, id := range ids {
 		if wp, ok := s.weakW[id]; ok && wp.Value() == nil {
 			delete(s.weakW, id)
+			s.forgetCounts(id)
 		}
-		s.forgetCounts(id)
 	}
 	for _, root := range s.tree.DetachedRoots() {
 		if !s.anyLiveWrapper(root) {
@@ -325,14 +328,8 @@ func (s *Sandbox) buildElementProto() *goja.Object {
 	})
 	s.method(p, "querySelector", func(c goja.FunctionCall) goja.Value { return s.query(s.node(c.This), c.Argument(0).String(), false) })
 	s.method(p, "querySelectorAll", func(c goja.FunctionCall) goja.Value { return s.query(s.node(c.This), c.Argument(0).String(), true) })
-	s.method(p, "addEventListener", func(c goja.FunctionCall) goja.Value {
-		s.addListener(c.This.(*goja.Object), s.node(c.This), c.Argument(0).String(), c.Argument(1))
-		return goja.Undefined()
-	})
-	s.method(p, "removeEventListener", func(c goja.FunctionCall) goja.Value {
-		s.removeListener(c.This.(*goja.Object), s.node(c.This), c.Argument(0).String(), c.Argument(1))
-		return goja.Undefined()
-	})
+	s.bindEventTarget(p)
+
 	s.method(p, "focus", func(c goja.FunctionCall) goja.Value {
 		if n := s.node(c.This); dom.Focusable(n) && s.tree.Attached(n) {
 			_ = s.SetFocus(n.ID()) // listener errors are logged inside
@@ -346,6 +343,8 @@ func (s *Sandbox) buildElementProto() *goja.Object {
 		return goja.Undefined()
 	})
 	s.installFormBindings(p)
+	_ = p.SetPrototype(s.eventTargetProto)
+	s.bindEventHandlers(p)
 	return p
 }
 
@@ -483,10 +482,18 @@ func (s *Sandbox) documentObject() *goja.Object {
 	vm := s.vm
 	d := vm.NewObject()
 	s.docObj = d
+	_ = d.SetPrototype(s.eventTargetProto)
+	s.method(d, "createEvent", func(c goja.FunctionCall) goja.Value {
+		if len(c.Arguments) == 0 {
+			panic(vm.NewTypeError("missing event interface"))
+		}
+		return s.createLegacyEvent(c.Argument(0).String())
+	})
 	// The document object participates in event dispatch like a wrapper for
 	// the root node, so it gets the same node symbol.
 	_ = d.DefineDataPropertySymbol(s.nodeSym, vm.ToValue(int(s.tree.Root().ID())), goja.FLAG_FALSE, goja.FLAG_FALSE, goja.FLAG_FALSE)
 	s.strong[s.tree.Root().ID()] = d
+	s.weakW[s.tree.Root().ID()] = weak.Make(d)
 	s.method(d, "getElementsByTagName", func(c goja.FunctionCall) goja.Value {
 		if c.This != d {
 			panic(vm.NewTypeError("not a Document"))
@@ -509,14 +516,10 @@ func (s *Sandbox) documentObject() *goja.Object {
 		s.underPressure(func() (err error) { n, err = s.tree.NewText(c.Argument(0).String()); return err })
 		return s.wrap(n)
 	})
-	s.method(d, "addEventListener", func(c goja.FunctionCall) goja.Value {
-		s.addListener(d, s.tree.Root(), c.Argument(0).String(), c.Argument(1))
-		return goja.Undefined()
-	})
-	s.method(d, "removeEventListener", func(c goja.FunctionCall) goja.Value {
-		s.removeListener(d, s.tree.Root(), c.Argument(0).String(), c.Argument(1))
-		return goja.Undefined()
-	})
+	s.registerEventTarget(d, s.tree.Root().ID())
+	s.bindEventTarget(d)
+	s.bindEventHandlers(d)
+
 	s.accessor(d, "currentScript", func(goja.Value) goja.Value { return s.wrap(s.tree.Node(s.currentScript)) }, nil)
 	s.accessor(d, "head", func(goja.Value) goja.Value { return s.query(s.tree.Root(), "head", false) }, nil)
 	s.accessor(d, "body", func(goja.Value) goja.Value { return s.wrap(s.tree.Body()) }, nil)
@@ -549,218 +552,7 @@ func (s *Sandbox) documentObject() *goja.Object {
 	return d
 }
 
-// ---- events ----
-//
-// Listeners live on the wrapper under a hidden symbol: { type: [fn, ...] }.
-// Only integer counts live in Go (listenCount), so a dropped wrapper takes
-// its callbacks with it and the counts are reconciled by reap.
-
-func (s *Sandbox) listenerList(w *goja.Object, typ string, create bool) *goja.Object {
-	bagV := w.GetSymbol(s.listSym)
-	bag, _ := bagV.(*goja.Object)
-	if bag == nil {
-		if !create {
-			return nil
-		}
-		bag = s.vm.NewObject()
-		_ = w.DefineDataPropertySymbol(s.listSym, bag, goja.FLAG_FALSE, goja.FLAG_FALSE, goja.FLAG_FALSE)
-	}
-	arr, _ := bag.Get(typ).(*goja.Object)
-	if arr == nil {
-		if !create {
-			return nil
-		}
-		arr = s.vm.NewArray()
-		_ = bag.Set(typ, arr)
-	}
-	return arr
-}
-
-func arrayValues(arr *goja.Object) []goja.Value {
-	if arr == nil {
-		return nil
-	}
-	n := int(arr.Get("length").ToInteger())
-	out := make([]goja.Value, 0, n)
-	for i := 0; i < n; i++ {
-		out = append(out, arr.Get(strconv.Itoa(i)))
-	}
-	return out
-}
-
-func (s *Sandbox) addListener(w *goja.Object, n *dom.Node, typ string, fn goja.Value) {
-	if _, ok := goja.AssertFunction(fn); !ok {
-		return // browsers ignore non-callable listeners
-	}
-	if s.nListen >= s.cfg.MaxListeners {
-		s.collectNow()
-		if s.nListen >= s.cfg.MaxListeners {
-			panic(jsError(s.vm, errors.New("too many event listeners")))
-		}
-	}
-	arr := s.listenerList(w, typ, true)
-	vals := arrayValues(arr)
-	for _, existing := range vals {
-		if existing.StrictEquals(fn) {
-			return
-		}
-	}
-	_ = arr.Set(strconv.Itoa(len(vals)), fn)
-	s.nListen++
-	if s.listenCount[n.ID()] == nil {
-		s.listenCount[n.ID()] = map[string]int{}
-	}
-	s.listenCount[n.ID()][typ]++
-	s.typeCount[typ]++
-	s.tree.AddListener(n, typ)
-	if s.tree.Attached(n) {
-		s.strong[n.ID()] = w
-	}
-}
-
-func (s *Sandbox) removeListener(w *goja.Object, n *dom.Node, typ string, fn goja.Value) {
-	arr := s.listenerList(w, typ, false)
-	if arr == nil {
-		return
-	}
-	vals := arrayValues(arr)
-	kept := s.vm.NewArray()
-	removed := false
-	for _, v := range vals {
-		if !removed && v.StrictEquals(fn) {
-			removed = true
-			continue
-		}
-		_ = kept.Set(strconv.Itoa(int(kept.Get("length").ToInteger())), v)
-	}
-	if !removed {
-		return
-	}
-	_ = w.GetSymbol(s.listSym).(*goja.Object).Set(typ, kept)
-	s.nListen--
-	s.typeCount[typ]--
-	if m := s.listenCount[n.ID()]; m != nil {
-		m[typ]--
-		if m[typ] <= 0 {
-			delete(m, typ)
-			s.tree.RemoveListener(n, typ)
-		}
-		if len(m) == 0 {
-			delete(s.listenCount, n.ID())
-			delete(s.strong, n.ID())
-		}
-	}
-}
-
-// forgetCounts reconciles the Go-side counts for a node whose wrapper (and
-// with it, its callbacks) is gone or whose subtree is being released.
-func (s *Sandbox) forgetCounts(id dom.NodeID) {
-	m := s.listenCount[id]
-	for typ, c := range m {
-		s.nListen -= c
-		s.typeCount[typ] -= c
-	}
-	delete(s.listenCount, id)
-	delete(s.strong, id)
-}
-
-// Event is what the loop delivers; it is Go data until Dispatch builds the
-// JS event object.
-type Event struct {
-	Type   string
-	Target dom.NodeID // 0 targets the focused element (keyboard) or the document
-	Key    string     // keydown: DOM KeyboardEvent.key where known
-	Href   string     // click: the resolved href of the target or its nearest <a>, if any
-	// NoBubble limits dispatch to the target (focus, blur); the zero value
-	// bubbles to the document, as every other event here does.
-	NoBubble bool
-	// AllowDetached is reserved for host-delivered image load/error events.
-	AllowDetached bool
-	NonCancelable bool
-}
-
-// Dispatch runs listeners from the target up to the document (bubbling
-// only). It returns whether the page called preventDefault. All listener
-// calls happen inside one watchdog slice. Called from inside running script
-// (element.focus()), it runs the listeners in the current slice; their
-// exceptions are logged rather than thrown into the caller, as in browsers.
-func (s *Sandbox) Dispatch(ev Event) (prevented bool, err error) {
-	if s.disabled {
-		return false, ErrDisabled // nothing can prevent anything any more
-	}
-	target := s.tree.Root()
-	switch {
-	case ev.Target != 0:
-		if target = s.tree.Node(ev.Target); target == nil || (!s.tree.Attached(target) && !ev.AllowDetached) {
-			return false, nil
-		}
-	case ev.Type == "keydown" || ev.Type == "keyup":
-		if n := s.tree.Node(s.active); n != nil && s.tree.Attached(n) {
-			target = n
-		}
-	}
-	// Collect the path first; listeners may mutate the tree while running.
-	type hop struct {
-		this *goja.Object
-		fns  []goja.Value
-	}
-	var path []hop
-	for n := target; n != nil; n = n.Parent() {
-		if w := s.liveWrapper(n.ID()); w != nil {
-			if fns := arrayValues(s.listenerList(w, ev.Type, false)); len(fns) > 0 {
-				path = append(path, hop{w, fns})
-			}
-		}
-		if ev.NoBubble {
-			break
-		}
-	}
-	if len(path) == 0 {
-		return false, nil
-	}
-	run := func(vm *goja.Runtime) error {
-		stopped := false
-		e := vm.NewObject()
-		defineFrozen(e, "type", vm.ToValue(ev.Type))
-		defineFrozen(e, "bubbles", vm.ToValue(!ev.NoBubble))
-		defineFrozen(e, "cancelable", vm.ToValue(!ev.NonCancelable))
-		defineFrozen(e, "target", s.wrap(target))
-		defineFrozen(e, "key", vm.ToValue(ev.Key))
-		defineFrozen(e, "href", vm.ToValue(ev.Href))
-		_ = e.Set("defaultPrevented", false)
-		defineFrozen(e, "preventDefault", vm.ToValue(func(goja.FunctionCall) goja.Value {
-			if !ev.NonCancelable {
-				prevented = true
-				_ = e.Set("defaultPrevented", true)
-			}
-			return goja.Undefined()
-		}))
-		defineFrozen(e, "stopPropagation", vm.ToValue(func(goja.FunctionCall) goja.Value { stopped = true; return goja.Undefined() }))
-		for _, h := range path {
-			if stopped {
-				break
-			}
-			_ = e.Set("currentTarget", h.this)
-			for _, f := range h.fns {
-				call, _ := goja.AssertFunction(f)
-				if _, err := call(h.this, e); err != nil {
-					return err // first throwing listener aborts; browsers report and continue
-				}
-			}
-		}
-		return nil
-	}
-	if s.running {
-		if err := run(s.vm); err != nil {
-			s.host.Log("error", "uncaught in "+ev.Type+" listener: "+safeString(s.vm.ToValue(err.Error())))
-		}
-		return prevented, nil
-	}
-	err = s.Run(run)
-	return prevented, err
-}
-
-// HasListeners lets the loop skip the VM entirely for events nobody wants.
+// HasListeners lets the loop skip input delivery when no target listens.
 func (s *Sandbox) HasListeners(typ string) bool { return s.typeCount[typ] > 0 }
 
 // Active reports the focused element (0 = none).

@@ -634,3 +634,42 @@ pending requests; stale or duplicate decisions have no authority. Private-networ
 mixed-content, SRI, CORS and response limits remain enforced after approval.
 Denied requests report the initiating origin, script URL and reason in the status
 line and diagnostic capture.
+
+### DOM event listening
+
+`window`, `document`, DOM nodes and `new EventTarget()` share
+`addEventListener`, `removeEventListener` and `dispatchEvent`. The implementation
+supports capture/target/bubble phases, function and `handleEvent` object
+listeners, capture-sensitive identity, `once`, `passive`, and `{signal}` removal.
+Dispatch snapshots the path and each invocation's listeners; removal takes
+immediate effect, and a throwing listener reports an error without skipping
+other listeners. Window/document/body wheel and touch listeners default to
+passive unless explicitly overridden.
+
+`Event` and `CustomEvent` provide cancellation, both propagation-stop methods,
+`composedPath`, phase constants, `isTrusted`, and legacy `initEvent` /
+`initCustomEvent` through `document.createEvent`. Common `on*` function properties
+share listener ordering and limits. Listener exceptions reach window `error`
+listeners and `onerror`; cancellation suppresses their default diagnostic.
+`UIEvent`, `MouseEvent`, `KeyboardEvent`, `FocusEvent`, `InputEvent`, `MessageEvent`,
+`ErrorEvent` and `ProgressEvent` constructors expose their basic initialization
+fields. Constructors alone do not produce device, messaging or lifecycle events.
+
+`AbortController` / `AbortSignal` support `abort(reason)`, `aborted`, `reason`,
+`throwIfAborted`, `onabort`, and static `abort`, `any`, and `timeout` helpers.
+Timeouts consume the existing host timer budget and accept finite nonnegative
+millisecond durations representable by Go's timer duration. Signals currently
+cancel **event listeners**; they do not add cancellation to `fetch` or image loads.
+
+Event state and callbacks are private to the VM. Synthetic dispatch stays
+untrusted and never invokes host navigation, form submission, or reader
+activation. It adds no profile authority. Listener and standalone target counts
+are bounded by `MaxListeners` (1024 each by default, including the window target);
+abort composition has the same source cap, nested dispatch is limited to 64,
+and callbacks retain the normal watchdog, heap and clock-resolution limits.
+Abandoned targets are weakly held; observed timeout/dependent signals stay
+alive until abort or listener removal. Unobserved timeouts are cleared on
+collection, and all pending timeouts are cleared on page close. This follows the [DOM event model](https://dom.spec.whatwg.org/#events)
+for the supported tree. Shadow DOM retargeting, inline handler attributes,
+full specialized/legacy event interfaces, and new browser event producers
+(including a full window-load lifecycle) remain outside this implementation.

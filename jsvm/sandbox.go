@@ -79,6 +79,22 @@ type FetchResponse struct {
 }
 
 type Sandbox struct {
+	signalPins             map[dom.NodeID]*goja.Object
+	specialEventProtos     map[string]*goja.Object
+	specialEventDefaults   map[*goja.Object]map[string]any
+	domExceptionProto      *goja.Object
+	eventTargetProto       *goja.Object
+	eventProto             *goja.Object
+	customEventProto       *goja.Object
+	signalProto            *goja.Object
+	eventPrivate           *goja.Object
+	privateGet, privateSet goja.Callable
+	extraTargetNext        dom.NodeID
+	extraTargets           map[dom.NodeID]bool
+	abortTimers            map[dom.NodeID]int
+	eventDepth             int
+	eventErrorReporting    bool
+
 	collectionProto *goja.Object
 
 	performanceOrigin float64
@@ -91,21 +107,18 @@ type Sandbox struct {
 	disabled          bool
 	running           bool
 
-	anchorProto    *goja.Object
-	relListSym     *goja.Symbol
-	scriptProto    *goja.Object
-	scripts        map[dom.NodeID]*scriptState
-	scriptCount    int
-	scriptHandlers *goja.Symbol
-	currentScript  dom.NodeID
-	imageProto     *goja.Object
-	images         map[dom.NodeID]*imageState
-	imageDecodes   int
-	imageSequence  uint64
-	imageHandlers  *goja.Symbol
-	elemProto      *goja.Object
-	nodeSym        *goja.Symbol // wrapper -> NodeID
-	listSym        *goja.Symbol // wrapper -> {type: [listeners]}
+	anchorProto   *goja.Object
+	relListSym    *goja.Symbol
+	scriptProto   *goja.Object
+	scripts       map[dom.NodeID]*scriptState
+	scriptCount   int
+	currentScript dom.NodeID
+	imageProto    *goja.Object
+	images        map[dom.NodeID]*imageState
+	imageDecodes  int
+	imageSequence uint64
+	elemProto     *goja.Object
+	nodeSym       *goja.Symbol // wrapper -> NodeID
 	// weakW holds every wrapper weakly; strong pins listener-bearing wrappers
 	// of attached nodes. See bindings.go for the lifetime rules.
 	weakW  map[dom.NodeID]weak.Pointer[goja.Object]
@@ -205,7 +218,7 @@ func New(cfg Config, tree *dom.Tree, host Host) *Sandbox {
 	s.wd.vm = s.vm
 	s.harden()
 	s.nodeSym = goja.NewSymbol("ntbrowser.node")
-	s.listSym = goja.NewSymbol("ntbrowser.listeners")
+	s.installEventCore()
 	s.elemProto = s.buildElementProto()
 	s.installAnchors()
 	s.installImages()
@@ -257,6 +270,10 @@ func defineFrozen(obj *goja.Object, name string, v goja.Value) {
 func (s *Sandbox) installGlobals() {
 	vm := s.vm
 	global := vm.GlobalObject()
+	s.registerEventTarget(global, 0)
+	_ = global.SetPrototype(s.eventTargetProto)
+	s.bindEventTarget(global)
+	s.bindEventHandlers(global)
 	defineFrozen(global, "window", global)
 	defineFrozen(global, "self", global)
 	defineFrozen(global, "console", s.consoleObject())
@@ -346,8 +363,19 @@ func (s *Sandbox) Close() {
 	s.disabled = true
 	s.wd.disarm()
 	s.images = nil
-	s.scriptProto, s.scriptHandlers, s.scripts = nil, nil, nil
+	s.scriptProto, s.scripts = nil, nil
 	s.collectionProto = nil
+	s.eventPrivate, s.eventTargetProto, s.eventProto, s.customEventProto, s.signalProto = nil, nil, nil, nil, nil
+	s.privateGet, s.privateSet = nil, nil
+	s.extraTargets = nil
+	s.signalPins = nil
+	s.domExceptionProto = nil
+	s.specialEventProtos = nil
+	s.specialEventDefaults = nil
+	for _, id := range s.abortTimers {
+		s.host.ClearTimer(id)
+	}
+	s.abortTimers = nil
 	s.cfg.LoadScript = nil
 	s.imageProto = nil
 	s.anchorProto = nil

@@ -40,7 +40,6 @@ func (s *Sandbox) scriptState(n *dom.Node) *scriptState {
 }
 func (s *Sandbox) installScripts() {
 	s.scripts = map[dom.NodeID]*scriptState{}
-	s.scriptHandlers = goja.NewSymbol("ntbrowser.scriptHandlers")
 	p := s.vm.NewObject()
 	s.scriptProto = p
 	_ = p.SetPrototype(s.elemProto)
@@ -89,51 +88,7 @@ func (s *Sandbox) installScripts() {
 			s.tree.RemoveAttr(n, "async")
 		}
 	})
-	for _, typ := range []string{"load", "error"} {
-		s.accessor(p, "on"+typ, func(t goja.Value) goja.Value {
-			s.scriptNode(t)
-			bag, _ := t.(*goja.Object).GetSymbol(s.scriptHandlers).(*goja.Object)
-			if bag != nil {
-				if v := bag.Get(typ); v != nil {
-					return v
-				}
-			}
-			return goja.Null()
-		}, func(t, v goja.Value) {
-			n := s.scriptNode(t)
-			w := t.(*goja.Object)
-			bag, _ := w.GetSymbol(s.scriptHandlers).(*goja.Object)
-			if bag == nil {
-				bag = s.vm.NewObject()
-				_ = w.SetSymbol(s.scriptHandlers, bag)
-			}
-			if old := bag.Get(typ + "Listener"); old != nil && !goja.IsNull(old) {
-				if _, ok := goja.AssertFunction(v); ok {
-					_ = bag.Set(typ, v)
-					return
-				}
-				s.removeListener(w, n, typ, old)
-			}
-			_ = bag.Set(typ, goja.Null())
-			_ = bag.Set(typ+"Listener", goja.Null())
-			if _, ok := goja.AssertFunction(v); ok {
-				listener := s.vm.ToValue(func(c goja.FunctionCall) goja.Value {
-					fn, ok := goja.AssertFunction(bag.Get(typ))
-					if !ok {
-						return goja.Undefined()
-					}
-					result, err := fn(c.This, c.Arguments...)
-					if err != nil {
-						panic(err)
-					}
-					return result
-				})
-				s.addListener(w, n, typ, listener)
-				_ = bag.Set(typ, v)
-				_ = bag.Set(typ+"Listener", listener)
-			}
-		})
-	}
+
 }
 
 // prepareScript is called at insertion/connected src or text mutation, never by

@@ -78,7 +78,6 @@ func (s *Sandbox) imageURL(src string) string {
 
 func (s *Sandbox) installImages() {
 	s.images = map[dom.NodeID]*imageState{}
-	s.imageHandlers = goja.NewSymbol("ntbrowser.imageHandlers")
 	p := s.vm.NewObject()
 	s.imageProto = p
 	_ = p.SetPrototype(s.elemProto)
@@ -137,51 +136,7 @@ func (s *Sandbox) installImages() {
 	s.accessor(p, "naturalWidth", func(t goja.Value) goja.Value { return s.vm.ToValue(s.imageState(s.imageNode(t)).width) }, nil)
 	s.accessor(p, "naturalHeight", func(t goja.Value) goja.Value { return s.vm.ToValue(s.imageState(s.imageNode(t)).height) }, nil)
 	s.accessor(p, "currentSrc", func(t goja.Value) goja.Value { return s.vm.ToValue(s.imageState(s.imageNode(t)).current) }, nil)
-	for _, typ := range []string{"load", "error"} {
-		s.accessor(p, "on"+typ, func(t goja.Value) goja.Value {
-			s.imageNode(t)
-			bag, _ := t.(*goja.Object).GetSymbol(s.imageHandlers).(*goja.Object)
-			if bag != nil {
-				if v := bag.Get(typ); v != nil {
-					return v
-				}
-			}
-			return goja.Null()
-		}, func(t, v goja.Value) {
-			n := s.imageNode(t)
-			w := t.(*goja.Object)
-			bag, _ := w.GetSymbol(s.imageHandlers).(*goja.Object)
-			if bag == nil {
-				bag = s.vm.NewObject()
-				_ = w.SetSymbol(s.imageHandlers, bag)
-			}
-			if old := bag.Get(typ + "Listener"); old != nil && !goja.IsNull(old) {
-				if _, ok := goja.AssertFunction(v); ok {
-					_ = bag.Set(typ, v)
-					return
-				}
-				s.removeListener(w, n, typ, old)
-			}
-			_ = bag.Set(typ, goja.Null())
-			_ = bag.Set(typ+"Listener", goja.Null())
-			if _, ok := goja.AssertFunction(v); ok {
-				listener := s.vm.ToValue(func(c goja.FunctionCall) goja.Value {
-					fn, ok := goja.AssertFunction(bag.Get(typ))
-					if !ok {
-						return goja.Undefined()
-					}
-					result, err := fn(c.This, c.Arguments...)
-					if err != nil {
-						panic(err)
-					}
-					return result
-				})
-				s.addListener(w, n, typ, listener)
-				_ = bag.Set(typ, v)
-				_ = bag.Set(typ+"Listener", listener)
-			}
-		})
-	}
+
 	s.method(p, "decode", func(c goja.FunctionCall) goja.Value {
 		n := s.imageNode(c.This)
 		if s.imageDecodes >= s.cfg.MaxListeners {
