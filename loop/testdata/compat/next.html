@@ -1,0 +1,15 @@
+<!doctype html>
+<title>Compatibility: session continuation</title>
+<p id="status">waiting</p>
+<script>
+function check(ok, message) { if (!ok) throw new Error(message); }
+check(location.pathname === "/next.html", "location did not advance");
+check(document.cookie === "fixture=ready", "cookie lost across navigation");
+check(sessionStorage.getItem("fixture") === "ready", "storage lost across navigation");
+check(sessionStorage.order === "script,microtask,timer,frame", "callback sequence lost");
+check(typeof local === "undefined", "old script realm leaked");
+requestAnimationFrame(() => {
+  document.getElementById("status").textContent = "compat-ready";
+  console.log("PASS:next");
+});
+</script>

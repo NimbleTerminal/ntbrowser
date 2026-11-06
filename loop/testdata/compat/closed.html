@@ -1,0 +1,19 @@
+<!doctype html>
+<title>Compatibility: closed gates</title>
+<script>
+function check(ok, message) { if (!ok) throw new Error(message); }
+function denied(action) {
+  let blocked = false;
+  try { action(); } catch (e) { blocked = e.name === "SecurityError"; }
+  check(blocked, "expected SecurityError");
+}
+check(!navigator.cookieEnabled, "cookies unexpectedly enabled");
+document.cookie = "fixture=leak";
+check(document.cookie === "", "closed cookie write persisted");
+denied(() => sessionStorage.setItem("fixture", "leak"));
+denied(() => location.assign("/escape"));
+let evalBlocked = false;
+try { eval("1 + 1"); } catch (e) { evalBlocked = e instanceof EvalError; }
+check(evalBlocked, "dynamic code unexpectedly available");
+setTimeout(() => requestAnimationFrame(() => console.log("PASS:closed")), 0);
+</script>

@@ -1,0 +1,8 @@
+<!doctype html>
+<title>Compatibility: different origin</title>
+<script>
+if (document.cookie !== "") throw new Error("cross-host cookie leak");
+if (sessionStorage.length !== 0) throw new Error("cross-origin storage leak");
+sessionStorage.setItem("fixture", "other");
+console.log("PASS:isolated");
+</script>

@@ -1,0 +1,29 @@
+<!doctype html>
+<title>Compatibility: session bootstrap</title>
+<p id="status">starting</p>
+<script>
+function check(ok, message) { if (!ok) throw new Error(message); }
+check(navigator.cookieEnabled, "cookies disabled");
+document.cookie = "fixture=ready; Path=/; Secure";
+sessionStorage.setItem("fixture", "ready");
+let local = 40;
+check(eval("local + 2") === 42, "direct eval lost lexical scope");
+let order = ["script"];
+Promise.resolve().then(() => order.push("microtask"));
+const cancelled = setTimeout(() => { throw new Error("cancelled timer ran"); }, 0);
+clearTimeout(cancelled);
+setTimeout(() => {
+  check(order.join(",") === "script,microtask", "microtask/timer ordering");
+  order.push("timer");
+  const cancelledFrame = requestAnimationFrame(() => { throw new Error("cancelled frame ran"); });
+  cancelAnimationFrame(cancelledFrame);
+  requestAnimationFrame(timestamp => {
+    check(typeof timestamp === "number" && timestamp >= 0, "frame timestamp");
+    check(performance.now() >= 0, "performance clock");
+    sessionStorage.order = order.concat("frame").join(",");
+    document.getElementById("status").textContent = "ready";
+    location.replace("/next.html");
+    console.log("PASS:start");
+  });
+}, 0);
+</script>
