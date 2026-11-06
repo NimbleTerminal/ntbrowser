@@ -174,3 +174,30 @@ func TestNoDowngradeFromHTTPS(t *testing.T) {
 		}
 	}
 }
+
+func TestScriptResponseKind(t *testing.T) {
+	for _, ct := range []string{"text/javascript", "application/javascript; charset=utf-8", "text/ecmascript", "application/ecmascript"} {
+		if err := acceptableFor(KindScript, "/script", ct); err != nil {
+			t.Fatal(ct, err)
+		}
+	}
+	for _, ct := range []string{"text/html", "application/json", "text/plain", "application/octet-stream", "", "image/png"} {
+		if err := acceptableFor(KindScript, "/looks-like.js", ct); err == nil {
+			t.Fatal("accepted", ct)
+		}
+	}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Accept") != "text/javascript, application/javascript" {
+			t.Error("incorrect script Accept")
+		}
+		w.Header().Set("Content-Type", "text/javascript")
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte("window.shouldNotRun=true"))
+	}))
+	defer server.Close()
+	u, _ := url.Parse(server.URL)
+	f := New(Policy{Origin: u, AllowPrivate: true})
+	if _, err := f.Do(context.Background(), Request{URL: server.URL, Kind: KindScript}); err == nil {
+		t.Fatal("accepted failed HTTP status")
+	}
+}

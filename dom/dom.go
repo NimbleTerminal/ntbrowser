@@ -291,7 +291,7 @@ func (t *Tree) Body() *Node {
 
 func (t *Tree) NewElement(tag string) (*Node, error) {
 	tag = strings.ToLower(tag)
-	if tag == "" || tag == "script" || tag == "#document" || !validName(tag) {
+	if tag == "" || tag == "#document" || !validName(tag) {
 		return nil, fmt.Errorf("ntbrowser/dom: invalid tag %q", tag)
 	}
 	if t.live+1 > t.limits.Nodes {
@@ -619,7 +619,7 @@ func hasClass(n *Node, cls string) bool {
 // ---- serialization: the frame handed to nthtml ----
 
 // Serialize writes the tree as HTML that nthtml's document.Parse accepts.
-// <script> never appears (none are in the tree). Elements with listeners,
+// <script> nodes are omitted from rendering. Elements with listeners,
 // and focusable elements, that have no id get a synthetic id so nthtml's
 // Result.Anchors / Box.Anchor can be mapped back to NodeIDs for hit testing
 // and focus. Form controls are written with their current state (forms.go).
@@ -647,7 +647,7 @@ func (t *Tree) write(b *strings.Builder, n *Node, seen map[string]bool, inSVG bo
 		b.WriteString(html.EscapeString(n.text))
 		return
 	case Element:
-		if n.tag == "noscript" {
+		if n.tag == "noscript" || n.tag == "script" {
 			return // scripting is on: <noscript> content is never shown (decision 18)
 		}
 		inSVG = inSVG || n.tag == "svg"

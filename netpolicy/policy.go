@@ -64,6 +64,7 @@ const (
 	KindStyle                // a stylesheet: text/css (or octet-stream with a .css path), 2xx only
 	KindImage                // an image: png, jpeg, gif, webp or svg+xml, 2xx only
 	KindNavigate             // top-level navigation: any content type; the caller classifies (content.Classify)
+	KindScript               // classic JavaScript, strict MIME and 2xx status
 )
 
 type Request struct {
@@ -376,6 +377,8 @@ func (f *Fetcher) Do(ctx context.Context, r Request) (result Response, resultErr
 
 func acceptFor(k Kind) string {
 	switch k {
+	case KindScript:
+		return "text/javascript, application/javascript"
 	case KindStyle:
 		return "text/css"
 	case KindImage:
@@ -391,6 +394,15 @@ func acceptFor(k Kind) string {
 // "charset=utf-8" never take part in the comparison.
 func acceptableFor(k Kind, path, ct string) error {
 	switch k {
+	case KindScript:
+		mt, _, err := mime.ParseMediaType(ct)
+		if err == nil {
+			switch mt {
+			case "text/javascript", "application/javascript", "text/ecmascript", "application/ecmascript":
+				return nil
+			}
+		}
+		return fmt.Errorf("%w: content type %q is not JavaScript", ErrDenied, ct)
 	case KindStyle:
 		mt, _, err := mime.ParseMediaType(ct)
 		if err != nil {

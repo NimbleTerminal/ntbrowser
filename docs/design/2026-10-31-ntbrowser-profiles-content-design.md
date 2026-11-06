@@ -437,3 +437,34 @@ Goja's string-key conversion limits. Accessor/symbol own-property descriptors,
 StorageEvents, frames/opener cloning and localStorage are outside this scope.
 No contents are emitted through diagnostics by the host. Source:
 [HTML Web Storage](https://html.spec.whatwg.org/multipage/webstorage.html).
+
+### Dynamic classic-script extension (2026-11-06)
+
+DOM insertion adds no network authority: external dynamic scripts require the
+existing `scripts=external` gate and use the same page-bound `netpolicy.Fetcher`
+as parser scripts. `KindScript` additionally enforces 2xx and a strict supported
+JavaScript MIME type. Redirect, private-address, cookie, timeout and body caps
+remain in netpolicy. SRI-bearing requests fail closed pending verification
+support. Inline dynamic source requires both scripts enabled and dynamic-code
+on, so DOM insertion cannot bypass the string-compilation gate.
+
+The VM snapshots a script's URL and async mode at preparation and pins its
+wrapper until completion. Started state outlives wrapper GC while its DOM node
+exists. At most 32 external scripts may be pending, including completed responses
+waiting for ordered predecessors; at most 256 dynamic elements prepare per
+page. Failed admission still consumes the total budget. Caps throw TypeError;
+network/policy errors dispatch element error events. The pending slot is released
+after event delivery, and old-page completions are dropped by both page identity
+and navigation generation. Workers carry plain request/response data only.
+
+Inline dynamic execution reuses the active watchdog, never clears its interrupt
+or rearms its budget. External execution and events use normal sandbox entries.
+All sources pass the existing size limit, hardened Parse/CompileAST path and
+heap checks; source-map loading stays disabled. DOM serialization omits scripts.
+
+The lifecycle follows the classic-script portion of the
+[HTML script processing model](https://html.spec.whatwg.org/multipage/scripting.html#prepare-the-script-element),
+with the additional gates and limits above. Modules, import maps, CSP and SRI
+verification are not implemented. Dynamic scripts are async by default;
+async=false scripts execute in preparation order. Tests use local HTTP servers
+with controlled completion order, with no public-network dependency.

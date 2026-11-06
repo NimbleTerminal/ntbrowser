@@ -78,6 +78,8 @@ type (
 // Page is one navigation: tree + sandbox + policy. Replacing it discards the
 // whole JS heap, which is how cross-page isolation is achieved.
 type Page struct {
+	dynamicOrdered []*dynamicScript
+
 	pendingLocation  *ScriptNavigateMsg
 	locationRequests int
 	Tree             *dom.Tree
@@ -370,6 +372,8 @@ func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) ui
 		page := &Page{Tree: tree, Fetcher: fetcher, Base: base, firstFrame: true, budgetWarned: map[string]bool{}, refused: map[string]bool{}, firing: map[dom.NodeID]bool{}, resetting: map[dom.NodeID]bool{}}
 		page.ctx, page.cancel = context.WithCancel(l.ctx)
 		page.paintCtx, page.paintCancel = context.WithCancel(l.ctx)
+		cfg.DynamicScripts = l.cfg.Profile.ScriptsOn()
+		cfg.LoadScript = func(req jsvm.ScriptRequest) { l.loadDynamicScript(page, gen, req) }
 		cfg.Navigate = nil
 		if l.cfg.Profile.ScriptsOn() && l.cfg.Profile.NavigationOpen() && l.cfg.Profile.ScriptNavigation != "" && l.cfg.Profile.ScriptNavigation != profile.ScriptNavOff {
 			cfg.Navigate = func(href, mode string) error {
@@ -407,6 +411,7 @@ func (l *Loop) dropPage(page *Page) {
 		return
 	}
 	page.killed = true
+	page.dynamicOrdered = nil
 	if page.subres != nil {
 		page.subres.Close()
 	}

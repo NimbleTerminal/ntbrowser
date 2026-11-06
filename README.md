@@ -496,3 +496,39 @@ one active top-level document. Storage contents are not included in diagnostic
 snapshots, though page code can explicitly log its own values. Storage errors
 currently have the specified names on JavaScript Error objects, not a full
 DOMException class hierarchy.
+
+## Dynamically inserted scripts
+
+Classic `<script>` elements created by JavaScript now support `src`, `text`,
+`type`, `async`, `defer`, `noModule`, `onload`/`onerror`, and event listeners.
+`document.head` is available. Connecting an eligible script (including inside a
+subtree), adding its text, or setting its connected `src` prepares it once.
+Removing, moving, or changing a prepared script does not execute it again.
+External scripts default to asynchronous execution; setting `async=false` before
+preparation preserves insertion order among those ordered scripts. Independent
+async scripts can finish while the ordered queue is waiting.
+
+External loading requires `--scripts=external` and uses the existing page
+fetcher's origin/allowlist, redirect, private-network, cookie, size and timeout
+policy. Only successful HTTP responses with a supported JavaScript MIME type
+are admitted; HTML and JSON responses never execute as scripts. Fetch failure
+or policy refusal dispatches `error`; successful loading dispatches `load`,
+while execution errors are reported separately. Events are non-bubbling and
+can reach a pending script removed from the DOM. Navigation cancels requests
+and discards old-page completions.
+
+Inserted inline source additionally requires `--dynamic-code=on`, preventing
+`script.text` from bypassing that gate. It executes synchronously in the
+inserting callback's watchdog slice, through the hardened compiler. A blocked
+inline script produces a warning. Parser-loaded inline scripts keep their
+existing behavior. Dynamic script limits are 32 pending external elements and
+256 prepared elements per document; exceeding either throws `TypeError`.
+Existing source, DOM, listener and heap budgets still apply.
+
+This is a classic-script subset: modules/import maps remain inert, integrity
+metadata is rejected rather than ignored, and reflected `crossOrigin`,
+`referrerPolicy` and `nonce` do not grant additional authority. There is no CSP
+implementation. Dynamic scripts do not delay `DOMContentLoaded`; `defer` has
+no extra scheduling effect on them. `document.currentScript` identifies a
+running dynamic script; parser scripts are still extracted from the tree and
+report null. Script elements are omitted from rendered HTML.

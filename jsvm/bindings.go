@@ -53,6 +53,9 @@ func (s *Sandbox) wrap(n *dom.Node) goja.Value {
 	if n.Tag() == "img" {
 		_ = w.SetPrototype(s.imageProto)
 	}
+	if n.Tag() == "script" {
+		_ = w.SetPrototype(s.scriptProto)
+	}
 	_ = w.DefineDataPropertySymbol(s.nodeSym, s.vm.ToValue(int(n.ID())), goja.FLAG_FALSE, goja.FLAG_FALSE, goja.FLAG_FALSE)
 	s.weakW[n.ID()] = weak.Make(w)
 	// The cleanup closure must not reference w (it would never be collected).
@@ -99,6 +102,11 @@ func (s *Sandbox) reap() {
 		if !s.anyLiveWrapper(root) {
 			dom.Walk(root, func(n *dom.Node) { s.forgetCounts(n.ID()); delete(s.weakW, n.ID()); delete(s.images, n.ID()) })
 			s.tree.Release(root)
+		}
+	}
+	for id := range s.scripts {
+		if s.tree.Node(id) == nil {
+			delete(s.scripts, id)
 		}
 	}
 	if s.active != 0 && s.tree.Node(s.active) == nil {
@@ -269,6 +277,12 @@ func (s *Sandbox) buildElementProto() *goja.Object {
 		if strings.EqualFold(name, "src") {
 			s.imageChanged(n)
 		}
+		if n.Tag() == "script" && strings.EqualFold(name, "async") {
+			s.scriptState(n).ordered = true
+		}
+		if strings.EqualFold(name, "src") {
+			s.prepareScript(n)
+		}
 		return goja.Undefined()
 	})
 	s.method(p, "removeAttribute", func(c goja.FunctionCall) goja.Value {
@@ -338,6 +352,8 @@ func (s *Sandbox) insert(parent, child, ref *dom.Node) {
 	} else if wasAttached && !s.tree.Attached(child) {
 		s.onDetach(child)
 	}
+	dom.Walk(child, s.prepareScript)
+	s.prepareScript(parent)
 }
 
 func (s *Sandbox) detach(n *dom.Node) {
@@ -370,6 +386,8 @@ func (s *Sandbox) setText(t, v goja.Value) {
 			s.tree.Release(root)
 		}
 	}
+	s.prepareScript(n)
+	s.prepareScript(n.Parent())
 }
 
 func (s *Sandbox) wrapAll(nodes []*dom.Node, elementsOnly bool) goja.Value {
@@ -484,6 +502,8 @@ func (s *Sandbox) documentObject() *goja.Object {
 		s.removeListener(d, s.tree.Root(), c.Argument(0).String(), c.Argument(1))
 		return goja.Undefined()
 	})
+	s.accessor(d, "currentScript", func(goja.Value) goja.Value { return s.wrap(s.tree.Node(s.currentScript)) }, nil)
+	s.accessor(d, "head", func(goja.Value) goja.Value { return s.query(s.tree.Root(), "head", false) }, nil)
 	s.accessor(d, "body", func(goja.Value) goja.Value { return s.wrap(s.tree.Body()) }, nil)
 	s.accessor(d, "documentElement", func(goja.Value) goja.Value {
 		for _, c := range s.tree.Root().Children() {

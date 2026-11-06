@@ -5571,3 +5571,12 @@ ordinary slice), including microtasks and normal heap/strike accounting;
 unstarted callbacks are deferred in order, interrupted callbacks are not
 retried. A single batch shares one coarsened performance timestamp. Engine
 non-preemptibility and Go-side work retain the existing soft-budget caveats.
+
+### Dynamic script adoption (2026-11-06)
+
+DOM-created classic script elements are now supported under the profiles design’s
+dynamic classic-script extension. Parsed scripts remain extracted; created
+script nodes remain in the mutable tree but are omitted from serialization.
+Inserted inline source requires dynamic-code and shares the active watchdog;
+external requests require scripts=external and the existing page fetch policy.
+See the profiles document for lifecycle, caps, MIME restrictions and limitations.

@@ -1,0 +1,22 @@
+<!doctype html>
+<title>Dynamic classic scripts</title>
+<script>
+var order = [];
+var loads = 0;
+function add(src) {
+  let script = document.createElement("script");
+  script.async = false;
+  script.src = src;
+  script.onerror = () => { throw Error("unexpected load failure: " + src); };
+  script.onload = function(event) {
+    if (this !== script || event.target !== script || event.bubbles) throw Error("load event shape");
+    if (++loads === 2) {
+      if (order.join() !== "first,second") throw Error("ordered scripts ran out of order");
+      console.log("PASS:dynamic");
+    }
+  };
+  document.head.appendChild(script);
+}
+add("/first.js");
+add("/second.js");
+</script>

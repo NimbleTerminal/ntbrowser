@@ -31,6 +31,9 @@ import (
 
 // Config bounds one page's scripting. Zero fields use the defaults below.
 type Config struct {
+	DynamicScripts bool                // host-authorized classic script insertion
+	LoadScript     func(ScriptRequest) // VM-thread admission; completion through CompleteScript
+
 	SessionStorage   *sessionstorage.Area          // bound to one origin by the host; nil is closed
 	Navigate         func(href, mode string) error // host-authorized navigation; nil is closed
 	CookieRead       func() string                 // host-only capability, bound to the current document URL
@@ -86,16 +89,21 @@ type Sandbox struct {
 	disabled          bool
 	running           bool
 
-	anchorProto   *goja.Object
-	relListSym    *goja.Symbol
-	imageProto    *goja.Object
-	images        map[dom.NodeID]*imageState
-	imageDecodes  int
-	imageSequence uint64
-	imageHandlers *goja.Symbol
-	elemProto     *goja.Object
-	nodeSym       *goja.Symbol // wrapper -> NodeID
-	listSym       *goja.Symbol // wrapper -> {type: [listeners]}
+	anchorProto    *goja.Object
+	relListSym     *goja.Symbol
+	scriptProto    *goja.Object
+	scripts        map[dom.NodeID]*scriptState
+	scriptCount    int
+	scriptHandlers *goja.Symbol
+	currentScript  dom.NodeID
+	imageProto     *goja.Object
+	images         map[dom.NodeID]*imageState
+	imageDecodes   int
+	imageSequence  uint64
+	imageHandlers  *goja.Symbol
+	elemProto      *goja.Object
+	nodeSym        *goja.Symbol // wrapper -> NodeID
+	listSym        *goja.Symbol // wrapper -> {type: [listeners]}
 	// weakW holds every wrapper weakly; strong pins listener-bearing wrappers
 	// of attached nodes. See bindings.go for the lifetime rules.
 	weakW  map[dom.NodeID]weak.Pointer[goja.Object]
@@ -199,6 +207,7 @@ func New(cfg Config, tree *dom.Tree, host Host) *Sandbox {
 	s.elemProto = s.buildElementProto()
 	s.installAnchors()
 	s.installImages()
+	s.installScripts()
 	s.installGlobals()
 	s.installStorage()
 	s.installPerformance()
@@ -334,6 +343,8 @@ func (s *Sandbox) Close() {
 	s.disabled = true
 	s.wd.disarm()
 	s.images = nil
+	s.scriptProto, s.scriptHandlers, s.scripts = nil, nil, nil
+	s.cfg.LoadScript = nil
 	s.imageProto = nil
 	s.anchorProto = nil
 	s.performanceNow = nil
