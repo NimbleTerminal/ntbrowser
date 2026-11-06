@@ -1,7 +1,7 @@
 # CSS-preserving viewport rendering
 
 Status: upstream implementation committed on nthtml branch
-`feat/host-painted-viewport` at `24f51fa`; not yet published or adopted by
+`feat/host-painted-viewport` at `9bb6fd6` (initial implementation `24f51fa`); not yet published or adopted by
 ntbrowser. Semantic `-chunked` mode ships independently. Date: 2026-11-05.
 
 ## Implementation checkpoint
@@ -29,6 +29,13 @@ and behavior. These choices are documented in the upstream integration contract.
 Next: publish the upstream API, then implement the ntbrowser adoption checklist
 below using that published dependency. The default CSS renderer still uses
 `NoImage: false`; this checkpoint does not supersede that current requirement.
+
+Review fixes in `9bb6fd6` track the submitted picture plan/revision separately,
+force upload after a TTY-mode replacement, reconcile stale install geometry, and
+preserve sub-row pan input. Column changes resize the retained band immediately
+and keep hit mapping aligned if replacement painting fails. Regression tests
+cover these cases, including Kitty image-payload comparison. Initial paint plans
+use automatic scale (`Scale: 0`), including glyph transport.
 
 ## Problem
 
@@ -69,7 +76,8 @@ Install a layout **with its initial painted band**, never a layout followed by a
 separate first-paint round trip. The loop already knows the initial viewport's
 width and top-of-page origin; it must also receive the viewport height/terminal
 geometry needed to size the initial band. In one worker pass, build the layout
-with `NoImage`, paint its initial band at scale 1, and send the result, image,
+with `NoImage`, plan its initial band with automatic scale (`Scale: 0`), paint
+at the returned scale, and send the result, image,
 CSS band rectangle, scale, and revision together. Reflow uses the latest requested
 viewport, clamped to the new extent. Installing this pair must never invoke
 `Paint` or allocate a whole-page image on the UI goroutine.
