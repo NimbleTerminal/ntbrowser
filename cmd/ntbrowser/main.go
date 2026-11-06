@@ -59,9 +59,11 @@ func parseArgs(args []string) (config, error) {
 	name := fs.String("profile", "browse", "built-in profile: locked, reader, browse")
 	file := fs.String("profile-file", "", "JSON profile file (overrides --profile)")
 	fs.BoolVar(&c.ShowProfile, "show-profile", false, "print the effective profile and exit")
-	allow := fs.String("allow", "", "comma-separated hosts for allowlist gates (leading dot = subdomains)")
+	scriptGrants := fs.StringArray("allow-script", nil, "script grant SOURCE_ORIGIN=DESTINATION_ORIGIN (repeatable)")
+	scriptPrompts := fs.Bool("script-prompts", false, "ask before admitting an ungranted cross-origin script")
+	allow := fs.String("allow", "", "comma-separated fetch/navigation allowlist hosts (leading dot = subdomains; scripts use --allow-script)")
 	private := fs.Bool("allow-private", false, "permit loopback/private addresses (development)")
-	external := fs.Bool("external-scripts", false, "fetch <script src> through the allowlist (same as --scripts external)")
+	external := fs.Bool("external-scripts", false, "fetch <script src> through source-scoped script grants (same as --scripts external)")
 	nav := fs.String("nav", "", "link navigation: off, free, allowlist, confirm")
 	subres := fs.String("subresources", "", "stylesheets and images: off, origin, any")
 	fetch := fs.String("fetch", "", "fetch() from page script: off, origin, allowlist")
@@ -107,6 +109,7 @@ func parseArgs(args []string) (config, error) {
 		return c, errors.New("diagnostics requires --diagnostics FILE")
 	}
 	chosen.Hosts = slices.Clone(p.Hosts)
+	chosen.ScriptGrants = slices.Clone(p.ScriptGrants)
 	if *nav != "" {
 		p.Navigate = profile.Navigate(*nav)
 	}
@@ -154,6 +157,16 @@ func parseArgs(args []string) (config, error) {
 	}
 	if *clipboard != "" {
 		p.Clipboard = profile.Clipboard(*clipboard)
+	}
+	if fs.Changed("script-prompts") {
+		p.ScriptPrompts = *scriptPrompts
+	}
+	for _, value := range *scriptGrants {
+		grant, err := profile.ParseScriptGrant(value)
+		if err != nil {
+			return c, err
+		}
+		p.ScriptGrants = append(p.ScriptGrants, grant)
 	}
 	if *allow != "" {
 		p.Hosts = strings.Split(*allow, ",")

@@ -76,7 +76,9 @@ New packages: `profile` (data, validation, printing; no system imports) and `con
    | `navigate` | `off`, `allowlist`, `confirm`, `free` | top-level navigation. `off`: only the start URL given at launch is fetched, and nothing after it |
    | `subresources` | `off`, `origin`, `any` | stylesheets and images, including detached script-created `Image` requests |
    | `fetch` | `off`, `origin`, `allowlist` | `fetch()` from page script |
-   | `hosts` | list | what `allowlist` means |
+   | `hosts` | list | fetch/navigation allowlist hosts; does not authorize scripts |
+   | `script-grants` | source/destination origin pairs | cross-origin script admission only |
+   | `script-prompts` | off/on | reader may admit one script request or grant the origin pair for this session; default off |
    | `private-network` | `off`, `on` | loopback and private addresses |
    | `scripts` | `off`, `inline`, `external` | page script |
    | `diagnostics` | boolean, default false | host writes observations to one preopened private file; no page access |
@@ -441,8 +443,9 @@ No contents are emitted through diagnostics by the host. Source:
 ### Dynamic classic-script extension (2026-11-06)
 
 DOM insertion adds no network authority: external dynamic scripts require the
-existing `scripts=external` gate and use the same page-bound `netpolicy.Fetcher`
-as parser scripts. `KindScript` additionally enforces 2xx and a strict supported
+existing `scripts=external` gate and use a script-specific policy derived from
+the page-bound `netpolicy.Fetcher`. Shared fetch/navigation host lists confer no
+script authority; exact source/destination origin grants control external access. `KindScript` additionally enforces 2xx and a strict supported
 JavaScript MIME type. Redirect, private-address, cookie, timeout and body caps
 remain in netpolicy. SRI-bearing requests use the verification rules below. Inline dynamic source requires both scripts enabled and dynamic-code
 on, so DOM insertion cannot bypass the string-compilation gate.
@@ -487,3 +490,30 @@ Cross-origin cookies remain excluded by the cookie transport. The CORS state is
 request-local context, never a shared mutable policy flag. Denials return no
 source to the VM, and stale navigation checks still apply after verification.
 This is a conservative subset of SRI, not general fetch CORS or CSP support.
+
+### Source-scoped script grant extension (2026-11-06)
+
+Script admission is independent of fetch admission. The loop derives an immutable
+policy from the page transport, clears AnyOrigin and shared hosts, adds only
+exact destinations granted to that page origin, retains cookies/IP/redirect/body/
+timeout checks, and shares the original request semaphore. Per-request derived
+transports close idle connections after completion. Same-origin requests still
+require scripts=external; zero transport policies remain closed.
+
+Saved grants are profile `script-grants` entries or repeatable --allow-script
+arguments. Profiles validate at most 128 exact HTTP(S) origin pairs. With
+script-prompts enabled, otherwise grantable requests can await a reader choice.
+The UI offers once/session/deny and never persists grants itself. Session grants
+are loop-owned and bounded to 128 pairs; pending prompts are bounded to eight
+and expire after 30 seconds. IDs and document generations bind every decision;
+page replacement stops timers and discards pending callbacks. Existing network
+policy is checked with a candidate origin before showing a prompt and rechecked
+on the actual request. A prompt cannot grant private-network or mixed-content
+exceptions. Runtime DNS admission remains authoritative after approval.
+
+The UI defers to active reader navigation/edit/search, prevents scripts replacing
+an active permission prompt, blocks page mouse dispatch while prompting, uses
+Alt-modified approval keys, and requires both origins to fit visibly. Denials
+record source origin, requested URL, purpose and reason. No profile-writing or
+new filesystem capability is introduced; persistent grants require explicit
+profile edits outside the sandboxed browser.

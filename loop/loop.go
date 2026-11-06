@@ -78,6 +78,8 @@ type (
 // Page is one navigation: tree + sandbox + policy. Replacing it discards the
 // whole JS heap, which is how cross-page isolation is achieved.
 type Page struct {
+	scriptPermissions map[uint64]*scriptPermission
+
 	dynamicOrdered []*dynamicScript
 
 	pendingLocation  *ScriptNavigateMsg
@@ -153,6 +155,9 @@ type Config struct {
 }
 
 type Loop struct {
+	scriptSessions     map[profile.ScriptGrant]bool
+	scriptPermissionID uint64
+
 	storage         *sessionstorage.Session
 	frameNavigation atomic.Uint64
 	locationCommit  atomic.Uint64
@@ -223,6 +228,15 @@ func New(ctx context.Context, cfg Config, sink Sink) *Loop {
 // Run is the VM goroutine. It is the only goroutine that may touch l.page.
 func (l *Loop) Run() {
 	defer l.storage.Clear()
+	defer func() {
+		l.scriptSessions = nil
+		if l.page != nil {
+			for _, request := range l.page.scriptPermissions {
+				request.timer.Stop()
+			}
+			l.page.scriptPermissions = nil
+		}
+	}()
 	for {
 		select {
 		case <-l.ctx.Done():
@@ -411,6 +425,10 @@ func (l *Loop) dropPage(page *Page) {
 		return
 	}
 	page.killed = true
+	for _, request := range page.scriptPermissions {
+		request.timer.Stop()
+	}
+	page.scriptPermissions = nil
 	page.dynamicOrdered = nil
 	if page.subres != nil {
 		page.subres.Close()
@@ -441,20 +459,15 @@ func (l *Loop) runScripts(page *Page, i int) {
 			l.evalScript(page, fmt.Sprintf("%s#inline-%d", page.Base, i), sc.Inline)
 		case sc.Src != "" && l.cfg.Profile.Scripts == profile.ScriptsExternal:
 			next := i + 1
-			go func() {
-				resp, err := page.Fetcher.Script(page.ctx, sc.Src, sc.Integrity, sc.CrossOrigin)
-				l.post(func() {
-					if l.page != page {
-						return // navigated away
-					}
-					if err != nil {
-						l.report(err)
-					} else {
-						l.evalScript(page, sc.Src, resp.Body)
-					}
-					l.runScripts(page, next)
-				})
-			}()
+			generation := l.navGen.Load()
+			l.fetchScript(page, generation, sc.Src, sc.Integrity, sc.CrossOrigin, func(resp netpolicy.Response, err error) {
+				if err != nil {
+					l.report(err)
+				} else {
+					l.evalScript(page, sc.Src, resp.Body)
+				}
+				l.runScripts(page, next)
+			})
 			return
 		}
 	}

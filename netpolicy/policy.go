@@ -19,6 +19,7 @@ import (
 	"net/url"
 	"nimbleterminal.dev/ntbrowser/cookies"
 	"nimbleterminal.dev/ntbrowser/diagnostics"
+	"nimbleterminal.dev/ntbrowser/origin"
 	"strings"
 	"sync"
 	"time"
@@ -34,7 +35,8 @@ type Policy struct {
 	// is set; relative URLs resolve against it.
 	Origin *url.URL
 	// AllowHosts lists additional hostnames. A leading dot allows subdomains.
-	AllowHosts []string
+	AllowOrigins []string // exact script-only origins in derived policies
+	AllowHosts   []string
 	// AllowPrivate permits loopback/RFC1918 targets (development only).
 	AllowPrivate bool
 	// AnyOrigin admits every http(s) host: the policy for top-level
@@ -197,6 +199,11 @@ func (f *Fetcher) Allowed(u *url.URL) error {
 	// Same origin means scheme + host + port, as in browsers.
 	if f.p.Origin != nil && f.p.Origin.Scheme == u.Scheme && strings.EqualFold(hostPort(f.p.Origin), hostPort(u)) {
 		return nil
+	}
+	for _, allowed := range f.p.AllowOrigins {
+		if canonical, err := origin.Of(u.String()); err == nil && canonical == allowed {
+			return nil
+		}
 	}
 	for _, a := range f.p.AllowHosts {
 		a = strings.ToLower(a)
@@ -526,3 +533,37 @@ func hostPort(u *url.URL) string {
 // Cookie access is bound to the current document URL by the loop, never by JS.
 func (f *Fetcher) DocumentCookie(base string) string    { return f.p.Cookies.Document(base) }
 func (f *Fetcher) SetDocumentCookie(base, value string) { f.p.Cookies.SetDocument(base, value) }
+
+// ForScripts derives an isolated request policy; shared fetch/navigation hosts
+// and AnyOrigin can never become script authority. Each derived policy remains
+// immutable, including while older requests are in flight.
+func (f *Fetcher) ForScripts(base string, origins []string) *Fetcher {
+	if f.p.Origin == nil {
+		return New(Policy{})
+	}
+	p := f.p
+	p.AllowHosts = nil
+	p.AnyOrigin = false
+	p.AllowOrigins = append([]string(nil), origins...)
+	u, err := url.Parse(base)
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") {
+		p.Origin = nil
+		p.AllowOrigins = nil
+	} else {
+		p.Origin = u
+		p.NoDowngradeFrom = u.Scheme
+	}
+	derived := New(p)
+	derived.sem = f.sem
+	return derived
+}
+
+// CloseScriptConnections releases idle connections of a per-request derived
+// script fetcher; active request and shared semaphore ownership are unchanged.
+func (f *Fetcher) CloseScriptConnections() {
+	if transport, ok := f.client.Transport.(cookies.Transport); ok {
+		if idle, ok := transport.Base.(interface{ CloseIdleConnections() }); ok {
+			idle.CloseIdleConnections()
+		}
+	}
+}

@@ -235,3 +235,13 @@ func TestSessionStorageFlags(t *testing.T) {
 		t.Fatal(c, err)
 	}
 }
+
+func TestScopedScriptGrantFlags(t *testing.T) {
+	c, err := parseArgs([]string{"--scripts=external", "--fetch=off", "--script-prompts", "--allow-script=https://page.test=https://cdn.test", "--allow-script=https://other.test=https://other-cdn.test", "https://page.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !c.Profile.ScriptPrompts || len(c.Profile.ScriptGrants) != 2 || len(c.Profile.Hosts) != 0 || c.Profile.Fetch != profile.FetchOff {
+		t.Fatal(c.Profile)
+	}
+}

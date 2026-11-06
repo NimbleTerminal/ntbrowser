@@ -30,38 +30,36 @@ func (l *Loop) loadDynamicScript(page *Page, generation uint64, request jsvm.Scr
 	if request.URL == "" {
 		denied = fmt.Errorf("empty script src")
 	}
-	go func() {
-		var response netpolicy.Response
-		err := denied
-		if err == nil {
-			response, err = page.Fetcher.Script(page.ctx, request.URL, request.Integrity, request.CrossOrigin)
+	complete := func(response netpolicy.Response, err error) {
+		if l.page != page || page.killed || l.navGen.Load() != generation {
+			return
 		}
-		l.post(func() {
-			if l.page != page || page.killed || l.navGen.Load() != generation {
-				return
+		job.ready, job.err, job.body = true, err, response.Body
+		if response.URL != "" {
+			job.name = response.URL
+		}
+		finish := func(j *dynamicScript) {
+			result := "ok"
+			if j.err != nil {
+				result = j.err.Error()
 			}
-			job.ready, job.err, job.body = true, err, response.Body
-			if response.URL != "" {
-				job.name = response.URL
-			}
-			finish := func(j *dynamicScript) {
-				result := "ok"
-				if j.err != nil {
-					result = j.err.Error()
-				}
-				l.cfg.Trace.Record("dynamic_script", map[string]any{"url": j.name, "result": result, "async": j.request.Async})
-				page.Sandbox.CompleteScript(j.request.ID, j.name, j.body, j.err)
-				j.body = ""
-			}
-			if request.Async {
-				finish(job)
-			}
-			for !page.killed && !page.Sandbox.Disabled() && len(page.dynamicOrdered) > 0 && page.dynamicOrdered[0].ready {
-				next := page.dynamicOrdered[0]
-				page.dynamicOrdered[0] = nil
-				page.dynamicOrdered = page.dynamicOrdered[1:]
-				finish(next)
-			}
-		})
-	}()
+			l.cfg.Trace.Record("dynamic_script", map[string]any{"url": j.name, "result": result, "async": j.request.Async})
+			page.Sandbox.CompleteScript(j.request.ID, j.name, j.body, j.err)
+			j.body = ""
+		}
+		if request.Async {
+			finish(job)
+		}
+		for !page.killed && !page.Sandbox.Disabled() && len(page.dynamicOrdered) > 0 && page.dynamicOrdered[0].ready {
+			next := page.dynamicOrdered[0]
+			page.dynamicOrdered[0] = nil
+			page.dynamicOrdered = page.dynamicOrdered[1:]
+			finish(next)
+		}
+	}
+	if denied != nil {
+		go l.post(func() { complete(netpolicy.Response{}, denied) })
+		return
+	}
+	l.fetchScript(page, generation, request.URL, request.Integrity, request.CrossOrigin, complete)
 }

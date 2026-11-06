@@ -91,6 +91,9 @@ const defaultClockMillis = 10
 // Profile is one position for each gate. Code compares against the open
 // values, so an empty field is closed.
 type Profile struct {
+	ScriptGrants  []ScriptGrant `json:"script-grants,omitempty"`
+	ScriptPrompts bool          `json:"script-prompts,omitempty"`
+
 	SessionStorage           SessionStorage   `json:"session-storage,omitempty"`
 	SessionStorageBytes      int              `json:"session-storage-bytes,omitempty"`
 	SessionStorageTotalBytes int              `json:"session-storage-total-bytes,omitempty"`
@@ -171,6 +174,15 @@ func oneOf[T ~string](gate string, v T, allowed ...T) error {
 }
 
 func (p Profile) check() error {
+	if len(p.ScriptGrants) > 128 {
+		return fmt.Errorf("profile: at most 128 script grants")
+	}
+	for _, g := range p.ScriptGrants {
+		if _, err := g.Normalized(); err != nil {
+			return err
+		}
+	}
+
 	if p.SessionStorageBytes < 0 || p.SessionStorageBytes > 8<<20 || p.SessionStorageTotalBytes < 0 || p.SessionStorageTotalBytes > 64<<20 {
 		return fmt.Errorf("profile: session-storage-bytes must be 0..8388608 and session-storage-total-bytes 0..67108864 (zero selects defaults)")
 	}
@@ -322,7 +334,9 @@ func (p Profile) Table(s Strengths) string {
 		{"navigate", orOff(p.Navigate), "top-level links; off = only the start URL"},
 		{"subresources", orOff(p.Subresources), "stylesheets and images inside a page"},
 		{"fetch", orOff(p.Fetch), "fetch() from page script"},
-		{"hosts", strings.Join(p.Hosts, ","), "what allowlist means"},
+		{"hosts", strings.Join(p.Hosts, ","), "fetch/navigation allowlists; does not authorize scripts"},
+		{"script-prompts", onOff(p.ScriptPrompts), "ask for one-request or session script grants"},
+		{"script-grants", fmt.Sprint(p.ScriptGrants), "source origin to destination origin; scripts only"},
 		{"private-network", onOff(p.PrivateNetwork), "loopback and private addresses"},
 		{"scripts", orOff(p.Scripts), "page script"},
 		{"diagnostics", onOff(p.Diagnostics), "host-only diagnostic file; may contain page data"},

@@ -42,7 +42,7 @@ func (m *Model) scriptNavigate(v loop.ScriptNavigateMsg) tea.Cmd {
 	if m.current == nil || v.Navigation != m.documentNav || v.Source != m.current.String() || m.navSeq != m.documentSeq {
 		return nil
 	}
-	if m.pendingNav != "" {
+	if m.pendingNav != "" || len(m.scriptPermissions) > 0 {
 		return nil
 	} // scripts cannot replace a reader-visible prompt
 	gate := m.profile.ScriptNavigation

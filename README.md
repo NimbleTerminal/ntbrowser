@@ -167,11 +167,13 @@ supported.
 | `--profile-file path` | JSON profile |
 | `--show-profile` | Print the effective profile and exit |
 | `--nav off\|free\|allowlist\|confirm` | Link navigation. `off` fetches only the start URL |
-| `--allow host[,host]` | Hosts for allowlist gates; a leading dot allows subdomains |
+| `--allow host[,host]` | Fetch/navigation allowlist hosts; a leading dot allows subdomains; scripts use `--allow-script` |
 | `--allow-private` | Permit loopback and private addresses (development only) |
 | `--subresources any\|origin\|off` | Stylesheets, images and CSS backgrounds |
 | `--fetch off\|origin\|allowlist` | `fetch()` from page script |
 | `--scripts off\|inline\|external` | Page script (`--external-scripts` is `--scripts external`) |
+| `--allow-script SOURCE_ORIGIN=DESTINATION_ORIGIN` | Repeatable exact-origin script grant, independent of fetch/navigation |
+| `--script-prompts` | Ask for one-request or session script grants; default off |
 | `--diagnostics path` | Capture bounded JSONL diagnostics to a new owner-only file |
 | `--script-navigation off\|origin\|allowlist\|confirm` | Location navigation, additionally constrained by `--nav` |
 | `--script-navigation-limit n` | Automatic navigation chain limit (default 8, maximum 100) |
@@ -508,9 +510,9 @@ External scripts default to asynchronous execution; setting `async=false` before
 preparation preserves insertion order among those ordered scripts. Independent
 async scripts can finish while the ordered queue is waiting.
 
-External loading requires `--scripts=external` and uses the existing page
-fetcher's origin/allowlist, redirect, private-network, cookie, size and timeout
-policy. Only successful HTTP responses with a supported JavaScript MIME type
+External loading requires `--scripts=external` and a same-origin destination
+or a source-scoped script grant. It retains the page transport’s redirect,
+private-network, cookie, size and timeout policy and shared in-flight budget. Only successful HTTP responses with a supported JavaScript MIME type
 are admitted; HTML and JSON responses never execute as scripts. Fetch failure
 or policy refusal dispatches `error`; successful loading dispatches `load`,
 while execution errors are reported separately. Events are non-bubbling and
@@ -566,7 +568,7 @@ Cross-origin integrity loads additionally require a `crossorigin` attribute
 (`anonymous` or its equivalent empty/invalid value) and exactly one matching
 `Access-Control-Allow-Origin` header, or `*`. The host sends the document's
 serialized Origin; page-provided request headers cannot replace it. Existing
-host allowlists, private-network, redirect, MIME, cookie, body and timeout gates
+script-origin grants, private-network, redirect, MIME, cookie, body and timeout gates
 still apply. Integrity grants no permission to fetch an otherwise denied host.
 
 This implementation fails closed for credentialed integrity loads, redirects
@@ -579,3 +581,56 @@ These stricter failure rules are intentional differences from a full browser.
 CSP, Integrity-Policy headers, stylesheet integrity and general fetch CORS are
 outside this feature. The verification model is based on the
 [Subresource Integrity specification](https://www.w3.org/TR/sri/).
+
+## Site-scoped script permissions
+
+`--allow` no longer authorizes script loading. It remains the host list for
+fetch/navigation allowlist gates. Cross-origin external scripts require an exact
+source-origin → destination-origin grant; granting a script does not open fetch,
+images/styles, navigation, private networking, or any other capability. Same-origin
+scripts still require `--scripts=external`. Script grants work independently of
+`--fetch=off|origin|allowlist`.
+
+For Google's CDN, an explicit command-line grant is:
+
+```sh
+ntbrowser --scripts=external \
+  --allow-script=https://www.google.com=https://www.gstatic.com \
+  'https://www.google.com/search?q=hello'
+```
+
+Origins include scheme and effective port. Grants accept exact ASCII hostnames
+(including punycode) or IP literals, with no paths or wildcards. A grant for one
+page origin does not carry over to another site. Repeat `--allow-script` to add
+grant pairs. For persistent, explicitly saved grants, put them in a profile file
+and launch with `--profile-file FILE`:
+
+```json
+{
+  "base": "browse",
+  "scripts": "external",
+  "script-grants": [
+    {
+      "source": "https://www.google.com",
+      "destination": "https://www.gstatic.com"
+    }
+  ]
+}
+```
+
+`--script-prompts` (or `"script-prompts": true`) enables reader decisions for
+otherwise ungranted cross-origin scripts. The prompt identifies both origins and
+the purpose. `Alt+O` admits that pending request once; `Alt+S` grants the origin
+pair for this browser session; `Esc` denies. Session grants apply to pending and
+future scripts from that source, including after reload, and expire on exit.
+The UI does not write profile files; persistent grants are explicit profile edits.
+
+Prompts cannot replace navigation confirmations or interrupt an active editor or
+search. Ordinary typing does not approve, mouse actions cannot reach the page
+while the prompt is displayed, and approval is disabled when both origins do not
+fit on screen. There are at most eight pending prompts, each expiring after 30
+seconds, and 128 session grants (128 saved grants per profile). Navigation drops
+pending requests; stale or duplicate decisions have no authority. Private-network,
+mixed-content, SRI, CORS and response limits remain enforced after approval.
+Denied requests report the initiating origin, script URL and reason in the status
+line and diagnostic capture.

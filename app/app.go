@@ -68,6 +68,8 @@ type shutdownReadyMsg struct{}
 const shutdownGrace = 150 * time.Millisecond
 
 type Model struct {
+	scriptPermissions []loop.ScriptPermissionMsg
+
 	loop              *loop.Loop
 	viewer            *nthtml.Model
 	cssPainted        bool
@@ -173,6 +175,7 @@ func (m *Model) Init() tea.Cmd { return m.navigate(m.start, pushNew, true) }
 func (m *Model) navigate(href string, hist int, anyOrigin bool, originOnly ...bool) tea.Cmd {
 	m.pendingNav = ""
 	m.pendingScript = nil
+	m.scriptPermissions = nil
 	m.navSeq++
 	seq := m.navSeq
 	// file: is allowed for the page the user asked for on the command line,
@@ -290,6 +293,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	switch v := msg.(type) {
+	case loop.ScriptPermissionMsg:
+		m.scriptPermission(v)
+		return m, nil
 	case pageLoadedMsg:
 		if v.seq != m.navSeq {
 			return m, nil // superseded by a later navigation
@@ -532,6 +538,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, cmd
 			}
 		}
+		if m.scriptPermissionKey(v.String()) {
+			return m, nil
+		}
 		searching := m.viewer != nil && m.viewer.SearchInputActive()
 		if m.pendingNav != "" && !searching {
 			switch v.String() {
@@ -629,7 +638,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // overlay reports a picture or video in the page's place.
-func (m *Model) overlay() bool { return m.player != nil || m.media != nil }
+func (m *Model) overlay() bool {
+	return m.player != nil || m.media != nil || len(m.scriptPermissions) > 0
+}
 
 // quit starts shutdown: graphics are cleaned up, then the program ends.
 func (m *Model) quit() tea.Cmd {
@@ -671,11 +682,14 @@ func (m *Model) View() tea.View {
 	// Everything on these two lines passed clean() when stored; truncation
 	// only measures width. No page text reaches here unfiltered.
 	status := ansi.Truncate(clean(m.status), max(1, m.cols), "…")
-	if line, ok := m.formStatus(); ok && m.pendingNav == "" {
+	if line, ok := m.formStatus(); ok && m.pendingNav == "" && len(m.scriptPermissions) == 0 {
 		status = line // the editor or chooser; a confirm prompt always wins (pendingNav)
 	}
 	if m.player != nil {
 		status = ansi.Truncate(m.playerStatus(), max(1, m.cols), "…")
+	}
+	if prompt := m.scriptPermissionStatus(); prompt != "" {
+		status = ansi.Truncate(prompt, max(1, m.cols), "…")
 	}
 	pos := ""
 	if m.chunk.Count > 0 {
@@ -694,6 +708,12 @@ func (m *Model) View() tea.View {
 	}
 	if m.player != nil {
 		help = "\n Space pause · ←→ seek · Esc back · ^C quit"
+	}
+	if len(m.scriptPermissions) > 0 {
+		help = "\n Alt+O allow once · Alt+S session · Esc deny · q quit"
+		if ansi.StringWidth(m.scriptPermissionStatus()) > m.cols {
+			help = "\n Widen terminal to view both origins before allowing · Esc deny"
+		}
 	}
 	v := tea.NewView(body + "\n" + status + help)
 	v.AltScreen = true
