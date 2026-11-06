@@ -1,7 +1,8 @@
 # CSS-preserving viewport rendering
 
-Status: upstream implementation committed on nthtml branch
-`feat/host-painted-viewport` at `9bb6fd6` (initial implementation `24f51fa`); not yet published or adopted by
+Status: upstream API published as [nthtml v0.4.0](https://github.com/NimbleTerminal/nthtml/releases/tag/v0.4.0)
+at `84caa4b`, including implementation `24f51fa` and review fixes `9bb6fd6`.
+Verified downloadable through the public Go module proxy. Not yet adopted by
 ntbrowser. Semantic `-chunked` mode ships independently. Date: 2026-11-05.
 
 ## Implementation checkpoint
@@ -26,8 +27,8 @@ is retained; the transport fills the planned grid to absorb raster rounding
 without scale-dependent letterboxes. Existing viewer callers retain their API
 and behavior. These choices are documented in the upstream integration contract.
 
-Next: publish the upstream API, then implement the ntbrowser adoption checklist
-below using that published dependency. The default CSS renderer still uses
+Next: implement the ntbrowser adoption checklist below using published nthtml
+v0.4.0, including the production CJK painter benchmark before rollout. The default CSS renderer still uses
 `NoImage: false`; this checkpoint does not supersede that current requirement.
 
 Review fixes in `9bb6fd6` track the submitted picture plan/revision separately,
