@@ -544,11 +544,11 @@ func (t *Tree) ByID(id string) *Node {
 	return t.find(t.root, func(n *Node) bool { v, ok := n.Attr("id"); return ok && v == id })
 }
 
-// Query supports the selector subset the bridge exposes: tag, #id, .class and
-// descendant combinations of those. Anything richer throws in JS.
+// Query supports tag, #id, .class, attribute-presence suffixes and
+// descendant combinations. Anything richer throws in JS.
 func (t *Tree) Query(from *Node, selector string, all bool) ([]*Node, error) {
-	parts := strings.Fields(selector)
-	if len(parts) == 0 || len(parts) > 8 {
+	parts, splitErr := selectorParts(selector)
+	if splitErr != nil || len(parts) == 0 || len(parts) > 8 {
 		return nil, errors.New("ntbrowser/dom: unsupported selector")
 	}
 	preds := make([]func(*Node) bool, 0, len(parts))
@@ -590,6 +590,48 @@ func ancestorsMatch(n *Node, preds []func(*Node) bool, stop *Node) bool {
 }
 
 func simplePredicate(p string) (func(*Node) bool, error) {
+	if first := strings.IndexByte(p, '['); first >= 0 {
+		base := p[:first]
+		if base == "" {
+			base = "*"
+		}
+		pred, err := simplePredicate(base)
+		if err != nil {
+			return nil, err
+		}
+		var attrs []string
+		rest := p[first:]
+		for len(rest) > 0 {
+			if rest[0] != '[' || len(attrs) >= 8 {
+				return nil, fmt.Errorf("ntbrowser/dom: unsupported selector %q", p)
+			}
+			end := strings.IndexByte(rest, ']')
+			if end < 0 {
+				return nil, fmt.Errorf("ntbrowser/dom: unsupported selector %q", p)
+			}
+			name := strings.Trim(rest[1:end], " \t\r\n\f")
+			if !validName(name) || strings.ContainsAny(name, ":|") {
+				return nil, fmt.Errorf("ntbrowser/dom: unsupported selector %q", p)
+			}
+			attrs = append(attrs, strings.ToLower(name))
+			rest = rest[end+1:]
+		}
+		return func(n *Node) bool {
+			if !pred(n) {
+				return false
+			}
+			for _, a := range attrs {
+				if _, ok := n.Attr(a); !ok {
+					return false
+				}
+			}
+			return true
+		}, nil
+	}
+	if strings.ContainsAny(p, "[]") {
+		return nil, fmt.Errorf("ntbrowser/dom: unsupported selector %q", p)
+	}
+
 	switch {
 	case strings.HasPrefix(p, "#"):
 		id := p[1:]

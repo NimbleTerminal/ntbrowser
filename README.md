@@ -532,3 +532,11 @@ implementation. Dynamic scripts do not delay `DOMContentLoaded`; `defer` has
 no extra scheduling effect on them. `document.currentScript` identifies a
 running dynamic script; parser scripts are still extracted from the tree and
 report null. Script elements are omitted from rendered HTML.
+
+DOM queries support attribute-presence selectors such as `[nonce]`,
+`script[nonce]`, `.item[data-ready]`, and descendant combinations. Empty-valued
+attributes count as present; HTML attribute names are case-insensitive. Queries
+are bounded to 4096 bytes, eight descendant parts and eight presence tests per
+part. Attribute value operators, namespaces, escapes and general compound CSS
+selectors remain unsupported. This follows the presence-selector semantics in
+[Selectors Level 4](https://www.w3.org/TR/selectors-4/#attribute-representation).

@@ -97,3 +97,15 @@ func TestScriptPreparationTriggersAndSnapshot(t *testing.T) {
 		t.Fatalf("preparation snapshot: %+v", requests)
 	}
 }
+
+func TestScriptNonceSelectorBootstrap(t *testing.T) {
+	s, _, _ := formSandbox(t, "")
+	defer s.Close()
+	s.cfg.DynamicScripts = true
+	var requests []ScriptRequest
+	s.cfg.LoadScript = func(r ScriptRequest) { requests = append(requests, r) }
+	imageEval(t, s, `if(document.querySelector("script[nonce]")!==null)throw Error("unexpected nonce");let original=document.createElement("script");original.type="application/json";original.nonce="fixture";document.head.appendChild(original);let script=document.createElement("script");let source=document.querySelector("script[nonce]");script.nonce=source.nonce||source.getAttribute("nonce");script.src="/bootstrap.js";document.head.appendChild(script);if(document.querySelectorAll("script[nonce]").length!==2||script.nonce!=="fixture")throw Error("nonce bootstrap failed");`)
+	if len(requests) != 1 {
+		t.Fatal("script never prepared", requests)
+	}
+}
