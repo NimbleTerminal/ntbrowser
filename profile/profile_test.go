@@ -227,3 +227,21 @@ func TestFrameResourceLimits(t *testing.T) {
 		t.Fatal(p, err)
 	}
 }
+
+func TestSessionStorageGateAndQuotas(t *testing.T) {
+	for _, name := range []string{"browse", "reader", "locked"} {
+		p, _ := Builtin(name)
+		if p.SessionStorage == SessionStorageOn {
+			t.Fatal(name)
+		}
+	}
+	for _, raw := range []string{`{"session-storage":"disk"}`, `{"session-storage-bytes":-1}`, `{"session-storage-bytes":8388609}`, `{"session-storage-total-bytes":67108865}`} {
+		if _, err := Parse([]byte(raw)); err == nil {
+			t.Fatal(raw)
+		}
+	}
+	p, err := Parse([]byte(`{"session-storage":"on","session-storage-bytes":1024,"session-storage-total-bytes":4096}`))
+	if err != nil || p.SessionStorage != SessionStorageOn || p.StorageBytes() != 1024 || p.StorageTotalBytes() != 4096 {
+		t.Fatal(p, err)
+	}
+}

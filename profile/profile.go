@@ -27,6 +27,7 @@ type (
 	Scripts          string
 	DynamicCode      string
 	Cookies          string
+	SessionStorage   string
 	Files            string
 	Media            string
 	Clipboard        string
@@ -51,6 +52,9 @@ const (
 	FetchOff       Fetch = "off"
 	FetchOrigin    Fetch = "origin"
 	FetchAllowlist Fetch = "allowlist"
+
+	SessionStorageOff SessionStorage = "off"
+	SessionStorageOn  SessionStorage = "on"
 
 	CookiesOff     Cookies = "off"
 	CookiesSession Cookies = "session"
@@ -87,28 +91,31 @@ const defaultClockMillis = 10
 // Profile is one position for each gate. Code compares against the open
 // values, so an empty field is closed.
 type Profile struct {
-	FrameMillis           int              `json:"frame-ms,omitempty"`
-	FrameCallbacks        int              `json:"frame-callbacks,omitempty"`
-	FrameBudgetMillis     int              `json:"frame-budget-ms,omitempty"`
-	ScriptNavigation      ScriptNavigation `json:"script-navigation,omitempty"`
-	ScriptNavigationLimit int              `json:"script-navigation-limit,omitempty"`
-	Cookies               Cookies          `json:"cookies,omitempty"`
-	Diagnostics           bool             `json:"diagnostics,omitempty"`
-	Name                  string           `json:"name,omitempty"`
-	Navigate              Navigate         `json:"navigate,omitempty"`
-	Subresources          Subresources     `json:"subresources,omitempty"`
-	Fetch                 Fetch            `json:"fetch,omitempty"`
-	Hosts                 []string         `json:"hosts,omitempty"`
-	PrivateNetwork        bool             `json:"private-network,omitempty"`
-	Scripts               Scripts          `json:"scripts,omitempty"`
-	DynamicCode           DynamicCode      `json:"dynamic-code,omitempty"`
-	ClockMillis           int              `json:"clock,omitempty"`
-	Files                 Files            `json:"files,omitempty"`
-	NativeCode            bool             `json:"native-code,omitempty"`
-	Media                 Media            `json:"media,omitempty"`
-	MaxMediaBytes         int64            `json:"max-media-bytes,omitempty"`
-	Clipboard             Clipboard        `json:"clipboard,omitempty"`
-	Enforcement           Enforcement      `json:"enforcement,omitempty"`
+	SessionStorage           SessionStorage   `json:"session-storage,omitempty"`
+	SessionStorageBytes      int              `json:"session-storage-bytes,omitempty"`
+	SessionStorageTotalBytes int              `json:"session-storage-total-bytes,omitempty"`
+	FrameMillis              int              `json:"frame-ms,omitempty"`
+	FrameCallbacks           int              `json:"frame-callbacks,omitempty"`
+	FrameBudgetMillis        int              `json:"frame-budget-ms,omitempty"`
+	ScriptNavigation         ScriptNavigation `json:"script-navigation,omitempty"`
+	ScriptNavigationLimit    int              `json:"script-navigation-limit,omitempty"`
+	Cookies                  Cookies          `json:"cookies,omitempty"`
+	Diagnostics              bool             `json:"diagnostics,omitempty"`
+	Name                     string           `json:"name,omitempty"`
+	Navigate                 Navigate         `json:"navigate,omitempty"`
+	Subresources             Subresources     `json:"subresources,omitempty"`
+	Fetch                    Fetch            `json:"fetch,omitempty"`
+	Hosts                    []string         `json:"hosts,omitempty"`
+	PrivateNetwork           bool             `json:"private-network,omitempty"`
+	Scripts                  Scripts          `json:"scripts,omitempty"`
+	DynamicCode              DynamicCode      `json:"dynamic-code,omitempty"`
+	ClockMillis              int              `json:"clock,omitempty"`
+	Files                    Files            `json:"files,omitempty"`
+	NativeCode               bool             `json:"native-code,omitempty"`
+	Media                    Media            `json:"media,omitempty"`
+	MaxMediaBytes            int64            `json:"max-media-bytes,omitempty"`
+	Clipboard                Clipboard        `json:"clipboard,omitempty"`
+	Enforcement              Enforcement      `json:"enforcement,omitempty"`
 }
 
 // Builtin returns a built-in profile: locked, reader or browse.
@@ -164,6 +171,9 @@ func oneOf[T ~string](gate string, v T, allowed ...T) error {
 }
 
 func (p Profile) check() error {
+	if p.SessionStorageBytes < 0 || p.SessionStorageBytes > 8<<20 || p.SessionStorageTotalBytes < 0 || p.SessionStorageTotalBytes > 64<<20 {
+		return fmt.Errorf("profile: session-storage-bytes must be 0..8388608 and session-storage-total-bytes 0..67108864 (zero selects defaults)")
+	}
 	if p.FrameMillis < 0 || p.FrameMillis > 1000 || p.FrameCallbacks < 0 || p.FrameCallbacks > 1024 || p.FrameBudgetMillis < 0 || p.FrameBudgetMillis > 50 {
 		return fmt.Errorf("profile: frame-ms must be 0..1000, frame-callbacks 0..1024, frame-budget-ms 0..50 (zero uses defaults)")
 	}
@@ -179,6 +189,7 @@ func (p Profile) check() error {
 		oneOf("subresources", p.Subresources, SubOff, SubOrigin, SubAny),
 		oneOf("fetch", p.Fetch, FetchOff, FetchOrigin, FetchAllowlist),
 		oneOf("scripts", p.Scripts, ScriptsOff, ScriptsInline, ScriptsExternal),
+		oneOf("session-storage", p.SessionStorage, SessionStorageOff, SessionStorageOn),
 		oneOf("cookies", p.Cookies, CookiesOff, CookiesSession),
 		oneOf("dynamic-code", p.DynamicCode, DynamicOff, DynamicOn),
 		oneOf("files", p.Files, FilesOff, FilesStartPage, FilesTemp),
@@ -315,6 +326,9 @@ func (p Profile) Table(s Strengths) string {
 		{"private-network", onOff(p.PrivateNetwork), "loopback and private addresses"},
 		{"scripts", orOff(p.Scripts), "page script"},
 		{"diagnostics", onOff(p.Diagnostics), "host-only diagnostic file; may contain page data"},
+		{"session-storage", orOff(p.SessionStorage), "origin-isolated memory-only session storage"},
+		{"session-storage-bytes", strconv.Itoa(p.StorageBytes()), "per-origin key/value bytes"},
+		{"session-storage-total-bytes", strconv.Itoa(p.StorageTotalBytes()), "session-wide key/value bytes"},
 		{"cookies", orOff(p.Cookies), "in-memory session cookies; cross-origin subrequests excluded"},
 		{"dynamic-code", orOff(p.DynamicCode), "eval and Function-family string compilation"},
 		{"frame-ms", strconv.Itoa(p.FrameInterval()), "minimum frame interval"},
@@ -369,4 +383,17 @@ func (p Profile) FrameBudget() int {
 		return p.FrameBudgetMillis
 	}
 	return 8
+}
+
+func (p Profile) StorageBytes() int {
+	if p.SessionStorageBytes > 0 {
+		return p.SessionStorageBytes
+	}
+	return 1 << 20
+}
+func (p Profile) StorageTotalBytes() int {
+	if p.SessionStorageTotalBytes > 0 {
+		return p.SessionStorageTotalBytes
+	}
+	return 8 << 20
 }

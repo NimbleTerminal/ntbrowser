@@ -80,6 +80,7 @@ New packages: `profile` (data, validation, printing; no system imports) and `con
    | `private-network` | `off`, `on` | loopback and private addresses |
    | `scripts` | `off`, `inline`, `external` | page script |
    | `diagnostics` | boolean, default false | host writes observations to one preopened private file; no page access |
+   | `session-storage` | `off`, `on` | bounded per-origin memory store for one browser session; off by default |
    | `cookies` | `off`, `session` | bounded memory-only cookie store shared across navigation; off in all built-ins |
    | `dynamic-code` | `off`, `on` | native direct/indirect eval and Function-family string compilation; off in every built-in |
    | `clock` | milliseconds | shared resolution for Date, performance and animation-frame timestamps (speculation timing) |
@@ -406,3 +407,33 @@ bounded to 1–1000 ms, 1–1024 callbacks, and 1–50 ms respectively; zero sel
 defaults. Scripts remain controlled by the scripts gate and callback execution
 retains the ordinary watchdog, strike and heap protections. Deferred callbacks
 preserve order and cancellation across batch boundaries.
+
+
+## Session storage extension (2026-11-06)
+
+`session-storage=on` explicitly enables a loop-owned, memory-only Session.
+The loop binds a Storage area to the current document's WHATWG-parsed HTTP(S)
+origin and overrides any lower-level Sandbox capability. Scheme/host/effective
+port isolate areas; opaque/file origins are refused. Hostile page strings
+never become paths or request destinations. No netpolicy or OS sandbox grant
+is added. Navigation retains the session store but replaces all JS wrappers;
+loop shutdown clears it. Independent browser loops have independent stores.
+
+`session-storage-bytes` defaults to 1 MiB per origin (maximum 8 MiB), and
+`session-storage-total-bytes` defaults to 8 MiB (maximum 64 MiB). Zero selects
+defaults. Keys plus values are charged by UTF-16 byte length. Fixed limits are
+64 nonempty origins and 1024 keys per origin, including empty-value entries.
+A rejected update is atomic; deletes/clear release quota. No eviction or disk
+spill occurs. The closed gate/unsupported origin raises SecurityError on
+sessionStorage access; failed writes raise QuotaExceededError. Errors use
+standard names without adding a general DOMException implementation.
+
+The bridge provides the Storage methods, length, named property operations,
+and enumeration using Goja's explicit DynamicObject API, never reflected Go
+structs. Stored data consists only of encoded strings, not runtime values.
+Prototype members take precedence over same-named stored keys. Method calls
+preserve UTF-16 code units, including lone surrogates; named-property keys have
+Goja's string-key conversion limits. Accessor/symbol own-property descriptors,
+StorageEvents, frames/opener cloning and localStorage are outside this scope.
+No contents are emitted through diagnostics by the host. Source:
+[HTML Web Storage](https://html.spec.whatwg.org/multipage/webstorage.html).

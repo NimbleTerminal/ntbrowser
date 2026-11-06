@@ -40,6 +40,7 @@ import (
 	"nimbleterminal.dev/ntbrowser/jsvm"
 	"nimbleterminal.dev/ntbrowser/netpolicy"
 	"nimbleterminal.dev/ntbrowser/profile"
+	"nimbleterminal.dev/ntbrowser/sessionstorage"
 	"nimbleterminal.dev/ntbrowser/subres"
 )
 
@@ -150,6 +151,7 @@ type Config struct {
 }
 
 type Loop struct {
+	storage         *sessionstorage.Session
 	frameNavigation atomic.Uint64
 	locationCommit  atomic.Uint64
 	resizeWidth     atomic.Int64
@@ -204,6 +206,9 @@ func New(ctx context.Context, cfg Config, sink Sink) *Loop {
 	}
 	cfg.Subresources = cfg.Subresources.WithDefaults()
 	l := &Loop{ctx: ctx, cfg: cfg, sink: sink, inbox: make(chan func(), cfg.Inbox), outbox: make(chan tea.Msg, cfg.Outbox), timerT: stoppedTimer(), frameTimer: stoppedTimer()}
+	if cfg.Profile.SessionStorage == profile.SessionStorageOn {
+		l.storage = sessionstorage.New(cfg.Profile.StorageBytes(), cfg.Profile.StorageTotalBytes())
+	}
 	l.resizeWake = make(chan struct{}, 1)
 	l.renderJobs = make(chan func(*paintWorker), 1)
 	l.paintWake = make(chan struct{}, 1)
@@ -215,6 +220,7 @@ func New(ctx context.Context, cfg Config, sink Sink) *Loop {
 
 // Run is the VM goroutine. It is the only goroutine that may touch l.page.
 func (l *Loop) Run() {
+	defer l.storage.Clear()
 	for {
 		select {
 		case <-l.ctx.Done():
@@ -348,6 +354,7 @@ func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) ui
 		}
 		cfg := l.cfg.Script
 		cfg.Location = base
+		cfg.SessionStorage = l.storage.Open(base)
 		cfg.CookieRead, cfg.CookieWrite = nil, nil
 		if l.cfg.Profile.Cookies == profile.CookiesSession {
 			cfg.CookieRead = func() string { return fetcher.DocumentCookie(base) }

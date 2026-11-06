@@ -228,3 +228,10 @@ func TestFrameResourceFlags(t *testing.T) {
 		t.Fatal(c, err)
 	}
 }
+
+func TestSessionStorageFlags(t *testing.T) {
+	c, err := parseArgs([]string{"https://example.test/", "--session-storage=on", "--session-storage-bytes=1024", "--session-storage-total-bytes=4096"})
+	if err != nil || c.Profile.SessionStorage != profile.SessionStorageOn || c.Profile.StorageBytes() != 1024 || c.Profile.StorageTotalBytes() != 4096 || c.Profile.Name != "browse+flags" {
+		t.Fatal(c, err)
+	}
+}

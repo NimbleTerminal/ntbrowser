@@ -26,10 +26,12 @@ import (
 	"github.com/dop251/goja/parser"
 
 	"nimbleterminal.dev/ntbrowser/dom"
+	"nimbleterminal.dev/ntbrowser/sessionstorage"
 )
 
 // Config bounds one page's scripting. Zero fields use the defaults below.
 type Config struct {
+	SessionStorage   *sessionstorage.Area          // bound to one origin by the host; nil is closed
 	Navigate         func(href, mode string) error // host-authorized navigation; nil is closed
 	CookieRead       func() string                 // host-only capability, bound to the current document URL
 	CookieWrite      func(string)                  // nil makes document.cookie writes inert
@@ -198,6 +200,7 @@ func New(cfg Config, tree *dom.Tree, host Host) *Sandbox {
 	s.installAnchors()
 	s.installImages()
 	s.installGlobals()
+	s.installStorage()
 	s.installPerformance()
 	dom.Walk(tree.Root(), func(n *dom.Node) {
 		if n.Tag() == "img" {
@@ -334,6 +337,7 @@ func (s *Sandbox) Close() {
 	s.imageProto = nil
 	s.anchorProto = nil
 	s.performanceNow = nil
+	s.cfg.SessionStorage = nil
 	s.vm = nil
 	s.wd.vm = nil
 	s.elemProto, s.docObj, s.promiseCtor, s.jsonParse = nil, nil, nil, nil

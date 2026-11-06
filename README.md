@@ -143,6 +143,7 @@ A profile is a named set of positions for every gate out of the sandbox. It is f
 | `scripts` | off | off | inline |
 | `dynamic-code` | off | off | off |
 | `cookies` | off | off | off |
+| `session-storage` | off | off | off |
 | `files` | off | off | start-page |
 | `native-code` | off | off | off |
 | `media` | off | image | animation |
@@ -174,6 +175,9 @@ supported.
 | `--diagnostics path` | Capture bounded JSONL diagnostics to a new owner-only file |
 | `--script-navigation off\|origin\|allowlist\|confirm` | Location navigation, additionally constrained by `--nav` |
 | `--script-navigation-limit n` | Automatic navigation chain limit (default 8, maximum 100) |
+| `--session-storage off\|on` | Origin-isolated memory-only sessionStorage (default off) |
+| `--session-storage-bytes n` | Per-origin key/value byte quota (default 1 MiB; maximum 8 MiB) |
+| `--session-storage-total-bytes n` | Total session byte quota (default 8 MiB; maximum 64 MiB) |
 | `--cookies off\|session` | In-memory cookies for this browser session (default off) |
 | `--dynamic-code off\|on` | Native `eval` and Function-family compilation (default off) |
 | `--clipboard off\|copy` | Selected-text copy |
@@ -395,8 +399,8 @@ Partitioned cookies are rejected. Cookie/Set-Cookie headers remain unavailable
 to page JavaScript; the cookie store adds headers only after network admission.
 Cookies do not grant navigation, network, storage, or script execution rights.
 
-Cookies and Location do not implement sessionStorage or the rest of a full
-browser challenge environment.
+Cookies, Location and sessionStorage remain a subset of a full browser
+challenge environment.
 
 
 ## Location and script navigation
@@ -458,3 +462,37 @@ callback consumes a normal watchdog strike and is not retried. Heap checks and
 microtask draining remain part of each callback entry. Go work/GC pauses and
 non-interruptible engine operations can overshoot the wall-time target; this
 is not a hard real-time deadline or a guaranteed display refresh rate.
+
+
+## Session storage
+
+Enable with `--session-storage=on` or `"session-storage":"on"` in a profile.
+The gate defaults off in every built-in. `window.sessionStorage` returns a
+stable `Storage` object for the active document, supporting `length`, `key`,
+`getItem`, `setItem`, `removeItem`, `clear`, named-property reads/writes/deletes,
+and enumeration. Values are strings; missing getItem/key results are null,
+while missing named properties are undefined. Built-in methods remain visible
+when a stored key has the same name; use getItem for such keys.
+
+Data survives reloads and navigation back to the same origin within one browser
+session. Scheme, normalized host and effective port define the origin; paths
+and fragments do not. Separate launches never share data. Only HTTP(S) origins
+are supported; disabled or unsupported access throws an error named
+`SecurityError`. There is no localStorage, disk persistence, importing, or
+cross-origin access. The store has no filesystem or networking capability.
+
+Quotas count two bytes per UTF-16 code unit in both keys and values. Defaults
+are 1 MiB per origin and 8 MiB in total, tunable with the byte-quota flags above
+(zero selects defaults). Hard caps of 64 nonempty origins and 1024 keys per
+origin also apply. Quota failure throws an error named `QuotaExceededError`
+and leaves existing values unchanged. Removal and clear release quota; no
+origin is silently evicted. Entry order is insertion order; overwriting keeps
+position. Method-based access preserves lone UTF-16 surrogates. Named-property
+keys follow Goja's string-property conversion, and the dynamic object does not
+support arbitrary accessor/symbol own-property descriptors.
+
+No StorageEvent machinery or opener/tab cloning is implemented: ntbrowser has
+one active top-level document. Storage contents are not included in diagnostic
+snapshots, though page code can explicitly log its own values. Storage errors
+currently have the specified names on JavaScript Error objects, not a full
+DOMException class hierarchy.
