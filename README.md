@@ -23,6 +23,41 @@ ntvideo's default source-dimension limits. The opt-in real playback check is
 `NTVIDEO_TEST_FILE=/absolute/path/clip.mp4 task test`; it requires libmpv and OS
 confinement and checks file-limit rejection, recovery, and repeated playback.
 
+## Chunked reading
+
+For long documents, opt into semantic reading mode:
+
+```sh
+ntbrowser -chunked https://example.com/long-document
+```
+
+`-chunked` uses nthtml's HTML-to-nttypeset adapter. It has reduced CSS support:
+CSS background images are omitted, ancestor decoration repeats across chunks,
+and layout follows semantic reading order. The default CSS renderer is unchanged.
+
+Use `[` / `]` for previous/next chunk and `Ctrl+Home` / `Ctrl+End` for first/last.
+In raster mode, scrolling again at a chunk's top or bottom also crosses to its
+neighbor. Explicit chunk keys work in TTY mode too. The help line shows the
+current chunk. Local fragments and script focus resolve through the chunk index;
+Tab follows the focusable elements represented in the displayed chunk.
+Search, selection, and copying are local to that chunk and reset on a chunk
+change. TTY uses a plain semantic representation; source/hit geometry is at the
+adapter's block/section granularity rather than the CSS renderer's inline boxes.
+
+Parsing and DOM limits still apply to the whole page. Extraction is lazy, with
+at most two cached layouts/source maps; each semantic unit is bounded to 256
+HTML nodes and 16 KiB of source text/attributes, including ancestor context.
+Layout/raster work stays on the render worker under the two-second frame deadline;
+rasters retain the existing pixel/height ceilings. An indivisible unit that
+exceeds a budget reports an error without truncation. Use the chunk keys to skip
+it; the last readable image remains visible until another chunk succeeds.
+DOM, stylesheet, image, and width changes rebuild the index, preserving a stable
+source anchor when available. No new profile gates are opened.
+
+CSS-preserving viewport painting is a separate upstream work item described in
+[the viewport rendering proposal](docs/design/2026-11-05-ntbrowser-viewport-rendering-design.md).
+It requires a future nthtml viewer API; the `-chunked` flag does not enable it.
+
 ## Release binaries
 
 GitHub releases provide `tar.gz` archives for Linux and macOS on amd64 and

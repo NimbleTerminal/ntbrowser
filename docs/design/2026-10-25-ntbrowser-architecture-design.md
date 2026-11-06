@@ -3,6 +3,15 @@
 Date: 2026-10-25 · Status: draft v4, two review rounds addressed (builder check; Evan's external review of v3), open questions answered by Evan, re-based on nthtml v0.1.0, awaiting approval · Author: Claude (Fable 5.1) with Evan
 Implementation status: v1 implemented in this repository on 2026-10-25 from an implementation plan. The Go blocks below are the design-time snapshot the plan transcribed; the whole-branch review then changed four things in the repo (plain `TypeError`s instead of `goja.NewGoError`; `dom.Parse` drops invalid attribute/tag names instead of failing; `file:` allowed for the start page on Reload/Back; a nil `Fetcher` means deny-all) plus two executor rulings (`isJSType` without `module`; `cleanText` for invalid UTF-8/NUL). Where this document and the repository differ, the repository is current.
 
+
+2026-11-05 extension: opt-in `-chunked` uses nthtml's semantic adapter and
+nttypeset's two-layout cache. It emits an already-painted chunk Result under the
+same worker deadline and raster ceilings; coordinates/search/selection are local
+to that chunk. The default CSS renderer and `NoImage == false` remain unchanged.
+See README for the reading-mode limits and the
+[CSS viewport proposal](2026-11-05-ntbrowser-viewport-rendering-design.md) for the
+separate future upstream change.
+
 ## 1. Intent
 
 `ntbrowser` is a terminal reader mode and small-application runtime. It takes an HTML page that may carry JavaScript, runs that JavaScript inside a pure-Go bytecode interpreter with no path to the operating system, lets the script change the page through a narrow proxy API, and shows the result through `nthtml`'s Bubble Tea viewer. The point is a "cognitive shield": the user gets the page's content and legitimate interactivity, and nothing the page does can reach files, sockets, the environment, or the terminal's escape-sequence surface.
@@ -5459,15 +5468,18 @@ require (
 	golang.org/x/image v0.47.0
 	golang.org/x/net v0.62.0
 	nimbleterminal.dev/ntconfine v0.1.1
+	nimbleterminal.dev/ntfonts v0.3.1
 	nimbleterminal.dev/ntfonts/cjk v0.3.1
 	nimbleterminal.dev/nthtml v0.3.0
 	nimbleterminal.dev/ntmediabox v0.1.0
 	nimbleterminal.dev/ntpicture v0.1.5
+	nimbleterminal.dev/nttypeset v0.2.0
 )
 
 require (
 	charm.land/lipgloss/v2 v2.0.6 // indirect
 	github.com/NimbleMarkets/oksvg v0.1.6 // indirect
+	github.com/alecthomas/chroma/v2 v2.27.0 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/charmbracelet/colorprofile v0.4.3 // indirect
 	github.com/charmbracelet/ultraviolet v0.0.0-20261023060817-a45b7c86333f // indirect
@@ -5478,6 +5490,7 @@ require (
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/dlclark/regexp2/v2 v2.12.0 // indirect
 	github.com/go-sourcemap/sourcemap v2.1.4+incompatible // indirect
+	github.com/go-text/typesetting v0.3.5 // indirect
 	github.com/google/pprof v0.0.0-20261105003125-4bf881d7fb0b // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.1 // indirect
 	github.com/mattn/go-runewidth v0.0.31 // indirect
@@ -5490,7 +5503,6 @@ require (
 	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	nimbleterminal.dev/ntconfine/pkg/confine v0.1.0 // indirect
-	nimbleterminal.dev/ntfonts v0.3.1 // indirect
 	nimbleterminal.dev/ntmediabox/pkg/mediabox v0.1.0 // indirect
 	nimbleterminal.dev/ntsvg v0.6.0 // indirect
 )

@@ -216,7 +216,19 @@ func (l *Loop) sendFocus(page *Page, user, moved bool) {
 	if moved {
 		page.focusValue = n.Value()
 	}
-	l.send(FocusMsg{Source: dom.AnchorID(page.Tree, n), Control: controlInfo(page.Tree, n), User: user})
+	source := dom.AnchorID(page.Tree, n)
+	if l.cfg.Chunked && moved {
+		visible := false
+		if page.result != nil {
+			_, visible = page.result.AnchorBounds(source)
+		}
+		if !visible {
+			page.chunkReq.anchor, page.chunkReq.bottom = source, false
+			page.chunkReq.seq++
+			l.pendingFrame = true
+		}
+	}
+	l.send(FocusMsg{Source: source, Control: controlInfo(page.Tree, n), User: user})
 }
 
 // reconcileFocus runs after every task: a focused element that was removed

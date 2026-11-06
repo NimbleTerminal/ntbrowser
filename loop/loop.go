@@ -55,6 +55,7 @@ type (
 		// image); Result.Warnings stay nthtml's. Page-controlled text:
 		// the host passes them through app.clean.
 		Warnings []string
+		Chunk    ChunkInfo
 	}
 	// NavigateMsg carries an absolute URL already resolved against the page
 	// base. Admission (scheme, host) is the host's decision.
@@ -86,7 +87,12 @@ type Page struct {
 	// used to map a document-pixel hit back to an element (Box.Anchor = id).
 	boxes []document.Box
 	// result is the last frame's Result (SourceAt refines clicks, forms.go).
-	result *document.Result
+	result     *document.Result
+	frameGen   uint64
+	chunkState *chunkRender // transferred between serial workers; never inspected by VM
+	chunkReq   chunkRequest
+	chunkInfo  ChunkInfo
+	chunkIndex chunkLookup
 	// lastFocus is the focus the host was last told about; focusValue the
 	// focused control's value at focus or last commit (change detection).
 	lastFocus     dom.NodeID
@@ -116,6 +122,7 @@ type Page struct {
 }
 
 type Config struct {
+	Chunked     bool          // opt-in semantic chunk renderer; CSS renderer remains the default
 	Width       int           // document pixel width handed to nthtml (default 800)
 	MinFrame    time.Duration // minimum spacing between re-flows (default 33ms)
 	RenderLimit document.Limits
@@ -419,9 +426,12 @@ var domKeys = map[string]string{
 // LinkActivated runs click listeners on the anchor behind an nthtml LinkMsg.
 // If no listener calls preventDefault, a NavigateMsg with the href resolved
 // against the page base goes back to the host, which owns navigation.
-func (l *Loop) LinkActivated(link document.Link) {
+func (l *Loop) LinkActivated(link document.Link) { l.LinkActivatedAt(0, link) }
+
+// LinkActivatedAt rejects input from a chunk that has already been replaced.
+func (l *Loop) LinkActivatedAt(gen uint64, link document.Link) {
 	l.tryPost(func() {
-		if l.page == nil {
+		if l.page == nil || gen != 0 && l.page.frameGen != gen {
 			return
 		}
 		href := document.ResolveURL(l.page.Base, link.Href)
@@ -452,9 +462,12 @@ func (l *Loop) LinkActivated(link document.Link) {
 // control or label under the point wins (clickTarget). Focus follows the
 // click; controls and labels get their activation behavior (forms.go); the
 // nearest <a> supplies the default navigation.
-func (l *Loop) ClickAt(area image.Rectangle) {
+func (l *Loop) ClickAt(area image.Rectangle) { l.ClickAtFrame(0, area) }
+
+// ClickAtFrame keeps chunk-local coordinates paired with their frame.
+func (l *Loop) ClickAtFrame(gen uint64, area image.Rectangle) {
 	l.tryPost(func() {
-		if l.page == nil {
+		if l.page == nil || gen != 0 && l.page.frameGen != gen {
 			return
 		}
 		var best *document.Box
@@ -514,6 +527,13 @@ func (l *Loop) anchorFor(link document.Link) *dom.Node {
 	anchors, _ := l.page.Tree.Query(l.page.Tree.Root(), "a", true)
 	var byHref []*dom.Node
 	for _, a := range anchors {
+		if l.page.chunkInfo.Count > 0 {
+			// Equal href/labels elsewhere in the DOM must never steal a click
+			// from the displayed chunk. Unmapped anchors cannot receive it.
+			if !l.page.chunkContains(dom.AnchorID(l.page.Tree, a)) {
+				continue
+			}
+		}
 		if raw, ok := a.Attr("href"); ok && document.SafeURL(raw) == link.Href {
 			byHref = append(byHref, a)
 		}
@@ -613,7 +633,13 @@ func (l *Loop) startRender() {
 		opts.Images = page.subres.Images()                     // fresh copies: nothing the
 		opts.BackgroundImages = page.subres.BackgroundImages() // worker reads is written again
 	}
-	html := page.Tree.Serialize() // immutable snapshot, after injection; safe to hand off
+	rebuildChunks := page.Tree.Dirty()
+	chunkState, chunkReq := page.chunkState, page.chunkReq
+	useChunks := l.cfg.Chunked
+	var html string
+	if !useChunks || chunkState == nil || rebuildChunks {
+		html = page.Tree.Serialize() // immutable snapshot after injection
+	}
 	page.Tree.ClearDirty()
 	l.pendingFrame = false
 	l.renderInFlight = true
@@ -628,15 +654,40 @@ func (l *Loop) startRender() {
 		// background sources (decision 21).
 		var res *document.Result
 		var backgrounds []string
-		doc, err := document.Parse(ctx, strings.NewReader(html), opts.Limits)
+		var chunkInfo ChunkInfo
+		if useChunks {
+			chunkInfo.Count = 1
+		}
+		var doc *document.Document
+		var err error
+		if useChunks && chunkState != nil && !rebuildChunks {
+			doc = chunkState.doc
+		} else {
+			doc, err = document.Parse(ctx, strings.NewReader(html), opts.Limits)
+		}
 		if err == nil && doc != nil {
 			for _, src := range doc.ImageSourceList() {
 				if src.Kind == "background" && !strings.HasPrefix(strings.ToLower(src.Src), "data:") {
 					backgrounds = append(backgrounds, src.Src)
 				}
 			}
-			res, err = doc.Render(ctx, opts)
-			if errors.Is(err, document.ErrLimit) && (opts.Images != nil || opts.BackgroundImages != nil) {
+			if useChunks {
+				if chunkState == nil || rebuildChunks || chunkState.width != opts.Width {
+					old := chunkState
+					chunkState, err = newChunkRender(ctx, doc, opts)
+					if err == nil && old != nil && chunkReq.index == old.index && chunkReq.anchor == "" && old.place != "" {
+						if start, end, ok := chunkState.source.ChunkRange(old.place); ok && (chunkReq.index < start || chunkReq.index >= end) {
+							chunkReq.index = start
+						}
+					}
+				}
+				if err == nil {
+					res, chunkInfo, err = chunkState.render(ctx, chunkReq, opts)
+				}
+			} else {
+				res, err = doc.Render(ctx, opts)
+			}
+			if !useChunks && errors.Is(err, document.ErrLimit) && (opts.Images != nil || opts.BackgroundImages != nil) {
 				// Images are the only thing the host added: drop them and
 				// retry once so an image-heavy page degrades to placeholders
 				// instead of a blank viewer (decision 16).
@@ -645,12 +696,33 @@ func (l *Loop) startRender() {
 				loaderWarnings = append(loaderWarnings, "page too large with images; rendered without them")
 			}
 		}
+		if useChunks && err != nil && doc == nil {
+			chunkState = nil
+		}
 		l.post(func() {
 			l.renderInFlight = false
 			if l.page != page {
 				return // frame for a page we navigated away from
 			}
-			if errors.Is(err, document.ErrLimit) && len(injected) > 0 {
+			if useChunks {
+				page.chunkState = chunkState
+				// A newer chunk request supersedes this frame. Finish the worker
+				// before starting another: the engine is never used concurrently.
+				if page.chunkReq.seq != chunkReq.seq {
+					l.pendingFrame = true
+					return
+				}
+				page.chunkIndex = nil
+				if chunkState != nil {
+					page.chunkIndex = chunkState.source.ChunkSource
+				}
+				if chunkInfo.Count > 0 {
+					page.chunkInfo = chunkInfo
+					page.chunkReq.index = chunkInfo.Index
+				}
+				page.chunkReq.anchor, page.chunkReq.bottom = "", false
+			}
+			if !useChunks && errors.Is(err, document.ErrLimit) && len(injected) > 0 {
 				// nthtml refused a page that only differs from the one it
 				// would accept by the injected sheets: drop them for good and
 				// render without, rather than show a failed frame forever.
@@ -661,6 +733,9 @@ func (l *Loop) startRender() {
 				l.send(LogMsg{"error", fmt.Sprintf("stylesheets dropped, the renderer refused the page with them: %v (%s)", injected, err)})
 				page.Tree.MarkDirty()
 				return
+			}
+			if useChunks && err != nil {
+				page.boxes, page.result = nil, nil
 			}
 			if res != nil {
 				page.boxes, page.result = res.Boxes, res
@@ -675,7 +750,8 @@ func (l *Loop) startRender() {
 				}
 				loaderWarnings = append(loaderWarnings, page.subres.Warnings()...)
 			}
-			l.send(FrameMsg{Gen: gen, Result: res, Err: err, Warnings: loaderWarnings})
+			page.frameGen = gen
+			l.send(FrameMsg{Gen: gen, Result: res, Err: err, Warnings: loaderWarnings, Chunk: chunkInfo})
 			l.runFrameCallbacks()
 		})
 	}()

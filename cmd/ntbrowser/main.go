@@ -46,6 +46,7 @@ type config struct {
 	Slice       time.Duration
 	Seed        uint64
 	ShowProfile bool
+	Chunked     bool
 }
 
 func parseArgs(args []string) (config, error) {
@@ -64,6 +65,7 @@ func parseArgs(args []string) (config, error) {
 	clipboard := fs.String("clipboard", "", "selected-text copy: off, copy")
 	media := fs.String("media", "", "most a response may be shown as: off, image, animation, video (video also opens native-code and files=temp)")
 	maxMedia := fs.Int64("max-media-bytes", 0, "download cap for media")
+	fs.BoolVar(&c.Chunked, "chunked", false, "read long pages in bounded semantic chunks (reduced CSS support)")
 	fs.IntVar(&c.Width, "width", 800, "document pixel width")
 	fs.DurationVar(&c.Slice, "slice", 50*time.Millisecond, "JS time slice per callback")
 	fs.Uint64Var(&c.Seed, "seed", 0, "PRNG seed for Math.random, for reproducible runs (0 = time-based); the clock is never fixed, timers depend on it")
@@ -242,7 +244,7 @@ func runMain() int {
 		return 2
 	}
 	subresCfg := subres.Config{Mode: mode}
-	l := loop.New(ctx, loop.Config{Profile: c.Profile, Width: c.Width, Script: script, Subresources: subresCfg, SubresourceTransport: app.SubresourceTransport(app.PolicyFor(c.Profile), subresCfg)}, sink)
+	l := loop.New(ctx, loop.Config{Chunked: c.Chunked, Profile: c.Profile, Width: c.Width, Script: script, Subresources: subresCfg, SubresourceTransport: app.SubresourceTransport(app.PolicyFor(c.Profile), subresCfg)}, sink)
 	go l.Run()
 
 	m := app.New(l, c.Profile, c.Start)

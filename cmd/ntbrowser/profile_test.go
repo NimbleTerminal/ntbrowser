@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -139,7 +140,7 @@ func symlinkedDir(t *testing.T) string {
 func TestStateSurvivesReexec(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "p.json")
 	os.WriteFile(path, []byte(`{"name":"mine","base":"reader"}`), 0o600)
-	c, err := parseArgs([]string{"-profile-file", path, "-width", "640", "https://a.test/"})
+	c, err := parseArgs([]string{"-profile-file", path, "-width", "640", "-chunked", "https://a.test/"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,7 +150,7 @@ func TestStateSurvivesReexec(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, ok, err := decodeState([]string{arg})
-	if err != nil || !ok || got.Config.Profile.Name != "mine" || got.Config.Width != 640 || got.Config.Start != "https://a.test/" || got.TempDir != "/t" || got.HelperFD != 7 || got.HelperPID != 99 {
+	if err != nil || !ok || !got.Config.Chunked || got.Config.Profile.Name != "mine" || got.Config.Width != 640 || got.Config.Start != "https://a.test/" || got.TempDir != "/t" || got.HelperFD != 7 || got.HelperPID != 99 {
 		t.Fatalf("%+v %v %v", got, ok, err)
 	}
 	if _, ok, _ := decodeState([]string{"-profile", "x"}); ok {
@@ -184,5 +185,19 @@ func TestStartPathResolved(t *testing.T) {
 	}
 	if got := startPath("https://a.test/"); got != "" {
 		t.Fatalf("%q", got)
+	}
+}
+
+func TestChunkedModeIsOptIn(t *testing.T) {
+	defaultConfig, err := parseArgs([]string{"https://example.test/"})
+	if err != nil || defaultConfig.Chunked {
+		t.Fatalf("default renderer changed: %+v %v", defaultConfig, err)
+	}
+	chunked, err := parseArgs([]string{"-chunked", "https://example.test/"})
+	if err != nil || !chunked.Chunked {
+		t.Fatalf("chunk flag missing: %+v %v", chunked, err)
+	}
+	if !reflect.DeepEqual(defaultConfig.Profile, chunked.Profile) {
+		t.Fatal("rendering flag changed security gates")
 	}
 }

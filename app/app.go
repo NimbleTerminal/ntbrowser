@@ -66,18 +66,20 @@ type shutdownReadyMsg struct{}
 const shutdownGrace = 150 * time.Millisecond
 
 type Model struct {
-	loop    *loop.Loop
-	viewer  *nthtml.Model
-	profile profile.Profile  // frozen at launch
-	policy  netpolicy.Policy // template derived from it; Origin is set per navigation
-	nav     NavMode
-	cols    int
-	rows    int
-	gen     uint64
-	title   string
-	status  string
-	closing bool
-	start   string
+	loop        *loop.Loop
+	viewer      *nthtml.Model
+	profile     profile.Profile  // frozen at launch
+	policy      netpolicy.Policy // template derived from it; Origin is set per navigation
+	nav         NavMode
+	cols        int
+	rows        int
+	gen         uint64
+	chunk       loop.ChunkInfo
+	chunkFailed bool
+	title       string
+	status      string
+	closing     bool
+	start       string
 
 	current    *url.URL
 	history    []string
@@ -90,6 +92,7 @@ type Model struct {
 	// uses before it emits LinkMsg).
 	resetView bool
 	pressCell image.Point
+	pressGen  uint64
 	pressed   bool
 	// navSeq counts navigations started; a pageLoadedMsg carrying an older
 	// sequence is a slower, superseded load and is dropped. History is only
@@ -313,14 +316,21 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.gen = v.Gen
+		oldChunk, chunkWasFailed := m.chunk, m.chunkFailed
+		m.chunk, m.chunkFailed = v.Chunk, v.Err != nil && v.Chunk.Count > 0
 		if v.Err != nil {
 			m.status = clean("render: " + v.Err.Error())
+			if m.chunkFailed {
+				return m, m.leaveForms()
+			}
 			return m, nil
 		}
 		warnings := append(statusWarnings(v.Result.Warnings), v.Warnings...) // nthtml's, then the loader's
 		switch {
 		case len(warnings) > 0:
 			m.status = clean(strings.Join(warnings, "; ")) // warnings replace the status; a log line survives the next frame
+		case chunkWasFailed && strings.HasPrefix(m.status, "render:"):
+			m.status = ""
 		case m.resetView && !strings.HasPrefix(m.status, "focus: "):
 			m.status = "" // the page's first frame: "loading …" is over (a focus line set by the page stays)
 		}
@@ -332,7 +342,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.resetView = false
 			cmd := tea.Batch(m.viewer.Init(), m.viewer.SetBounds(0, 0, m.cols, m.viewRows()))
 			m.loop.Resize(documentWidth(m.viewer))
-			return m, tea.Batch(cmd, m.applyRing(false))
+			return m, tea.Batch(cmd, m.finishChunk(), m.applyRing(false))
 		}
 		// Re-flow in place (nthtml v0.1.0 Model.SetResult). SetResult resets
 		// scroll, zoom, search and the focused link; the host puts the scroll
@@ -341,18 +351,26 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// page, so a shorter page simply ends at its bottom. Zoom is not
 		// recoverable through the public API (design §11).
 		crop := m.viewer.Picture().Crop()
+		if oldChunk.Count > 0 {
+			if viewport, ok := m.viewer.DocumentViewport(); ok {
+				crop = viewport
+			}
+		}
 		cmd := m.viewer.SetResult(v.Result)
 		m.loop.Resize(documentWidth(m.viewer)) // no-op unless the terminal's pixel geometry changed
-		if m.resetView || crop.Empty() {
+		if m.resetView || crop.Empty() || v.Chunk.Count > 0 && (oldChunk.Index != v.Chunk.Index || v.Chunk.Anchor != "" || v.Chunk.Bottom) {
 			scroll := m.resetView // a new page's script focus scrolls into view, as in browsers
 			m.resetView = false
-			return m, tea.Batch(cmd, m.applyRing(scroll))
+			return m, tea.Batch(cmd, m.finishChunk(), m.applyRing(scroll))
 		}
 		// Pan first: it is relative to the origin SetResult just reset to.
 		pan := m.viewer.Pan(crop.Min.X, crop.Min.Y)
 		return m, tea.Batch(cmd, pan, m.applyRing(false))
 
 	case loop.NavigateMsg:
+		if !v.Form && m.chunkFragment(v.Href) {
+			return m, nil
+		}
 		return m, m.admit(v.Href, v.Form)
 	case videoFrameMsg, videoStatusMsg, videoDeadMsg, videoProgressMsg:
 		return m, m.onVideo(msg)
@@ -376,7 +394,13 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Keyboard (Tab/Enter) and mouse activation of links both arrive
 		// here; the page's click listeners decide the default action first.
-		m.loop.LinkActivated(v.Link)
+		if m.chunk.Count > 0 {
+			if !m.chunkFailed {
+				m.loop.LinkActivatedAt(m.gen, v.Link)
+			}
+		} else {
+			m.loop.LinkActivated(v.Link)
+		}
 		return m, nil
 	case nthtml.CopyMsg:
 		if m.profile.Clipboard != profile.ClipboardCopy {
@@ -389,6 +413,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil // nothing reaches the page beneath a picture or video
 		}
 		m.pressed = v.Button == tea.MouseLeft
+		if m.chunk.Count > 0 {
+			m.pressed = m.pressed && m.chunkMouseReady()
+		}
+		m.pressGen = m.gen
 		m.pressCell = image.Pt(v.X, v.Y)
 	case tea.MouseReleaseMsg:
 		if m.overlay() {
@@ -398,6 +426,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		click := m.pressed && p == m.pressCell
 		m.pressed = false
 		if click && m.viewer != nil {
+			if m.chunk.Count > 0 {
+				if m.pressGen == m.gen && m.chunkMouseReady() {
+					if link, ok := m.viewer.LinkAtCell(p); ok {
+						m.loop.LinkActivatedAt(m.gen, link)
+					} else if area, ok := m.viewer.CellToDocument(p); ok {
+						m.loop.ClickAtFrame(m.gen, area)
+					}
+				}
+				// Finish selection state with a non-activating release. The
+				// host owns chunk links (including fragments), so the widget
+				// must not scroll before the page can preventDefault. Run any
+				// graphics commands it returns; discarding one can strand a
+				// pending picture render.
+				release := v
+				release.Button = tea.MouseRight
+				return m, m.viewer.Update(release)
+			}
 			// A link under the cell is nthtml's: it emits LinkMsg for this
 			// same release and the loop handles it once. Anything else is an
 			// element click the viewer knows nothing about.
@@ -408,6 +453,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+	case tea.MouseWheelMsg:
+		if !m.overlay() && m.chunk.Count > 0 {
+			key := ""
+			if v.Button == tea.MouseWheelDown {
+				key = "down"
+			}
+			if v.Button == tea.MouseWheelUp {
+				key = "up"
+			}
+			if key != "" && m.chunkKey(key) {
+				return m, nil
+			}
+		}
 	case tea.KeyPressMsg:
 		if m.downloading.Load() && v.String() == "esc" {
 			m.navCancel()
@@ -464,6 +522,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// as keydown and cannot swallow them. Text typed into the viewer's
 			// / search box never reaches the page.
 			m.loop.Input(v)
+			if m.chunkKey(v.String()) {
+				return m, nil
+			}
 		}
 
 	case tea.WindowSizeMsg:
@@ -551,8 +612,11 @@ func (m *Model) View() tea.View {
 		status = ansi.Truncate(m.playerStatus(), max(1, m.cols), "…")
 	}
 	pos := ""
+	if m.chunk.Count > 0 {
+		pos = fmt.Sprintf(" · chunk %d/%d · [ ] chunks", m.chunk.Index+1, m.chunk.Count)
+	}
 	if len(m.history) > 1 {
-		pos = fmt.Sprintf(" · %d/%d", m.hIndex+1, len(m.history))
+		pos += fmt.Sprintf(" · %d/%d", m.hIndex+1, len(m.history))
 	}
 	enforced := ""
 	if m.notEnforced {
