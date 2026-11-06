@@ -180,3 +180,29 @@ func TestFirstFrameClearsLoadingStatus(t *testing.T) {
 		t.Fatalf("first frame left the loading status: %q", m.status)
 	}
 }
+
+func TestScriptErrorSurvivesFirstFrameAndResize(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400}, dropSink{})
+	go l.Run()
+	m := New(l, testProfile(nil, false, NavFree), "")
+	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+	m.Update(pageLoadedMsg{html: "<p>x</p>", base: mustURL(t, "https://example.test/"), seq: m.navSeq, hist: pushNew})
+	m.Update(loop.LogMsg{Level: "error", Line: "ReferenceError: Image is not defined at page.js:2:1"})
+	want := m.status
+	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 1, Result: renderTall(t, `<p>x</p>`)}))
+	if m.status != want {
+		t.Fatalf("first frame erased error: %q", m.status)
+	}
+	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 2, Result: renderTall(t, `<p>x</p>`), Warnings: []string{"stylesheet unavailable"}}))
+	if m.status != want {
+		t.Fatalf("resize reflow replaced error: %q", m.status)
+	}
+	m.Update(pageLoadedMsg{html: "<p>next</p>", base: mustURL(t, "https://example.test/next"), seq: m.navSeq, hist: pushNew})
+	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 3, Result: renderTall(t, `<p>next</p>`)}))
+	if strings.Contains(m.status, "ReferenceError") {
+		t.Fatalf("error survived navigation: %q", m.status)
+	}
+}
