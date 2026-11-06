@@ -442,7 +442,7 @@ func (l *Loop) runScripts(page *Page, i int) {
 		case sc.Src != "" && l.cfg.Profile.Scripts == profile.ScriptsExternal:
 			next := i + 1
 			go func() {
-				resp, err := page.Fetcher.Do(page.ctx, netpolicy.Request{Method: "GET", URL: sc.Src})
+				resp, err := page.Fetcher.Script(page.ctx, sc.Src, sc.Integrity, sc.CrossOrigin)
 				l.post(func() {
 					if l.page != page {
 						return // navigated away

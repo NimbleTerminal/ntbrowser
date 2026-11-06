@@ -444,8 +444,7 @@ DOM insertion adds no network authority: external dynamic scripts require the
 existing `scripts=external` gate and use the same page-bound `netpolicy.Fetcher`
 as parser scripts. `KindScript` additionally enforces 2xx and a strict supported
 JavaScript MIME type. Redirect, private-address, cookie, timeout and body caps
-remain in netpolicy. SRI-bearing requests fail closed pending verification
-support. Inline dynamic source requires both scripts enabled and dynamic-code
+remain in netpolicy. SRI-bearing requests use the verification rules below. Inline dynamic source requires both scripts enabled and dynamic-code
 on, so DOM insertion cannot bypass the string-compilation gate.
 
 The VM snapshots a script's URL and async mode at preparation and pins its
@@ -464,7 +463,27 @@ heap checks; source-map loading stays disabled. DOM serialization omits scripts.
 
 The lifecycle follows the classic-script portion of the
 [HTML script processing model](https://html.spec.whatwg.org/multipage/scripting.html#prepare-the-script-element),
-with the additional gates and limits above. Modules, import maps, CSP and SRI
-verification are not implemented. Dynamic scripts are async by default;
+with the additional gates and limits above. Modules, import maps and CSP
+are not implemented. Dynamic scripts are async by default;
 async=false scripts execute in preparation order. Tests use local HTTP servers
 with controlled completion order, with no public-network dependency.
+
+### Script integrity extension (2026-11-06)
+
+`netpolicy.Fetcher.Script` is the common entry for parsed and inserted external
+scripts. It validates bounded integrity metadata, invokes the existing vetted
+transport with KindScript, then hashes the decoded response body before returning
+source. SHA-512 takes precedence over SHA-384 over SHA-256; equal-strength digests
+are alternatives. Empty metadata preserves ordinary script loading. Unknown-only
+or malformed recognized metadata, options, credentialed integrity requests, and
+origin-changing redirects fail closed. At most 4096 metadata bytes and 32 tokens
+are accepted. No dependency or profile permission is added.
+
+For integrity loads across origins, the element must request anonymous CORS and
+the response must carry a single ACAO value equal to the document's serialized
+origin or `*`. The host supplies Origin. Same-origin redirects re-enter normal
+policy; cross-origin resource redirect responses also undergo CORS checks.
+Cross-origin cookies remain excluded by the cookie transport. The CORS state is
+request-local context, never a shared mutable policy flag. Denials return no
+source to the VM, and stale navigation checks still apply after verification.
+This is a conservative subset of SRI, not general fetch CORS or CSP support.

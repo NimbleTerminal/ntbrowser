@@ -30,14 +30,11 @@ func (l *Loop) loadDynamicScript(page *Page, generation uint64, request jsvm.Scr
 	if request.URL == "" {
 		denied = fmt.Errorf("empty script src")
 	}
-	if request.Integrity != "" {
-		denied = fmt.Errorf("script integrity verification is unsupported")
-	}
 	go func() {
 		var response netpolicy.Response
 		err := denied
 		if err == nil {
-			response, err = page.Fetcher.Do(page.ctx, netpolicy.Request{Method: "GET", URL: request.URL, Kind: netpolicy.KindScript})
+			response, err = page.Fetcher.Script(page.ctx, request.URL, request.Integrity, request.CrossOrigin)
 		}
 		l.post(func() {
 			if l.page != page || page.killed || l.navGen.Load() != generation {

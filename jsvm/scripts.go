@@ -15,6 +15,7 @@ const MaxPendingScripts = 32
 type ScriptRequest struct {
 	ID             dom.NodeID
 	URL, Integrity string
+	CrossOrigin    string
 	Async          bool
 }
 type scriptState struct {
@@ -202,7 +203,13 @@ func (s *Sandbox) prepareScript(n *dom.Node) {
 	} else {
 		src = ""
 	}
-	s.cfg.LoadScript(ScriptRequest{ID: n.ID(), URL: src, Integrity: integrity, Async: !st.ordered || asyncAttr})
+	corsMode, present := n.Attr("crossorigin")
+	if !present {
+		corsMode = "none"
+	} else if !strings.EqualFold(corsMode, "use-credentials") {
+		corsMode = "anonymous"
+	}
+	s.cfg.LoadScript(ScriptRequest{CrossOrigin: corsMode, ID: n.ID(), URL: src, Integrity: integrity, Async: !st.ordered || asyncAttr})
 }
 
 func (s *Sandbox) evalInserted(name, src string) error {

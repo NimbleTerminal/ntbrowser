@@ -525,9 +525,9 @@ existing behavior. Dynamic script limits are 32 pending external elements and
 256 prepared elements per document; exceeding either throws `TypeError`.
 Existing source, DOM, listener and heap budgets still apply.
 
-This is a classic-script subset: modules/import maps remain inert, integrity
-metadata is rejected rather than ignored, and reflected `crossOrigin`,
-`referrerPolicy` and `nonce` do not grant additional authority. There is no CSP
+This is a classic-script subset: modules/import maps remain inert. Integrity
+metadata is verified as described below; reflected `referrerPolicy` and `nonce`
+do not grant additional authority. There is no CSP
 implementation. Dynamic scripts do not delay `DOMContentLoaded`; `defer` has
 no extra scheduling effect on them. `document.currentScript` identifies a
 running dynamic script; parser-script execution still reports null. Parsed
@@ -552,3 +552,30 @@ and arbitrary collection expandos are not implemented. Parsed scripts (including
 data blocks) now count against DOM node/text budgets and are available for nonce
 lookup and insertion anchors. Their execution plan remains separate from the
 rendered tree.
+
+### Script integrity verification
+
+Parsed and dynamically inserted external scripts support SHA-256, SHA-384 and
+SHA-512 `integrity` digests. Only the strongest supplied supported algorithm is
+used; any matching digest of that strength admits the response. The exact
+bounded, decompressed response bytes are verified before compilation. A mismatch
+never reaches the VM. Dynamic scripts report failure through `error`, and an
+ordered queue continues past the failed entry. Parser-script failures are logged.
+
+Cross-origin integrity loads additionally require a `crossorigin` attribute
+(`anonymous` or its equivalent empty/invalid value) and exactly one matching
+`Access-Control-Allow-Origin` header, or `*`. The host sends the document's
+serialized Origin; page-provided request headers cannot replace it. Existing
+host allowlists, private-network, redirect, MIME, cookie, body and timeout gates
+still apply. Integrity grants no permission to fetch an otherwise denied host.
+
+This implementation fails closed for credentialed integrity loads, redirects
+that change origin, malformed recognized hashes, metadata containing no supported
+hash, and integrity options. Same-origin redirects are supported, with CORS
+checked on redirect responses when the resource is cross-origin to the page.
+Metadata is bounded to 4096 bytes and 32 tokens. Unsupported algorithms can
+coexist with a valid supported hash; an empty integrity attribute adds no check.
+These stricter failure rules are intentional differences from a full browser.
+CSP, Integrity-Policy headers, stylesheet integrity and general fetch CORS are
+outside this feature. The verification model is based on the
+[Subresource Integrity specification](https://www.w3.org/TR/sri/).

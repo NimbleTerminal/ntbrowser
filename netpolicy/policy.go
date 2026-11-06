@@ -154,6 +154,17 @@ func New(p Policy) *Fetcher {
 			if len(via) >= f.p.MaxRedirects {
 				return fmt.Errorf("%w: too many redirects", ErrDenied)
 			}
+			if state, ok := req.Context().Value(scriptIntegrityKey{}).(*scriptIntegrityContext); ok {
+				previous := via[len(via)-1].URL
+				if !sameOrigin(previous, req.URL) {
+					return fmt.Errorf("%w: cross-origin integrity redirects unsupported", ErrDenied)
+				}
+				if req.Response != nil {
+					if err := state.checkResponse(previous, req.Response.Header); err != nil {
+						return err
+					}
+				}
+			}
 			return f.Allowed(req.URL) // every hop re-enters policy
 		},
 	}
@@ -322,10 +333,20 @@ func (f *Fetcher) Open(ctx context.Context, r Request) (result *OpenResponse, re
 			req.Header.Set(k, v)
 		}
 	}
+	if state, ok := ctx.Value(scriptIntegrityKey{}).(*scriptIntegrityContext); ok && state.cors {
+		req.Header.Set("Origin", serializedOrigin(state.origin))
+	}
 	resp, err := f.client.Do(req)
 	if err != nil {
 		done()
 		return nil, err
+	}
+	if state, ok := ctx.Value(scriptIntegrityKey{}).(*scriptIntegrityContext); ok {
+		if err := state.checkResponse(resp.Request.URL, resp.Header); err != nil {
+			resp.Body.Close()
+			done()
+			return nil, err
+		}
 	}
 	status, contentType, finalURL = resp.StatusCode, resp.Header.Get("Content-Type"), resp.Request.URL.String()
 	if r.Kind == KindNavigate {

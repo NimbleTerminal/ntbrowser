@@ -141,6 +141,8 @@ type Tree struct {
 }
 
 type Script struct {
+	Integrity, CrossOrigin string
+
 	Inline string // inline source; empty when Src is set
 	Src    string // external src as written; the host decides whether to fetch it
 }
@@ -260,7 +262,14 @@ func (t *Tree) ingest(parent *Node, src *html.Node, depth int) error {
 				typ, _ := n.Attr("type")
 				if isJSType(typ) {
 					src, _ := n.Attr("src")
-					sc := Script{Src: src}
+					integrity, _ := n.Attr("integrity")
+					cors, present := n.Attr("crossorigin")
+					if !present {
+						cors = "none"
+					} else if !strings.EqualFold(cors, "use-credentials") {
+						cors = "anonymous"
+					}
+					sc := Script{Src: src, Integrity: integrity, CrossOrigin: cors}
 					if src == "" {
 						sc.Inline = TextContent(n)
 					}

@@ -4,6 +4,8 @@ package loop
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +13,7 @@ import (
 	"nimbleterminal.dev/ntbrowser/netpolicy"
 	"nimbleterminal.dev/ntbrowser/profile"
 	"os"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -153,4 +156,52 @@ func TestParsedScriptInsertionAnchorBootstrap(t *testing.T) {
 	l, sink, f := scriptTestLoop(t, externalProfile, server.URL)
 	l.LoadPage(`<script nonce="fixture">var added=document.createElement("script");added.src="/bootstrap.js";var nonce=document.querySelector("script[nonce]");added.nonce=nonce.nonce;var first=document.getElementsByTagName("script")[0];first.parentNode.insertBefore(added,first);</script>`, server.URL+"/", f)
 	waitLog(t, sink, "PASS:anchor-bootstrap")
+}
+
+func TestDynamicIntegrityMismatchDoesNotExecuteOrBlockOrderedQueue(t *testing.T) {
+	const source = `window.verified=true;`
+	hash := sha256.Sum256([]byte(source))
+	integrity := "sha256-" + base64.StdEncoding.EncodeToString(hash[:])
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/javascript")
+		fmt.Fprint(w, source)
+	}))
+	defer server.Close()
+	l, sink, f := scriptTestLoop(t, externalProfile, server.URL)
+	html := fmt.Sprintf(`<script>var denied=false;let bad=document.createElement("script");bad.async=false;bad.src="/bad.js";bad.integrity=%q;bad.onerror=()=>{if(window.verified)throw Error("mismatched source executed");denied=true};let good=document.createElement("script");good.async=false;good.src="/good.js";good.integrity=%q;good.onload=()=>{if(!denied||!window.verified)throw Error("integrity or queue failure");console.log("PASS:integrity")};document.head.appendChild(bad);document.head.appendChild(good);</script>`, "sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=", integrity)
+	l.LoadPage(html, server.URL+"/", f)
+	waitLog(t, sink, "PASS:integrity")
+}
+
+func TestParsedIntegrityMismatchNeverExecutes(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/javascript")
+		fmt.Fprint(w, `window.unverified=true`)
+	}))
+	defer server.Close()
+	l, sink, f := scriptTestLoop(t, externalProfile, server.URL)
+	l.LoadPage(`<script src="/bad.js" integrity="sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="></script><script>console.log("result:"+typeof window.unverified)</script>`, server.URL+"/", f)
+	sawRefusal := false
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case <-deadline:
+			t.Fatal("parsed integrity fixture did not complete")
+		case msg := <-sink:
+			if m, ok := msg.(LogMsg); ok {
+				if m.Level == "error" {
+					if !strings.Contains(m.Line, "integrity mismatch") {
+						t.Fatal(m.Line)
+					}
+					sawRefusal = true
+				}
+				if strings.HasPrefix(m.Line, "result:") {
+					if m.Line != "result:undefined" || !sawRefusal {
+						t.Fatal("unverified script escaped", m)
+					}
+					return
+				}
+			}
+		}
+	}
 }
