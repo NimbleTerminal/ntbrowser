@@ -395,3 +395,14 @@ Replace/reload reuse the current history slot on successful load. Fragment
 changes commit on the owning VM goroutine without refetching. These features
 do not implement the full History platform or navigation events, ancestorOrigins,
 frames, or cross-window Location semantics. Source: [HTML Location interface](https://html.spec.whatwg.org/multipage/nav-history-apis.html#the-location-interface).
+
+
+## Animation resource controls (2026-11-06)
+
+`frame-ms`, `frame-callbacks`, and `frame-budget-ms` tune scheduling and resource
+limits without opening a new host capability. Defaults are 33 ms, 256 pending
+callbacks, and 8 ms total callback execution per batch. Explicit values are
+bounded to 1–1000 ms, 1–1024 callbacks, and 1–50 ms respectively; zero selects
+defaults. Scripts remain controlled by the scripts gate and callback execution
+retains the ordinary watchdog, strike and heap protections. Deferred callbacks
+preserve order and cancellation across batch boundaries.

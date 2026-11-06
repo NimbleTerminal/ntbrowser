@@ -221,3 +221,10 @@ func TestScriptNavigationFlags(t *testing.T) {
 		t.Fatal("unbounded navigation budget")
 	}
 }
+
+func TestFrameResourceFlags(t *testing.T) {
+	c, err := parseArgs([]string{"--frame-ms=16", "--frame-callbacks=32", "--frame-budget-ms=4", "https://example.test/"})
+	if err != nil || c.Profile.FrameInterval() != 16 || c.Profile.FrameCallbackLimit() != 32 || c.Profile.FrameBudget() != 4 {
+		t.Fatal(c, err)
+	}
+}

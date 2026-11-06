@@ -160,10 +160,11 @@ type Loop struct {
 	outbox          chan tea.Msg
 	ctx             context.Context
 
-	page   *Page
-	timers timerHeap
-	nextID int
-	frames []frameCB
+	page         *Page
+	timers       timerHeap
+	nextID       int
+	frames       []frameCB
+	activeFrames []frameCB
 
 	currentFrame   atomic.Uint64
 	renderJobs     chan func(*paintWorker)
@@ -185,6 +186,9 @@ func New(ctx context.Context, cfg Config, sink Sink) *Loop {
 	}
 	if cfg.Width <= 0 {
 		cfg.Width = 800
+	}
+	if cfg.Profile.FrameMillis > 0 {
+		cfg.MinFrame = time.Duration(cfg.Profile.FrameInterval()) * time.Millisecond
 	}
 	if cfg.MinFrame <= 0 {
 		cfg.MinFrame = 33 * time.Millisecond
@@ -334,6 +338,7 @@ func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) ui
 		}
 		l.timers = nil
 		l.frames = nil
+		l.activeFrames = nil
 		l.cfg.Trace.Record("document", map[string]any{"url": base, "navigation": gen, "html": html})
 		tree, err := dom.Parse(strings.NewReader(html), dom.Limits{})
 		if err != nil {
@@ -404,6 +409,7 @@ func (l *Loop) dropPage(page *Page) {
 	}
 	l.timers = nil
 	l.frames = nil
+	l.activeFrames = nil
 	runtime.GC()
 }
 
@@ -712,6 +718,15 @@ func (l *Loop) startRender() {
 	if l.page == nil || l.renderInFlight {
 		return
 	}
+	if wait := l.cfg.MinFrame - time.Since(l.lastFrame); wait > 0 {
+		l.frameTimer.Reset(wait)
+		return
+	}
+	l.lastFrame = time.Now()
+	l.runFrameCallbacks()
+	if l.page.Sandbox.Disabled() && !l.page.killed {
+		l.dropPage(l.page)
+	}
 	page := l.page
 	opts := document.Options{NoImage: !l.cfg.Chunked, Width: l.cfg.Width, Limits: l.cfg.RenderLimit, Fonts: l.cfg.Fonts, FallbackFaces: fallbackFaces}
 	var loaderWarnings []string
@@ -739,7 +754,7 @@ func (l *Loop) startRender() {
 		html = page.Tree.Serialize() // immutable snapshot after injection
 	}
 	page.Tree.ClearDirty()
-	l.pendingFrame = false
+	l.pendingFrame = len(l.frames) > 0
 	l.renderInFlight = true
 	l.lastFrame = time.Now()
 	gen := l.gen.Add(1)
@@ -890,7 +905,6 @@ func (l *Loop) startRender() {
 				page.firstFrame = false
 			}
 			l.send(FrameMsg{Painted: painted, Navigation: navigation, Gen: gen, Result: res, Err: err, Warnings: loaderWarnings, Chunk: chunkInfo})
-			l.runFrameCallbacks()
 		})
 	}
 }
@@ -967,20 +981,44 @@ type frameCB struct {
 	fn goja.Callable
 }
 
-// runFrameCallbacks delivers requestAnimationFrame callbacks after a frame
-// was produced, each under its own slice, with a monotonic millisecond
-// timestamp from the same profile-coarsened clock as performance.now().
+// runFrameCallbacks snapshots the batch before rendering. Newly registered
+// callbacks wait for another frame; cancellation can still remove a callback
+// from the active batch. Unstarted callbacks survive budget exhaustion.
 func (l *Loop) runFrameCallbacks() {
-	if len(l.frames) == 0 || l.page == nil {
+	if len(l.frames) == 0 || l.page == nil || l.page.killed {
 		return
 	}
-	cbs := l.frames
+	l.activeFrames = l.frames
 	l.frames = nil
 	sb := l.page.Sandbox
 	ts := sb.PerformanceNow()
-	for _, cb := range cbs {
-		l.report(sb.Call(cb.fn, goja.Undefined(), sb.ToValue(ts)))
+	deadline := time.Now().Add(time.Duration(l.cfg.Profile.FrameBudget()) * time.Millisecond)
+	for i := range l.activeFrames {
+		cb := l.activeFrames[i]
+		if cb.fn == nil {
+			continue
+		}
+		remaining := time.Until(deadline)
+		if remaining <= 0 {
+			break
+		}
+		l.activeFrames[i].fn = nil
+		l.report(sb.CallWithinBudget(remaining, cb.fn, goja.Undefined(), sb.ToValue(ts)))
+		if sb.Disabled() {
+			break
+		}
 	}
+	pending := make([]frameCB, 0, len(l.activeFrames)+len(l.frames))
+	if !sb.Disabled() {
+		for _, cb := range l.activeFrames {
+			if cb.fn != nil {
+				pending = append(pending, cb)
+			}
+		}
+		pending = append(pending, l.frames...)
+	}
+	l.activeFrames = nil
+	l.frames = pending
 }
 
 // ---- timers ----
@@ -1063,7 +1101,13 @@ func (h *host) ClearTimer(id int) {
 // callback at the frame cadence.
 func (h *host) RequestFrame(fn goja.Callable) int {
 	l := (*Loop)(h)
-	if len(l.frames) >= 256 {
+	count := len(l.frames)
+	for _, cb := range l.activeFrames {
+		if cb.fn != nil {
+			count++
+		}
+	}
+	if count >= l.cfg.Profile.FrameCallbackLimit() {
 		return 0
 	}
 	l.nextID++
@@ -1074,6 +1118,12 @@ func (h *host) RequestFrame(fn goja.Callable) int {
 
 func (h *host) CancelFrame(id int) {
 	l := (*Loop)(h)
+	for i, cb := range l.activeFrames {
+		if cb.id == id {
+			l.activeFrames[i].fn = nil
+			return
+		}
+	}
 	for i, f := range l.frames {
 		if f.id == id {
 			l.frames = append(l.frames[:i], l.frames[i+1:]...)

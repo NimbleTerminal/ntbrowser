@@ -5552,3 +5552,22 @@ replace charm.land/bubbletea/v2 => github.com/neomantra/bubbletea/v2 v2.0.0-2026
 // Vector rendering fork used by nttypeset and ntsvg (same as nthtml).
 replace github.com/srwiley/rasterx => github.com/neomantra/rasterx v0.1.0
 ```
+
+
+## Animation-frame scheduling revision (2026-11-06)
+
+Animation callbacks run on the VM goroutine before serializing the next render
+snapshot, replacing the original post-render delivery. Batch membership is
+snapshotted while callbacks remain cancellable by ID until invocation. New
+callbacks enter the next frame; cancellation and the capacity bound include
+both active and queued callbacks. Page replacement clears both collections.
+
+The profile supplies `frame-ms` (default 33, max 1000), `frame-callbacks`
+(default 256, max 1024), and `frame-budget-ms` (default 8, max 50). Zero means
+default; negative values are invalid. The host's existing MinFrame override
+continues to work when no profile interval was selected. One shared monotonic
+wall-time budget bounds the batch. Each callback gets min(remaining budget,
+ordinary slice), including microtasks and normal heap/strike accounting;
+unstarted callbacks are deferred in order, interrupted callbacks are not
+retried. A single batch shares one coarsened performance timestamp. Engine
+non-preemptibility and Go-side work retain the existing soft-budget caveats.

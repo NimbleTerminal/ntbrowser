@@ -66,6 +66,9 @@ func parseArgs(args []string) (config, error) {
 	subres := fs.String("subresources", "", "stylesheets and images: off, origin, any")
 	fetch := fs.String("fetch", "", "fetch() from page script: off, origin, allowlist")
 	scripts := fs.String("scripts", "", "page script: off, inline, external")
+	frameMS := fs.Int("frame-ms", 0, "minimum frame interval in ms (default 33; max 1000)")
+	frameCallbacks := fs.Int("frame-callbacks", 0, "pending animation callbacks (default 256; max 1024)")
+	frameBudget := fs.Int("frame-budget-ms", 0, "shared animation callback budget in ms (default 8; max 50)")
 	scriptNav := fs.String("script-navigation", "", "Location navigation: off, origin, allowlist, confirm")
 	scriptNavLimit := fs.Int("script-navigation-limit", 0, "automatic navigations per reader-initiated chain (default 8; max 100)")
 	cookieMode := fs.String("cookies", "", "cookies: off, session (default off; memory only)")
@@ -115,6 +118,15 @@ func parseArgs(args []string) (config, error) {
 	}
 	if *scripts != "" {
 		p.Scripts = profile.Scripts(*scripts)
+	}
+	if fs.Changed("frame-ms") {
+		p.FrameMillis = *frameMS
+	}
+	if fs.Changed("frame-callbacks") {
+		p.FrameCallbacks = *frameCallbacks
+	}
+	if fs.Changed("frame-budget-ms") {
+		p.FrameBudgetMillis = *frameBudget
 	}
 	if *scriptNav != "" {
 		p.ScriptNavigation = profile.ScriptNavigation(*scriptNav)

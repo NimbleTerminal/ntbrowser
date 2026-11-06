@@ -180,6 +180,9 @@ supported.
 | `--media off\|image\|animation\|video` | The most a top-level response may be shown as. Images inside a page are `--subresources`. `video` also opens `native-code` and `files=temp` |
 | `--max-media-bytes n` | Download cap for media (64 MiB) |
 | `--width px` | Initial document width; the terminal's pixel geometry takes over once known |
+| `--frame-ms n` | Minimum frame interval in ms (default 33, range 1–1000) |
+| `--frame-callbacks n` | Pending animation callbacks (default 256, range 1–1024) |
+| `--frame-budget-ms n` | Shared callback budget per frame in ms (default 8, range 1–50) |
 | `--slice d` | JavaScript time budget per entry (50ms); three overruns disable the page |
 | `--seed n` | PRNG seed for `Math.random` (0 = time-based) |
 
@@ -432,3 +435,26 @@ This is not a complete navigation platform: no frames/cross-window Location,
 History API, hashchange/popstate/beforeunload events, or ancestorOrigins list.
 The location URL remains the committed document URL while a load or confirmation
 is pending. Destination-policy refusals are reported asynchronously by the host.
+
+
+## Animation frames
+
+`requestAnimationFrame` callbacks run before the upcoming render snapshot.
+Each batch shares one profile-coarsened performance timestamp. Cancelling an
+unstarted callback works even from another callback in the same batch; newly
+requested callbacks wait until the next frame. Navigation discards both queued
+and active callbacks.
+
+Frame cadence, pending callback capacity and aggregate callback time are
+configurable through `--frame-ms`, `--frame-callbacks`, and `--frame-budget-ms`
+(or the same JSON profile keys). Defaults are 33 ms, 256 callbacks, and 8 ms.
+Zero selects the default. These are resource controls, not additional script
+permissions. Registration at capacity returns 0, as before.
+
+The shared budget shortens each callback's watchdog to the remaining batch
+time, without widening its ordinary `--slice` limit. Unstarted callbacks retain
+order and are deferred ahead of newly requested callbacks. An interrupted
+callback consumes a normal watchdog strike and is not retried. Heap checks and
+microtask draining remain part of each callback entry. Go work/GC pauses and
+non-interruptible engine operations can overshoot the wall-time target; this
+is not a hard real-time deadline or a guaranteed display refresh rate.

@@ -215,3 +215,15 @@ func TestScriptNavigationConfiguration(t *testing.T) {
 		t.Fatal(p, err)
 	}
 }
+
+func TestFrameResourceLimits(t *testing.T) {
+	for _, bad := range []string{`{"frame-ms":-1}`, `{"frame-ms":1001}`, `{"frame-callbacks":1025}`, `{"frame-budget-ms":51}`} {
+		if _, err := Parse([]byte(bad)); err == nil {
+			t.Fatal(bad)
+		}
+	}
+	p, err := Parse([]byte(`{"frame-ms":16,"frame-callbacks":32,"frame-budget-ms":4}`))
+	if err != nil || p.FrameInterval() != 16 || p.FrameCallbackLimit() != 32 || p.FrameBudget() != 4 {
+		t.Fatal(p, err)
+	}
+}

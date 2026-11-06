@@ -87,6 +87,9 @@ const defaultClockMillis = 10
 // Profile is one position for each gate. Code compares against the open
 // values, so an empty field is closed.
 type Profile struct {
+	FrameMillis           int              `json:"frame-ms,omitempty"`
+	FrameCallbacks        int              `json:"frame-callbacks,omitempty"`
+	FrameBudgetMillis     int              `json:"frame-budget-ms,omitempty"`
 	ScriptNavigation      ScriptNavigation `json:"script-navigation,omitempty"`
 	ScriptNavigationLimit int              `json:"script-navigation-limit,omitempty"`
 	Cookies               Cookies          `json:"cookies,omitempty"`
@@ -161,6 +164,9 @@ func oneOf[T ~string](gate string, v T, allowed ...T) error {
 }
 
 func (p Profile) check() error {
+	if p.FrameMillis < 0 || p.FrameMillis > 1000 || p.FrameCallbacks < 0 || p.FrameCallbacks > 1024 || p.FrameBudgetMillis < 0 || p.FrameBudgetMillis > 50 {
+		return fmt.Errorf("profile: frame-ms must be 0..1000, frame-callbacks 0..1024, frame-budget-ms 0..50 (zero uses defaults)")
+	}
 	if p.ScriptNavigationLimit < 0 || p.ScriptNavigationLimit > 100 {
 		return fmt.Errorf("profile: script-navigation-limit must be 0 (default) or 1..100")
 	}
@@ -311,6 +317,9 @@ func (p Profile) Table(s Strengths) string {
 		{"diagnostics", onOff(p.Diagnostics), "host-only diagnostic file; may contain page data"},
 		{"cookies", orOff(p.Cookies), "in-memory session cookies; cross-origin subrequests excluded"},
 		{"dynamic-code", orOff(p.DynamicCode), "eval and Function-family string compilation"},
+		{"frame-ms", strconv.Itoa(p.FrameInterval()), "minimum frame interval"},
+		{"frame-callbacks", strconv.Itoa(p.FrameCallbackLimit()), "pending animation callback cap"},
+		{"frame-budget-ms", strconv.Itoa(p.FrameBudget()), "shared animation callback execution budget"},
 		{"clock", strconv.Itoa(p.ClockMillis) + "ms", "script clock resolution"},
 		{"files", orOff(p.Files), "start-page: the file: URL given at launch; temp adds the media directory"},
 		{"native-code", onOff(p.NativeCode), "only ever in the ntbrowser-media helper"},
@@ -339,6 +348,25 @@ func (p Profile) Table(s Strengths) string {
 func (p Profile) ScriptNavBudget() int {
 	if p.ScriptNavigationLimit > 0 {
 		return p.ScriptNavigationLimit
+	}
+	return 8
+}
+
+func (p Profile) FrameInterval() int {
+	if p.FrameMillis > 0 {
+		return p.FrameMillis
+	}
+	return 33
+}
+func (p Profile) FrameCallbackLimit() int {
+	if p.FrameCallbacks > 0 {
+		return p.FrameCallbacks
+	}
+	return 256
+}
+func (p Profile) FrameBudget() int {
+	if p.FrameBudgetMillis > 0 {
+		return p.FrameBudgetMillis
 	}
 	return 8
 }

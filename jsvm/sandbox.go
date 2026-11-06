@@ -372,6 +372,18 @@ func (s *Sandbox) Call(fn goja.Callable, this goja.Value, args ...goja.Value) er
 	return s.Run(func(vm *goja.Runtime) error { _, err := fn(this, args...); return err })
 }
 
+// CallWithinBudget preserves the per-entry watchdog while shortening it to
+// the remaining host batch budget. Only the VM owner may call this method.
+func (s *Sandbox) CallWithinBudget(budget time.Duration, fn goja.Callable, this goja.Value, args ...goja.Value) error {
+	if budget <= 0 {
+		return errors.New("animation frame budget exhausted")
+	}
+	previous := s.cfg.Slice
+	s.cfg.Slice = min(previous, budget)
+	defer func() { s.cfg.Slice = previous }()
+	return s.Call(fn, this, args...)
+}
+
 // ---- timers and frames: thin shims over Host ----
 
 func (s *Sandbox) timerFunc(repeat bool) func(goja.FunctionCall) goja.Value {
