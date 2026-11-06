@@ -284,7 +284,17 @@ func (s *Sandbox) Run(fn func(vm *goja.Runtime) error) (err error) {
 		s.strike()
 		return err
 	case errors.As(err, &exception):
-		return fmt.Errorf("ntbrowser/jsvm: uncaught %s", safeString(exception.Value()))
+		message := safeString(exception.Value())
+		// Use the captured frames, not a page-controlled Error.stack property.
+		// Callbacks retain their original source location here as well.
+		for _, frame := range exception.Stack() {
+			pos := frame.Position()
+			if pos.Line > 0 {
+				message += fmt.Sprintf(" at %s:%d:%d", pos.Filename, pos.Line, pos.Column)
+				break
+			}
+		}
+		return fmt.Errorf("ntbrowser/jsvm: uncaught %s", safeString(s.vm.ToValue(message)))
 	}
 	return err
 }
