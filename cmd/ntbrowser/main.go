@@ -30,6 +30,7 @@ import (
 	flag "github.com/spf13/pflag"
 
 	"nimbleterminal.dev/ntbrowser/app"
+	"nimbleterminal.dev/ntbrowser/cookies"
 	"nimbleterminal.dev/ntbrowser/diagnostics"
 	"nimbleterminal.dev/ntbrowser/jsvm"
 	"nimbleterminal.dev/ntbrowser/loop"
@@ -65,6 +66,7 @@ func parseArgs(args []string) (config, error) {
 	subres := fs.String("subresources", "", "stylesheets and images: off, origin, any")
 	fetch := fs.String("fetch", "", "fetch() from page script: off, origin, allowlist")
 	scripts := fs.String("scripts", "", "page script: off, inline, external")
+	cookieMode := fs.String("cookies", "", "cookies: off, session (default off; memory only)")
 	dynamic := fs.String("dynamic-code", "", "eval and Function-family compilation: off, on (default off)")
 	clipboard := fs.String("clipboard", "", "selected-text copy: off, copy")
 	media := fs.String("media", "", "most a response may be shown as: off, image, animation, video (video also opens native-code and files=temp)")
@@ -111,6 +113,9 @@ func parseArgs(args []string) (config, error) {
 	}
 	if *scripts != "" {
 		p.Scripts = profile.Scripts(*scripts)
+	}
+	if *cookieMode != "" {
+		p.Cookies = profile.Cookies(*cookieMode)
 	}
 	if *dynamic != "" {
 		p.DynamicCode = profile.DynamicCode(*dynamic)
@@ -277,13 +282,19 @@ func runMain() int {
 		return 2
 	}
 	subresCfg := subres.Config{Mode: mode}
+	var cookieStore *cookies.Store
+	if c.Profile.Cookies == profile.CookiesSession {
+		cookieStore = cookies.New()
+	}
 	policy := app.PolicyFor(c.Profile)
+	policy.Cookies = cookieStore
 	policy.Trace = trace
 	l := loop.New(ctx, loop.Config{Trace: trace, Chunked: c.Chunked, Profile: c.Profile, Width: c.Width, Script: script, Subresources: subresCfg, SubresourceTransport: app.SubresourceTransport(policy, subresCfg)}, sink)
 	go l.Run()
 
 	m := app.New(l, c.Profile, c.Start)
 	m.SetDiagnostics(trace)
+	m.SetCookies(cookieStore)
 	defer m.Cleanup()
 	program = tea.NewProgram(m)
 	m.SetEnforced(strengths["files"] == profile.StrengthOS)

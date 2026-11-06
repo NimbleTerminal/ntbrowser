@@ -78,6 +78,7 @@ New packages: `profile` (data, validation, printing; no system imports) and `con
    | `private-network` | `off`, `on` | loopback and private addresses |
    | `scripts` | `off`, `inline`, `external` | page script |
    | `diagnostics` | boolean, default false | host writes observations to one preopened private file; no page access |
+   | `cookies` | `off`, `session` | bounded memory-only cookie store shared across navigation; off in all built-ins |
    | `dynamic-code` | `off`, `on` | native direct/indirect eval and Function-family string compilation; off in every built-in |
    | `clock` | milliseconds | shared resolution for Date, performance and animation-frame timestamps (speculation timing) |
    | `files` | `off`, `start-page`, `temp` | `start-page` reads the one `file:` URL given at launch; `temp` adds the private media directory |
@@ -336,3 +337,33 @@ This is the first inspection transport, not a DevTools or MCP implementation.
 It deliberately has no incoming command channel, page mutation, eval, or
 permission override. A future live inspection protocol must preserve these
 boundaries and separately gate any write/evaluation operations.
+
+
+## Session cookie extension (2026-11-06)
+
+This explicitly revises the architecture's anonymous-only rule when the
+`cookies=session` profile gate is selected. The zero value and every built-in
+stay off. The host creates one bounded memory-only store per browser launch and
+shares it between navigation, page fetchers and subresources. The loop binds
+cookie callbacks to the actual page URL, clearing any low-level VM overrides;
+page code cannot choose another URL or access the store object.
+
+`document.cookie` is an accessor even when off (empty reads, ignored writes).
+The store follows RFC 6265 domain/path/expiry semantics, validates domains with
+the public suffix list, protects HttpOnly from script reads/writes/deletions,
+rejects insecure Secure cookies and secure-cookie shadowing, and enforces
+__Secure-/__Host-/__Http- prefix constraints. SameSite is schemeful, defaults to
+Lax, and None requires Secure. Cookies marked Partitioned are refused rather
+than silently becoming unpartitioned. Navigation applies SameSite across the
+initiator and redirect chain. Subrequests are stricter: only the document's
+exact origin may send or receive cookies; cross-origin credentials include
+is not supported. Fetch credentials omit disables both directions through
+redirects. Network policy admission and header filtering remain in place.
+
+Limits: 4096-byte Set-Cookie inputs, 50 entries per domain, 256 per session,
+400-day maximum expiry, expired entries pruned before capacity checks; reject
+new entries at capacity. No persistence, importing, external cookie access,
+or new filesystem permissions. Diagnostics do not record cookie headers or
+store contents (page-generated console text can of course include JS-visible
+values). The source specifications are [RFC 6265 §5](https://httpwg.org/specs/rfc6265.html#user-agent-requirements) and [HTML document.cookie](https://html.spec.whatwg.org/multipage/dom.html#dom-document-cookie);
+this remains a documented subset rather than full browser cookie conformance.

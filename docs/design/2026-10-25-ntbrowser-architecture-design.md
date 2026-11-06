@@ -31,7 +31,7 @@ implemented CSS viewport contract.
 
 - Full web compatibility. The target is *arbitrary small pages* (Evan's answer to Q3), so DOM node lifetime, focus and element clicks follow browser semantics, but only the DOM/Fetch subset listed in §7b exists. No `innerHTML`, forms, CSS object model, `XMLHttpRequest`, `WebSocket`, `localStorage`, workers, or modules in v1.
 - Running on `js/wasm` (compile-only; decision 14).
-- Cookies or credentials of any kind. Requests are anonymous.
+- Persistent cookies, imported credentials, and third-party cookies. Requests are anonymous by default; the opt-in `cookies=session` extension in the profiles design adds bounded memory-only cookie state.
 
 **Anti-goals (failure even if it "works")**
 

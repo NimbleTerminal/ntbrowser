@@ -141,6 +141,7 @@ A profile is a named set of positions for every gate out of the sandbox. It is f
 | `fetch` | off | off | allowlist |
 | `scripts` | off | off | inline |
 | `dynamic-code` | off | off | off |
+| `cookies` | off | off | off |
 | `files` | off | off | start-page |
 | `native-code` | off | off | off |
 | `media` | off | image | animation |
@@ -170,6 +171,7 @@ supported.
 | `--fetch off\|origin\|allowlist` | `fetch()` from page script |
 | `--scripts off\|inline\|external` | Page script (`--external-scripts` is `--scripts external`) |
 | `--diagnostics path` | Capture bounded JSONL diagnostics to a new owner-only file |
+| `--cookies off\|session` | In-memory cookies for this browser session (default off) |
 | `--dynamic-code off\|on` | Native `eval` and Function-family compilation (default off) |
 | `--clipboard off\|copy` | Selected-text copy |
 | `--media off\|image\|animation\|video` | The most a top-level response may be shown as. Images inside a page are `--subresources`. `video` also opens `native-code` and `files=temp` |
@@ -361,3 +363,31 @@ for display. For example, inspect metadata without printing page HTML:
 ```sh
 jq -c 'select(.kind != "document" and .kind != "snapshot")' /tmp/ntbrowser-debug.jsonl
 ```
+
+
+## Session cookies
+
+`--cookies=session` (or `"cookies":"session"` in a profile) enables
+`document.cookie`, `navigator.cookieEnabled`, and HTTP cookie exchange using one in-memory store across
+navigation. All built-ins default to off: reads return an empty string, writes
+are ignored, and HTTP requests remain cookieless. Exiting discards every cookie,
+even cookies with a future expiry. No disk persistence or cookie import exists.
+
+The store implements host/domain and path matching, default paths, expiry and
+Max-Age deletion, Secure and HttpOnly, public-suffix rejection, secure cookie
+prefixes, and schemeful SameSite checks. HttpOnly cookies are sent over HTTP but
+never exposed to or overwritten by JavaScript. The limits are 4096 bytes per
+Set-Cookie value, 50 cookies per domain, and 256 total; excess new cookies are
+ignored after expired entries are removed. Expiry is capped at 400 days.
+
+Subrequests send and accept cookies only on the document's exact origin,
+including its port. This intentionally excludes third-party/cross-origin
+cookies, even with `fetch` credentials `include`. `credentials: "omit"` disables
+both directions. Navigation uses destination cookies with SameSite checks,
+including cross-site redirect chains; unspecified SameSite behaves as Lax.
+Partitioned cookies are rejected. Cookie/Set-Cookie headers remain unavailable
+to page JavaScript; the cookie store adds headers only after network admission.
+Cookies do not grant navigation, network, storage, or script execution rights.
+
+This adds the cookie API; it does not implement `location.replace`, sessionStorage,
+or the rest of a full browser challenge environment.

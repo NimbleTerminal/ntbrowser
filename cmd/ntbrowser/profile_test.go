@@ -201,3 +201,13 @@ func TestChunkedModeIsOptIn(t *testing.T) {
 		t.Fatal("rendering flag changed security gates")
 	}
 }
+
+func TestCookieFlag(t *testing.T) {
+	c, err := parseArgs([]string{"https://example.test/", "--cookies=session"})
+	if err != nil || c.Profile.Cookies != profile.CookiesSession || c.Profile.Name != "browse+flags" {
+		t.Fatal(c, err)
+	}
+	if _, err := parseArgs([]string{"--cookies=all", "https://example.test/"}); err == nil {
+		t.Fatal("accepted unknown policy")
+	}
+}

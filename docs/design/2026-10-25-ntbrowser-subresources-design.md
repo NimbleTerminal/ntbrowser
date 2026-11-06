@@ -240,3 +240,12 @@ Two ways:
 2. **Host-side pre-pass** in `subres`: flatten at-rules before `SetStyle` (drop non-matching `@media`, keep matching bodies, strip the others), re-run on `Resize` since matching depends on width, apply the same pass to inline `<style>` text in the serializer, and have the `dom` serializer emit presentational attributes as inline `style`. Cost: a CSS pre-parser in ntbrowser that must agree with nthtml's, re-flattening per width change, package ownership changes (`dom` or the loop must transform inline styles), and item 2 stays broken (subtext links black, comment links not underlined) until nthtml changes anyway.
 
 **Evan's answer (2026-10-26): option 1, fix nthtml.** **Shipped as nthtml v0.1.1 (2026-10-26, on the Go proxy; requires nttypeset v0.1.4).** All four fixes re-verified with the same probes: `@media (max-width:750px)` is skipped at 800 px and `@import` no longer eats the next rule; `.a, .b:visited{}` styles `.a`; `bgcolor`, `<center>` + `width="85%"`, `align`, `valign` and `cellpadding` apply; `alt=""` images reserve their box silently. HN with `news.css` inlined at 800 px renders the orange bar, the centred `#f6f6ef` column, black 10 pt titles and grey subtext links. nthtml `main` at 4123b17 (2026-10-26, unreleased) goes on to cover every item of the nthtml request list, including `Options.BackgroundImages` and `Document.ImageSourceList`, which is what turned background images from a deferred item into decision 21. This round's plan therefore starts by pinning the newest nthtml release and `subres` injects CSS verbatim. No `Flatten` component, no `dom` transform hook, no media-query evaluator in ntbrowser.
+
+
+### Cookie extension (2026-11-06)
+
+The profiles design's `cookies=session` extension supersedes the unconditional
+no-cookie statements above only when explicitly enabled. Subresource policies
+share the host's bounded session store; only same-origin requests may send or
+receive cookies. Cross-origin resources remain cookieless even when allowed to
+load. The default remains off, and no Referer is added.

@@ -26,6 +26,7 @@ import (
 	"nimbleterminal.dev/ntpicture"
 	"nimbleterminal.dev/ntpicture/animation"
 
+	"nimbleterminal.dev/ntbrowser/cookies"
 	"nimbleterminal.dev/ntbrowser/diagnostics"
 	"nimbleterminal.dev/ntbrowser/loop"
 	"nimbleterminal.dev/ntbrowser/netpolicy"
@@ -713,5 +714,11 @@ func statusWarnings(warnings []string) []string {
 func (m *Model) SetDiagnostics(r *diagnostics.Recorder) {
 	if m.profile.Diagnostics {
 		m.policy.Trace = r
+	}
+}
+
+func (m *Model) SetCookies(s *cookies.Store) {
+	if m.profile.Cookies == profile.CookiesSession {
+		m.policy.Cookies = s
 	}
 }

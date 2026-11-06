@@ -339,6 +339,11 @@ func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) {
 		}
 		cfg := l.cfg.Script
 		cfg.Location = base
+		cfg.CookieRead, cfg.CookieWrite = nil, nil
+		if l.cfg.Profile.Cookies == profile.CookiesSession {
+			cfg.CookieRead = func() string { return fetcher.DocumentCookie(base) }
+			cfg.CookieWrite = func(v string) { fetcher.SetDocumentCookie(base, v) }
+		}
 		cfg.AllowDynamicCode = l.cfg.Profile.AllowsDynamicCode()
 		if ms := l.cfg.Profile.ClockMillis; ms > 0 {
 			cfg.ClockResolution = time.Duration(ms) * time.Millisecond
@@ -1066,7 +1071,7 @@ func (h *host) Fetch(req jsvm.FetchRequest, done func(jsvm.FetchResponse, error)
 		var resp netpolicy.Response
 		var err error
 		if f := l.cfg.Profile.Fetch; f == profile.FetchOrigin || f == profile.FetchAllowlist {
-			resp, err = page.Fetcher.Do(page.ctx, netpolicy.Request{Method: req.Method, URL: req.URL, Headers: req.Headers, Body: req.Body})
+			resp, err = page.Fetcher.Do(page.ctx, netpolicy.Request{OmitCookies: req.OmitCookies, Method: req.Method, URL: req.URL, Headers: req.Headers, Body: req.Body})
 		} else {
 			err = fmt.Errorf("%w: fetch is off", netpolicy.ErrDenied)
 			l.cfg.Trace.Record("network_error", map[string]string{"url": req.URL, "error": err.Error()})

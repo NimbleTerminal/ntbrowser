@@ -49,6 +49,7 @@ func policyFor(policy netpolicy.Policy, cfg subres.Config, base string) (netpoli
 	}
 	p := netpolicy.Policy{
 		Trace:           policy.Trace,
+		Cookies:         policy.Cookies,
 		Origin:          origin,
 		AllowHosts:      append([]string(nil), policy.AllowHosts...),
 		AllowPrivate:    policy.AllowPrivate,

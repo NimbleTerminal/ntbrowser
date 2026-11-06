@@ -19,6 +19,16 @@ func (s *Sandbox) fetch(call goja.FunctionCall) goja.Value {
 	promise, resolve, reject := vm.NewPromise()
 	req := FetchRequest{URL: call.Argument(0).String(), Method: "GET", Headers: map[string]string{}}
 	if init, ok := call.Argument(1).(*goja.Object); ok {
+		if v := init.Get("credentials"); v != nil && !goja.IsUndefined(v) {
+			switch v.String() {
+			case "omit":
+				req.OmitCookies = true
+			case "same-origin", "include":
+			default:
+				_ = reject(vm.NewTypeError("invalid fetch credentials"))
+				return vm.ToValue(promise)
+			}
+		}
 		if m := init.Get("method"); m != nil && !goja.IsUndefined(m) {
 			req.Method = m.String()
 		}

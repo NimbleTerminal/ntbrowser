@@ -30,6 +30,8 @@ import (
 
 // Config bounds one page's scripting. Zero fields use the defaults below.
 type Config struct {
+	CookieRead       func() string // host-only capability, bound to the current document URL
+	CookieWrite      func(string)  // nil makes document.cookie writes inert
 	AllowDynamicCode bool          // native eval and Function-family compilation; default false
 	Slice            time.Duration // wall-clock budget per entry into JS (default 50ms)
 	Strikes          int           // slice overruns before scripting is disabled (default 3)
@@ -57,6 +59,7 @@ type Host interface {
 }
 
 type FetchRequest struct {
+	OmitCookies       bool
 	Method, URL, Body string
 	Headers           map[string]string
 }
@@ -247,6 +250,7 @@ func (s *Sandbox) installGlobals() {
 	defineFrozen(location, "href", vm.ToValue(s.cfg.Location))
 	defineFrozen(global, "location", location)
 	navigator := vm.NewObject()
+	defineFrozen(navigator, "cookieEnabled", vm.ToValue(s.cfg.CookieRead != nil && s.cfg.CookieWrite != nil))
 	defineFrozen(navigator, "userAgent", vm.ToValue("ntbrowser"))
 	defineFrozen(global, "navigator", navigator)
 	defineFrozen(global, "setTimeout", vm.ToValue(s.timerFunc(false)))

@@ -181,3 +181,19 @@ func TestDynamicCodeProfileGate(t *testing.T) {
 		t.Fatal("invalid gate accepted")
 	}
 }
+
+func TestCookieGateDefaultsClosed(t *testing.T) {
+	for _, name := range []string{"locked", "reader", "browse"} {
+		p, _ := Builtin(name)
+		if p.Cookies == CookiesSession {
+			t.Fatal(name)
+		}
+	}
+	p, err := Parse([]byte(`{"base":"browse","cookies":"session"}`))
+	if err != nil || p.Cookies != CookiesSession {
+		t.Fatal(p, err)
+	}
+	if _, err := Parse([]byte(`{"cookies":"persistent"}`)); err == nil {
+		t.Fatal("accepted unsupported cookie policy")
+	}
+}

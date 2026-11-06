@@ -499,6 +499,17 @@ func (s *Sandbox) documentObject() *goja.Object {
 		}
 		return s.wrap(s.tree.Body())
 	}, nil)
+	s.accessor(d, "cookie", func(goja.Value) goja.Value {
+		v := ""
+		if s.cfg.CookieRead != nil {
+			v = s.cfg.CookieRead()
+		}
+		return vm.ToValue(v)
+	}, func(_ goja.Value, v goja.Value) {
+		if s.cfg.CookieWrite != nil {
+			s.cfg.CookieWrite(v.String())
+		}
+	})
 	s.accessor(d, "title", func(goja.Value) goja.Value { return vm.ToValue(s.tree.Title()) }, nil)
 	return d
 }

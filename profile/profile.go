@@ -25,6 +25,7 @@ type (
 	Fetch        string
 	Scripts      string
 	DynamicCode  string
+	Cookies      string
 	Files        string
 	Media        string
 	Clipboard    string
@@ -44,6 +45,9 @@ const (
 	FetchOff       Fetch = "off"
 	FetchOrigin    Fetch = "origin"
 	FetchAllowlist Fetch = "allowlist"
+
+	CookiesOff     Cookies = "off"
+	CookiesSession Cookies = "session"
 
 	DynamicOff DynamicCode = "off"
 	DynamicOn  DynamicCode = "on"
@@ -77,6 +81,7 @@ const defaultClockMillis = 10
 // Profile is one position for each gate. Code compares against the open
 // values, so an empty field is closed.
 type Profile struct {
+	Cookies        Cookies      `json:"cookies,omitempty"`
 	Diagnostics    bool         `json:"diagnostics,omitempty"`
 	Name           string       `json:"name,omitempty"`
 	Navigate       Navigate     `json:"navigate,omitempty"`
@@ -156,6 +161,7 @@ func (p Profile) check() error {
 		oneOf("subresources", p.Subresources, SubOff, SubOrigin, SubAny),
 		oneOf("fetch", p.Fetch, FetchOff, FetchOrigin, FetchAllowlist),
 		oneOf("scripts", p.Scripts, ScriptsOff, ScriptsInline, ScriptsExternal),
+		oneOf("cookies", p.Cookies, CookiesOff, CookiesSession),
 		oneOf("dynamic-code", p.DynamicCode, DynamicOff, DynamicOn),
 		oneOf("files", p.Files, FilesOff, FilesStartPage, FilesTemp),
 		oneOf("media", p.Media, MediaOff, MediaImage, MediaAnimation, MediaVideo),
@@ -289,6 +295,7 @@ func (p Profile) Table(s Strengths) string {
 		{"private-network", onOff(p.PrivateNetwork), "loopback and private addresses"},
 		{"scripts", orOff(p.Scripts), "page script"},
 		{"diagnostics", onOff(p.Diagnostics), "host-only diagnostic file; may contain page data"},
+		{"cookies", orOff(p.Cookies), "in-memory session cookies; cross-origin subrequests excluded"},
 		{"dynamic-code", orOff(p.DynamicCode), "eval and Function-family string compilation"},
 		{"clock", strconv.Itoa(p.ClockMillis) + "ms", "script clock resolution"},
 		{"files", orOff(p.Files), "start-page: the file: URL given at launch; temp adds the media directory"},

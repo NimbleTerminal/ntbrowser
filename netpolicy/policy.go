@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"nimbleterminal.dev/ntbrowser/cookies"
 	"nimbleterminal.dev/ntbrowser/diagnostics"
 	"strings"
 	"sync"
@@ -26,6 +27,7 @@ import (
 // Policy is fixed per page load. The zero value denies everything, so a
 // misconfigured host fails closed.
 type Policy struct {
+	Cookies *cookies.Store
 	// Trace is a host-only observer, installed only when diagnostics is enabled.
 	Trace *diagnostics.Recorder
 	// Origin is the page's own URL. Same-origin requests are allowed when it
@@ -65,11 +67,12 @@ const (
 )
 
 type Request struct {
-	Method  string
-	URL     string
-	Headers map[string]string // filtered against requestHeaderAllow
-	Body    string
-	Kind    Kind
+	OmitCookies bool
+	Method      string
+	URL         string
+	Headers     map[string]string // filtered against requestHeaderAllow
+	Body        string
+	Kind        Kind
 }
 
 type Response struct {
@@ -137,8 +140,14 @@ func New(p Policy) *Fetcher {
 		},
 	}
 	f.client = &http.Client{
-		Transport: transport,
-		Jar:       nil, // no cookies, ever
+		Transport: cookies.Transport{Base: transport, Store: p.Cookies, Origin: p.Origin, Omit: func(r *http.Request) bool {
+			v, _ := r.Context().Value(cookieKindKey{}).(cookieRequestContext)
+			return v.omit
+		}, Navigation: func(r *http.Request) bool {
+			v, _ := r.Context().Value(cookieKindKey{}).(cookieRequestContext)
+			return v.kind == KindNavigate
+		}},
+		Jar: nil, // the bounded transport store owns cookie admission
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			f.p.Trace.Record("redirect", map[string]any{"url": req.URL.String(), "from": via[len(via)-1].URL.String()})
 			if len(via) >= f.p.MaxRedirects {
@@ -249,7 +258,14 @@ func (b *openBody) Close() error {
 
 // Open performs a request up to the response headers, under every check Do
 // makes. It is safe for concurrent use.
+type cookieKindKey struct{}
+type cookieRequestContext struct {
+	kind Kind
+	omit bool
+}
+
 func (f *Fetcher) Open(ctx context.Context, r Request) (result *OpenResponse, resultErr error) {
+	ctx = context.WithValue(ctx, cookieKindKey{}, cookieRequestContext{r.Kind, r.OmitCookies})
 	started := time.Now()
 	status := 0
 	contentType, finalURL := "", ""
@@ -473,3 +489,7 @@ func hostPort(u *url.URL) string {
 	}
 	return u.Hostname() + ":" + port
 }
+
+// Cookie access is bound to the current document URL by the loop, never by JS.
+func (f *Fetcher) DocumentCookie(base string) string    { return f.p.Cookies.Document(base) }
+func (f *Fetcher) SetDocumentCookie(base, value string) { f.p.Cookies.SetDocument(base, value) }
