@@ -72,7 +72,7 @@ func TestGlobalSurface(t *testing.T) {
 	for _, n := range names {
 		have[n] = true
 	}
-	for _, want := range []string{"document", "fetch", "console", "setTimeout", "requestAnimationFrame", "location", "Image", "HTMLImageElement", "HTMLAnchorElement"} {
+	for _, want := range []string{"document", "fetch", "console", "setTimeout", "requestAnimationFrame", "location", "Image", "HTMLImageElement", "HTMLAnchorElement", "performance", "Performance"} {
 		if !have[want] {
 			t.Errorf("missing host global %s", want)
 		}

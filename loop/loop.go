@@ -79,7 +79,6 @@ type Page struct {
 	Sandbox *jsvm.Sandbox
 	Fetcher *netpolicy.Fetcher
 	Base    string
-	started time.Time
 	loaded  bool
 	// ctx bounds every request this page starts; cancel fires when the page
 	// is replaced or killed, so no completion outlives its runtime.
@@ -323,14 +322,13 @@ func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) {
 		}
 		cfg := l.cfg.Script
 		cfg.Location = base
-		if ms := l.cfg.Profile.ClockMillis; ms > 0 && cfg.Clock == nil {
-			res := time.Duration(ms) * time.Millisecond
-			cfg.Clock = func() time.Time { return time.Now().Truncate(res) }
+		if ms := l.cfg.Profile.ClockMillis; ms > 0 {
+			cfg.ClockResolution = time.Duration(ms) * time.Millisecond
 		}
 		if l.cfg.Profile.Media == profile.MediaVideo {
 			tree.MarkVideos()
 		}
-		page := &Page{Tree: tree, Fetcher: fetcher, Base: base, started: time.Now(), firstFrame: true, budgetWarned: map[string]bool{}, refused: map[string]bool{}, firing: map[dom.NodeID]bool{}, resetting: map[dom.NodeID]bool{}}
+		page := &Page{Tree: tree, Fetcher: fetcher, Base: base, firstFrame: true, budgetWarned: map[string]bool{}, refused: map[string]bool{}, firing: map[dom.NodeID]bool{}, resetting: map[dom.NodeID]bool{}}
 		page.ctx, page.cancel = context.WithCancel(l.ctx)
 		page.paintCtx, page.paintCancel = context.WithCancel(l.ctx)
 		page.Sandbox = jsvm.New(cfg, tree, (*host)(l))
@@ -922,7 +920,7 @@ type frameCB struct {
 
 // runFrameCallbacks delivers requestAnimationFrame callbacks after a frame
 // was produced, each under its own slice, with a monotonic millisecond
-// timestamp since page start (DOMHighResTimeStamp semantics, 10 ms coarse).
+// timestamp from the same profile-coarsened clock as performance.now().
 func (l *Loop) runFrameCallbacks() {
 	if len(l.frames) == 0 || l.page == nil {
 		return
@@ -930,7 +928,7 @@ func (l *Loop) runFrameCallbacks() {
 	cbs := l.frames
 	l.frames = nil
 	sb := l.page.Sandbox
-	ts := float64(time.Since(l.page.started).Truncate(10*time.Millisecond)) / float64(time.Millisecond)
+	ts := sb.PerformanceNow()
 	for _, cb := range cbs {
 		l.report(sb.Call(cb.fn, goja.Undefined(), sb.ToValue(ts)))
 	}

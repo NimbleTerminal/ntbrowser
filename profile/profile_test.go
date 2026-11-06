@@ -139,3 +139,16 @@ func TestTableNamesTheHelper(t *testing.T) {
 		t.Fatalf("%s", out)
 	}
 }
+
+func TestClockRejectsInvalidResolution(t *testing.T) {
+	for _, src := range []string{`{"clock":-1}`, `{"clock":9223372036855}`} {
+		if _, err := Parse([]byte(src)); err == nil {
+			t.Fatalf("accepted invalid clock: %s", src)
+		}
+	}
+	for _, src := range []string{`{"clock":0}`, `{"clock":1}`, `{"clock":1000}`} {
+		if _, err := Parse([]byte(src)); err != nil {
+			t.Fatal(err)
+		}
+	}
+}

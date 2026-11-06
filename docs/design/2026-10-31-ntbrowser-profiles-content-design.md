@@ -77,7 +77,7 @@ New packages: `profile` (data, validation, printing; no system imports) and `con
    | `hosts` | list | what `allowlist` means |
    | `private-network` | `off`, `on` | loopback and private addresses |
    | `scripts` | `off`, `inline`, `external` | page script |
-   | `clock` | milliseconds | script clock resolution (speculation timing) |
+   | `clock` | milliseconds | shared resolution for Date, performance and animation-frame timestamps (speculation timing) |
    | `files` | `off`, `start-page`, `temp` | `start-page` reads the one `file:` URL given at launch; `temp` adds the private media directory |
    | `native-code` | `off`, `on` | native code, which exists only in the media helper (decision 21); the main binary never loads any |
    | `media` | `off`, `image`, `animation`, `video` | the most a top-level response may be presented as (cumulative). Images inside a page are the `subresources` gate; the printed table says so |

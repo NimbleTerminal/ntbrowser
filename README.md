@@ -186,6 +186,14 @@ Decoding runs in a separate binary, `ntbrowser-media`, built beside `ntbrowser`.
 
 `Tab`/`Shift+Tab` move focus through links and form controls · `Enter` opens the focused link or presses the focused button · `Space` toggles a focused checkbox or radio · `⌫` or `⌥←` back · `⌥→` forward · `^R` reload · `/` search · `q` quit. Mouse clicks reach page elements; the page cannot swallow these keys.
 
+**Performance timing.** `performance.now()`, read-only `performance.timeOrigin`,
+and `performance.toJSON()` are available. Elapsed time is monotonic with the
+default clock. `Date.now()`, performance values and animation-frame timestamps
+all use the profile's clock resolution (10 ms by default), with a shared
+quantization phase. Injected clocks support deterministic replay and backward
+movement is clamped for elapsed time. Legacy `performance.timing`, performance
+entries/observers and user-timing marks/measures are not implemented.
+
 **JavaScript anchors.** Parsed and script-created `<a>` elements share an
 `HTMLAnchorElement` prototype. The interface exposes `href`, URL components
 (`protocol`, `username`, `password`, `host`, `hostname`, `port`, `pathname`,
@@ -208,6 +216,7 @@ The effect determines which existing gate applies:
 | Reader activates a link | Resolve the final destination after click listeners; `navigate` applies off/allowlist/confirm/free |
 | Make the admitted navigation request | `netpolicy` checks schemes, credentials, hosts, private addresses, DNS and redirects; content gates apply before consuming the response |
 | Set `target`, `download`, `ping`, `rel`, or `referrerPolicy` | Attributes only; no popup, download-to-disk, audit ping or relaxed request policy. Links continue in the current viewer |
+| Read `Date`, `performance`, or animation-frame timestamps | The profile’s `clock` resolution; no finer timer through another API |
 | Set an image source, attached or detached | `subresources`, with the shared image request and decoding budgets |
 
 URL parsing accepts more schemes than navigation allows. Parsing a `file:`,

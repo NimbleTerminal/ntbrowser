@@ -16,6 +16,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type (
@@ -141,6 +142,9 @@ func oneOf[T ~string](gate string, v T, allowed ...T) error {
 }
 
 func (p Profile) check() error {
+	if p.ClockMillis < 0 || int64(p.ClockMillis) > (1<<63-1)/int64(time.Millisecond) {
+		return fmt.Errorf("profile: clock resolution is negative or exceeds the supported duration")
+	}
 	for _, err := range []error{
 		oneOf("navigate", p.Navigate, NavOff, NavAllowlist, NavConfirm, NavFree),
 		oneOf("subresources", p.Subresources, SubOff, SubOrigin, SubAny),

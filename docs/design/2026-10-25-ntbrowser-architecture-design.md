@@ -1822,6 +1822,14 @@ func (t *Tree) Listeners(typ string) []*Node {
 
 ### 7b. Bindings (`jsvm/bindings.go`)
 
+2026-11-06 timing extension: `jsvm/performance.go` exposes the core Performance
+interface (`now`, `timeOrigin`, `toJSON`). `Config.ClockResolution` defaults to
+10 ms and is set from the host profile. Date, performance and rAF share that
+resolution and quantization phase. The default raw time source preserves Go's
+monotonic clock for elapsed time; injected clocks are deterministic and clamped
+against backward movement. Legacy navigation/resource timing is not exposed.
+
+
 2026-11-06 anchor extension: `jsvm/anchors.go` and `anchor_tokens.go` expose the
 anchor surface documented in README. URLs use `github.com/nlnwa/whatwg-url`
 v0.6.2; parsing is a pure operation, not an admission decision. The loop uses

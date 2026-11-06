@@ -30,15 +30,16 @@ import (
 
 // Config bounds one page's scripting. Zero fields use the defaults below.
 type Config struct {
-	Slice        time.Duration // wall-clock budget per entry into JS (default 50ms)
-	Strikes      int           // slice overruns before scripting is disabled (default 3)
-	MaxCallStack int           // default 512 frames
-	MaxTimers    int           // live timers (default 256)
-	MaxListeners int           // total event listeners (default 1024)
-	HeapBudget   uint64        // process heap bytes after which this page is disabled (default 256 MiB)
-	Clock        func() time.Time
-	Rand         func() float64
-	Location     string // read-only location.href shown to scripts
+	Slice           time.Duration // wall-clock budget per entry into JS (default 50ms)
+	Strikes         int           // slice overruns before scripting is disabled (default 3)
+	MaxCallStack    int           // default 512 frames
+	MaxTimers       int           // live timers (default 256)
+	MaxListeners    int           // total event listeners (default 1024)
+	HeapBudget      uint64        // process heap bytes after which this page is disabled (default 256 MiB)
+	ClockResolution time.Duration // minimum clock resolution (default 10ms), shared by Date, performance and rAF
+	Clock           func() time.Time
+	Rand            func() float64
+	Location        string // read-only location.href shown to scripts
 }
 
 // Host is what the loop gives the sandbox. Every method is called on the VM
@@ -68,13 +69,15 @@ type FetchResponse struct {
 }
 
 type Sandbox struct {
-	vm       *goja.Runtime
-	cfg      Config
-	host     Host
-	tree     *dom.Tree
-	strikes  int
-	disabled bool
-	running  bool
+	performanceOrigin float64
+	performanceNow    func() float64
+	vm                *goja.Runtime
+	cfg               Config
+	host              Host
+	tree              *dom.Tree
+	strikes           int
+	disabled          bool
+	running           bool
 
 	anchorProto   *goja.Object
 	relListSym    *goja.Symbol
@@ -174,15 +177,11 @@ func New(cfg Config, tree *dom.Tree, host Host) *Sandbox {
 	if cfg.HeapBudget == 0 {
 		cfg.HeapBudget = 256 << 20
 	}
-	if cfg.Clock == nil {
-		// Coarse clock: 10ms granularity blunts timing side channels and
-		// makes Date.now() useless as a high-resolution profiler.
-		cfg.Clock = func() time.Time { return time.Now().Truncate(10 * time.Millisecond) }
-	}
+	origin, now := prepareClocks(&cfg)
 	if cfg.Rand == nil {
 		cfg.Rand = defaultRand
 	}
-	s := &Sandbox{cfg: cfg, host: host, tree: tree,
+	s := &Sandbox{cfg: cfg, host: host, tree: tree, performanceOrigin: origin, performanceNow: now,
 		weakW: map[dom.NodeID]weak.Pointer[goja.Object]{}, strong: map[dom.NodeID]*goja.Object{},
 		listenCount: map[dom.NodeID]map[string]int{}, typeCount: map[string]int{}}
 	s.vm = goja.New()
@@ -194,6 +193,7 @@ func New(cfg Config, tree *dom.Tree, host Host) *Sandbox {
 	s.installAnchors()
 	s.installImages()
 	s.installGlobals()
+	s.installPerformance()
 	dom.Walk(tree.Root(), func(n *dom.Node) {
 		if n.Tag() == "img" {
 			s.imageChanged(n)
@@ -334,6 +334,7 @@ func (s *Sandbox) Close() {
 	s.images = nil
 	s.imageProto = nil
 	s.anchorProto = nil
+	s.performanceNow = nil
 	s.vm = nil
 	s.wd.vm = nil
 	s.elemProto, s.docObj, s.promiseCtor, s.jsonParse = nil, nil, nil, nil

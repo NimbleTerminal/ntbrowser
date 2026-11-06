@@ -64,3 +64,13 @@ func TestPageCannotSeeProfile(t *testing.T) {
 		t.Fatalf("%+v", lm)
 	}
 }
+
+func TestPerformanceAndAnimationFramesRespectProfileClock(t *testing.T) {
+	p, _ := profile.Builtin("browse")
+	p.ClockMillis = 1000
+	_, sink := profileLoop(t, p, `<script>
+ if(performance.timeOrigin%1000!==0||performance.now()%1000!==0)throw Error("fine performance clock");
+ requestAnimationFrame(t=>{if(t%1000!==0||performance.now()<t)throw Error("fine frame clock");console.log("coarse clocks")});
+ </script>`)
+	waitLog(t, sink, "coarse clocks")
+}
