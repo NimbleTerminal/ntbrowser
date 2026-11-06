@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"nimbleterminal.dev/ntbrowser/diagnostics"
 	"strings"
 	"sync"
 	"time"
@@ -25,6 +26,8 @@ import (
 // Policy is fixed per page load. The zero value denies everything, so a
 // misconfigured host fails closed.
 type Policy struct {
+	// Trace is a host-only observer, installed only when diagnostics is enabled.
+	Trace *diagnostics.Recorder
 	// Origin is the page's own URL. Same-origin requests are allowed when it
 	// is set; relative URLs resolve against it.
 	Origin *url.URL
@@ -137,6 +140,7 @@ func New(p Policy) *Fetcher {
 		Transport: transport,
 		Jar:       nil, // no cookies, ever
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			f.p.Trace.Record("redirect", map[string]any{"url": req.URL.String(), "from": via[len(via)-1].URL.String()})
 			if len(via) >= f.p.MaxRedirects {
 				return fmt.Errorf("%w: too many redirects", ErrDenied)
 			}
@@ -245,7 +249,22 @@ func (b *openBody) Close() error {
 
 // Open performs a request up to the response headers, under every check Do
 // makes. It is safe for concurrent use.
-func (f *Fetcher) Open(ctx context.Context, r Request) (*OpenResponse, error) {
+func (f *Fetcher) Open(ctx context.Context, r Request) (result *OpenResponse, resultErr error) {
+	started := time.Now()
+	status := 0
+	contentType, finalURL := "", ""
+	defer func() {
+		e := ""
+		if resultErr != nil {
+			e = resultErr.Error()
+		}
+		f.p.Trace.Record("network", map[string]any{"url": r.URL, "origin": func() string {
+			if f.p.Origin != nil {
+				return f.p.Origin.String()
+			}
+			return ""
+		}(), "method": r.Method, "kind": r.Kind, "status": status, "content_type": contentType, "final_url": finalURL, "error": e, "duration_ms": time.Since(started).Milliseconds()})
+	}()
 	select {
 	case f.sem <- struct{}{}:
 	default:
@@ -291,6 +310,7 @@ func (f *Fetcher) Open(ctx context.Context, r Request) (*OpenResponse, error) {
 		done()
 		return nil, err
 	}
+	status, contentType, finalURL = resp.StatusCode, resp.Header.Get("Content-Type"), resp.Request.URL.String()
 	if r.Kind == KindNavigate {
 		deadline.Stop()
 	}
@@ -317,7 +337,12 @@ func (f *Fetcher) Open(ctx context.Context, r Request) (*OpenResponse, error) {
 
 // Do performs one bounded request. It is safe for concurrent use; the loop
 // calls it from a worker goroutine, never from the VM goroutine.
-func (f *Fetcher) Do(ctx context.Context, r Request) (Response, error) {
+func (f *Fetcher) Do(ctx context.Context, r Request) (result Response, resultErr error) {
+	defer func() {
+		if resultErr != nil {
+			f.p.Trace.Record("network_error", map[string]string{"url": r.URL, "error": resultErr.Error()})
+		}
+	}()
 	o, err := f.Open(ctx, r)
 	if err != nil {
 		return Response{}, err

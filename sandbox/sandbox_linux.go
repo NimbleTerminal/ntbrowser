@@ -82,7 +82,7 @@ func landlockABI() int {
 func Available() bool { return landlockABI() > 0 }
 
 // Reexec is not needed on Linux: Apply restricts the running process.
-func Reexec(profile.Profile, string, string, []string) error { return nil }
+func Reexec(profile.Profile, string, string, []string, ...string) error { return nil }
 
 // readPaths are what a terminal Go program reads at run time: name
 // resolution, certificates and terminal descriptions. Missing ones are

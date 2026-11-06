@@ -26,6 +26,7 @@ import (
 	"nimbleterminal.dev/ntpicture"
 	"nimbleterminal.dev/ntpicture/animation"
 
+	"nimbleterminal.dev/ntbrowser/diagnostics"
 	"nimbleterminal.dev/ntbrowser/loop"
 	"nimbleterminal.dev/ntbrowser/netpolicy"
 	"nimbleterminal.dev/ntbrowser/profile"
@@ -706,4 +707,11 @@ func statusWarnings(warnings []string) []string {
 		}
 	}
 	return out
+}
+
+// SetDiagnostics installs the host recorder before the program starts.
+func (m *Model) SetDiagnostics(r *diagnostics.Recorder) {
+	if m.profile.Diagnostics {
+		m.policy.Trace = r
+	}
 }

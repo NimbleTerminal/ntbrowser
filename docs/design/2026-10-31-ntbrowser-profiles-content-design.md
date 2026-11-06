@@ -77,6 +77,7 @@ New packages: `profile` (data, validation, printing; no system imports) and `con
    | `hosts` | list | what `allowlist` means |
    | `private-network` | `off`, `on` | loopback and private addresses |
    | `scripts` | `off`, `inline`, `external` | page script |
+   | `diagnostics` | boolean, default false | host writes observations to one preopened private file; no page access |
    | `dynamic-code` | `off`, `on` | native direct/indirect eval and Function-family string compilation; off in every built-in |
    | `clock` | milliseconds | shared resolution for Date, performance and animation-frame timestamps (speculation timing) |
    | `files` | `off`, `start-page`, `temp` | `start-page` reads the one `file:` URL given at launch; `temp` adds the private media directory |
@@ -309,3 +310,29 @@ process-isolated.
 The cross-project [security landscape](2026-11-05-nimbleterminal-security-landscape.md)
 and [boundary review](2026-11-05-security-landscape-review.md) distinguish
 existing library guarantees from the application integration work described above.
+
+
+## Diagnostic capture extension (2026-11-06)
+
+`--diagnostics FILE` opens the diagnostics gate, creates a new 0600 file with
+O_EXCL before confinement, and retains only that descriptor. A JSON profile can
+set `diagnostics: true`, but a CLI destination is still required. macOS carries
+the descriptor across re-exec and permits file-write-data only at the resolved
+literal path. Linux retains the preopened descriptor without opening directory
+write access. The page cannot select a path, enable capture, inspect the file,
+or submit debugger commands. Gate-off runs create no capture.
+
+The host emits versioned JSONL through a bounded nonblocking queue. The stream
+is capped at 32 MiB; each record is capped at 4 MiB, the queue at eight records.
+It includes original HTML and render snapshots, profile/enforcement, script
+results, console/errors and network metadata/refusals. Snapshot serialization
+reuses the existing render pass on the VM goroutine; capture never touches the
+VM or mutable DOM from an observer goroutine. Dropped counts and byte-limit
+termination are explicit. No cookie or authorization headers or request bodies
+are collected; URLs and page contents can still be sensitive. Output is
+untrusted data, not instructions for an agent reading it.
+
+This is the first inspection transport, not a DevTools or MCP implementation.
+It deliberately has no incoming command channel, page mutation, eval, or
+permission override. A future live inspection protocol must preserve these
+boundaries and separately gate any write/evaluation operations.

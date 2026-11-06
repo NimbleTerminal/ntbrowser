@@ -5505,6 +5505,7 @@ require (
 	github.com/spf13/pflag v1.1.0
 	golang.org/x/image v0.47.0
 	golang.org/x/net v0.62.0
+	golang.org/x/sys v0.49.0
 	nimbleterminal.dev/ntconfine v0.1.1
 	nimbleterminal.dev/ntfonts v0.3.1
 	nimbleterminal.dev/ntfonts/cjk v0.3.1
@@ -5539,7 +5540,6 @@ require (
 	github.com/xo/terminfo v1.3.1 // indirect
 	github.com/zkrebbekx/go-mermaid v0.1.6 // indirect
 	golang.org/x/sync v0.24.0 // indirect
-	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/text v0.43.0 // indirect
 	nimbleterminal.dev/ntconfine/pkg/confine v0.1.0 // indirect
 	nimbleterminal.dev/ntmediabox/pkg/mediabox v0.1.0 // indirect

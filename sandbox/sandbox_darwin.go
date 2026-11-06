@@ -32,7 +32,7 @@ func q(s string) string { return strconv.Quote(s) }
 
 // Policy is the sandbox-exec profile: deny by default, then only what a
 // terminal Go program needs. No process may be started but this executable.
-func Policy(p profile.Profile, start, tempDir, exe string) string {
+func Policy(p profile.Profile, start, tempDir, exe string, diagnostic ...string) string {
 	var b strings.Builder
 	w := func(format string, args ...any) { fmt.Fprintf(&b, format+"\n", args...) }
 	w("(version 1)")
@@ -57,6 +57,9 @@ func Policy(p profile.Profile, start, tempDir, exe string) string {
 	if tempDir != "" {
 		w("(allow file-read* file-write* (subpath %s))", q(tempDir))
 	}
+	if p.Diagnostics && len(diagnostic) > 0 && diagnostic[0] != "" {
+		w("(allow file-write-data (literal %s))", q(diagnostic[0]))
+	}
 	return b.String()
 }
 
@@ -70,7 +73,7 @@ func HelperPolicy(helper, tempDir string) string {
 // program's arguments, which must mark the run as sandboxed so this happens
 // once; it returns only if that cannot happen. Without sandbox-exec, under
 // best-effort, it returns nil and the program goes on unconfined.
-func Reexec(p profile.Profile, start, tempDir string, args []string) error {
+func Reexec(p profile.Profile, start, tempDir string, args []string, diagnostic ...string) error {
 	if !Available() {
 		return checkRequired(p, false)
 	}
@@ -81,7 +84,7 @@ func Reexec(p profile.Profile, start, tempDir string, args []string) error {
 	if exe, err = filepath.EvalSymlinks(exe); err != nil {
 		return err
 	}
-	argv := append([]string{"sandbox-exec", "-p", Policy(p, start, tempDir, exe), exe}, args...)
+	argv := append([]string{"sandbox-exec", "-p", Policy(p, start, tempDir, exe, diagnostic...), exe}, args...)
 	return syscall.Exec(sandboxExec, argv, os.Environ())
 }
 

@@ -6,6 +6,7 @@ package sandbox
 import (
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"nimbleterminal.dev/ntbrowser/profile"
@@ -50,5 +51,21 @@ func TestFailingSandboxExecIsUnavailable(t *testing.T) {
 	}
 	if applies("/usr/bin/false") {
 		t.Fatal("a failing tool read as available")
+	}
+}
+
+func TestDiagnosticPolicyGrantsOnlyExactFileWhenEnabled(t *testing.T) {
+	p, _ := profile.Builtin("browse")
+	path := "/private/tmp/trace.jsonl"
+	if strings.Contains(Policy(p, "", "", "/bin/test", path), path) {
+		t.Fatal("closed gate granted file")
+	}
+	p.Diagnostics = true
+	policy := Policy(p, "", "", "/bin/test", path)
+	if !strings.Contains(policy, `(allow file-write-data (literal "/private/tmp/trace.jsonl"))`) {
+		t.Fatal(policy)
+	}
+	if strings.Contains(policy, `(subpath "/private/tmp`) {
+		t.Fatal("granted directory")
 	}
 }

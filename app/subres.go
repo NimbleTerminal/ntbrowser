@@ -48,6 +48,7 @@ func policyFor(policy netpolicy.Policy, cfg subres.Config, base string) (netpoli
 		origin, downgrade = nil, ""
 	}
 	p := netpolicy.Policy{
+		Trace:           policy.Trace,
 		Origin:          origin,
 		AllowHosts:      append([]string(nil), policy.AllowHosts...),
 		AllowPrivate:    policy.AllowPrivate,

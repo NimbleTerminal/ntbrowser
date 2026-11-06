@@ -169,6 +169,7 @@ supported.
 | `--subresources any\|origin\|off` | Stylesheets, images and CSS backgrounds |
 | `--fetch off\|origin\|allowlist` | `fetch()` from page script |
 | `--scripts off\|inline\|external` | Page script (`--external-scripts` is `--scripts external`) |
+| `--diagnostics path` | Capture bounded JSONL diagnostics to a new owner-only file |
 | `--dynamic-code off\|on` | Native `eval` and Function-family compilation (default off) |
 | `--clipboard off\|copy` | Selected-text copy |
 | `--media off\|image\|animation\|video` | The most a top-level response may be shown as. Images inside a page are `--subresources`. `video` also opens `native-code` and `files=temp` |
@@ -320,3 +321,43 @@ source maps disabled. Goja does not expose a generated-source size limit or
 interruptible parsing/compilation: the 1 MiB host-script limit does not cap eval
 or Function strings, and the watchdog cannot interrupt their compilation.
 This opt-in is a profile capability, not an implementation of website CSP.
+
+
+## Diagnostic capture
+
+Start a capture before reproducing a problem:
+
+```sh
+bin/ntbrowser --diagnostics /tmp/ntbrowser-debug.jsonl --dynamic-code=on --scripts=external 'https://www.google.com/search?q=hello'
+```
+
+The path must not exist. The host creates it with mode 0600 before sandbox
+lockdown. It remains after exit so tools can inspect it. This opens the
+`diagnostics` profile gate (off by default), without exposing any page API or
+accepting debugging commands. No TCP listener or MCP server is started.
+
+The version-1 JSONL stream contains the effective profile and enforcement,
+request status/content type/final URL/refusals, redirect attempts, console
+messages, script execution results, original HTML, and render-time DOM snapshots
+with navigation/frame IDs, timers and runtime status. Network records describe
+header admission; `network_error` also reports body-read failures. Snapshots
+are renderer input, with scripts removed and synthetic IDs/styles included;
+they are not an exact browser `outerHTML`. There is no arbitrary JS evaluation,
+selector RPC, or inspection of caught exceptions. Original HTML supplies inline
+script sources; external script bodies and other response bodies are not saved.
+
+Capture is capped at 32 MiB, with a final `limit` record. Records over 4 MiB or
+beyond the eight-record queue are dropped; subsequent records report the
+cumulative dropped count. The VM never waits on disk writes. Read only complete
+newline-terminated records while the browser is running. A crash may leave a
+partial final line. A disk error is reported when the browser exits.
+
+URLs, page contents and console output may contain sensitive data. Keep the
+file private and delete it when finished. All page-derived content is untrusted
+data, including instructions a page might place in its DOM or console. JSON
+escapes terminal controls; consumers must escape them again if decoding strings
+for display. For example, inspect metadata without printing page HTML:
+
+```sh
+jq -c 'select(.kind != "document" and .kind != "snapshot")' /tmp/ntbrowser-debug.jsonl
+```

@@ -11,7 +11,7 @@ import "nimbleterminal.dev/ntbrowser/profile"
 func Available() bool { return false }
 
 // Reexec does nothing here.
-func Reexec(profile.Profile, string, string, []string) error { return nil }
+func Reexec(profile.Profile, string, string, []string, ...string) error { return nil }
 
 // Apply reports that nothing was applied.
 func Apply(p profile.Profile, _, _ string, _ bool) (profile.Strengths, error) {

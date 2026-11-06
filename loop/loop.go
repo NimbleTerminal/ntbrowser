@@ -35,6 +35,7 @@ import (
 	"nimbleterminal.dev/nthtml"
 	"nimbleterminal.dev/nthtml/document"
 
+	"nimbleterminal.dev/ntbrowser/diagnostics"
 	"nimbleterminal.dev/ntbrowser/dom"
 	"nimbleterminal.dev/ntbrowser/jsvm"
 	"nimbleterminal.dev/ntbrowser/netpolicy"
@@ -126,6 +127,7 @@ type Page struct {
 }
 
 type Config struct {
+	Trace       *diagnostics.Recorder
 	Chunked     bool          // opt-in semantic chunk renderer; CSS renderer remains the default
 	Width       int           // document pixel width handed to nthtml (default 800)
 	MinFrame    time.Duration // minimum spacing between re-flows (default 33ms)
@@ -174,6 +176,9 @@ type Loop struct {
 }
 
 func New(ctx context.Context, cfg Config, sink Sink) *Loop {
+	if !cfg.Profile.Diagnostics {
+		cfg.Trace = nil
+	}
 	if cfg.Width <= 0 {
 		cfg.Width = 800
 	}
@@ -241,6 +246,17 @@ func (l *Loop) forward() {
 // block, which only happens when the UI goroutine is dead). Log lines are
 // droppable.
 func (l *Loop) send(m tea.Msg) {
+	switch v := m.(type) {
+	case LogMsg:
+		l.cfg.Trace.Record("console", v)
+	case FrameMsg:
+		if v.Err != nil {
+			l.cfg.Trace.Record("render_error", v.Err.Error())
+		}
+		if len(v.Warnings) > 0 {
+			l.cfg.Trace.Record("warnings", v.Warnings)
+		}
+	}
 	if _, isLog := m.(LogMsg); isLog {
 		select {
 		case l.outbox <- m:
@@ -314,6 +330,7 @@ func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) {
 		}
 		l.timers = nil
 		l.frames = nil
+		l.cfg.Trace.Record("document", map[string]any{"url": base, "navigation": gen, "html": html})
 		tree, err := dom.Parse(strings.NewReader(html), dom.Limits{})
 		if err != nil {
 			l.page = nil
@@ -375,13 +392,15 @@ func (l *Loop) dropPage(page *Page) {
 // sequence resumes on the VM goroutine.
 func (l *Loop) runScripts(page *Page, i int) {
 	if !l.cfg.Profile.ScriptsOn() {
+		l.cfg.Trace.Record("scripts_skipped", "scripts gate off")
 		return // the scripts gate: not even DOMContentLoaded
 	}
 	for ; i < len(page.Tree.Scripts); i++ {
 		sc := page.Tree.Scripts[i]
+		l.cfg.Trace.Record("script", map[string]any{"page": page.Base, "index": i, "src": sc.Src, "inline_bytes": len(sc.Inline), "external_allowed": l.cfg.Profile.Scripts == profile.ScriptsExternal})
 		switch {
 		case sc.Inline != "":
-			l.report(page.Sandbox.Eval(fmt.Sprintf("%s#inline-%d", page.Base, i), sc.Inline))
+			l.evalScript(page, fmt.Sprintf("%s#inline-%d", page.Base, i), sc.Inline)
 		case sc.Src != "" && l.cfg.Profile.Scripts == profile.ScriptsExternal:
 			next := i + 1
 			go func() {
@@ -393,7 +412,7 @@ func (l *Loop) runScripts(page *Page, i int) {
 					if err != nil {
 						l.report(err)
 					} else {
-						l.report(page.Sandbox.Eval(sc.Src, resp.Body))
+						l.evalScript(page, sc.Src, resp.Body)
 					}
 					l.runScripts(page, next)
 				})
@@ -697,6 +716,7 @@ func (l *Loop) startRender() {
 	l.lastFrame = time.Now()
 	gen := l.gen.Add(1)
 	navigation := l.navGen.Load()
+	l.cfg.Trace.Record("snapshot", map[string]any{"url": page.Base, "navigation": navigation, "frame": gen, "html": html, "scripts": len(page.Tree.Scripts), "loaded": page.loaded, "disabled": page.killed, "timers": len(l.timers), "animation_frames": len(l.frames), "dropped": l.dropped.Load()})
 	viewport := l.viewport()
 	if page.firstFrame {
 		viewport.Origin = image.Point{}
@@ -1049,6 +1069,7 @@ func (h *host) Fetch(req jsvm.FetchRequest, done func(jsvm.FetchResponse, error)
 			resp, err = page.Fetcher.Do(page.ctx, netpolicy.Request{Method: req.Method, URL: req.URL, Headers: req.Headers, Body: req.Body})
 		} else {
 			err = fmt.Errorf("%w: fetch is off", netpolicy.ErrDenied)
+			l.cfg.Trace.Record("network_error", map[string]string{"url": req.URL, "error": err.Error()})
 		}
 		l.post(func() {
 			if l.page != page {
@@ -1061,3 +1082,13 @@ func (h *host) Fetch(req jsvm.FetchRequest, done func(jsvm.FetchResponse, error)
 }
 
 func (h *host) Log(level, line string) { (*Loop)(h).send(LogMsg{Level: level, Line: line}) }
+
+func (l *Loop) evalScript(page *Page, name, source string) {
+	err := page.Sandbox.Eval(name, source)
+	result := "ok"
+	if err != nil {
+		result = err.Error()
+	}
+	l.cfg.Trace.Record("script_result", map[string]string{"url": name, "result": result})
+	l.report(err)
+}

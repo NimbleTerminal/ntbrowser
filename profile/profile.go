@@ -77,6 +77,7 @@ const defaultClockMillis = 10
 // Profile is one position for each gate. Code compares against the open
 // values, so an empty field is closed.
 type Profile struct {
+	Diagnostics    bool         `json:"diagnostics,omitempty"`
 	Name           string       `json:"name,omitempty"`
 	Navigate       Navigate     `json:"navigate,omitempty"`
 	Subresources   Subresources `json:"subresources,omitempty"`
@@ -287,6 +288,7 @@ func (p Profile) Table(s Strengths) string {
 		{"hosts", strings.Join(p.Hosts, ","), "what allowlist means"},
 		{"private-network", onOff(p.PrivateNetwork), "loopback and private addresses"},
 		{"scripts", orOff(p.Scripts), "page script"},
+		{"diagnostics", onOff(p.Diagnostics), "host-only diagnostic file; may contain page data"},
 		{"dynamic-code", orOff(p.DynamicCode), "eval and Function-family string compilation"},
 		{"clock", strconv.Itoa(p.ClockMillis) + "ms", "script clock resolution"},
 		{"files", orOff(p.Files), "start-page: the file: URL given at launch; temp adds the media directory"},

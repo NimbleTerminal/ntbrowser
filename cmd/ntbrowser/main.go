@@ -30,6 +30,7 @@ import (
 	flag "github.com/spf13/pflag"
 
 	"nimbleterminal.dev/ntbrowser/app"
+	"nimbleterminal.dev/ntbrowser/diagnostics"
 	"nimbleterminal.dev/ntbrowser/jsvm"
 	"nimbleterminal.dev/ntbrowser/loop"
 	"nimbleterminal.dev/ntbrowser/profile"
@@ -40,6 +41,7 @@ import (
 // config is what the command line decides. Profile is the effective profile:
 // the chosen one with the gate flags applied, validated and then frozen.
 type config struct {
+	Diagnostics string
 	Profile     profile.Profile
 	Start       string
 	Width       int
@@ -52,6 +54,7 @@ type config struct {
 func parseArgs(args []string) (config, error) {
 	var c config
 	fs := flag.NewFlagSet("ntbrowser", flag.ContinueOnError)
+	fs.StringVar(&c.Diagnostics, "diagnostics", "", "write bounded JSONL diagnostics to a new owner-only file")
 	name := fs.String("profile", "browse", "built-in profile: locked, reader, browse")
 	file := fs.String("profile-file", "", "JSON profile file (overrides --profile)")
 	fs.BoolVar(&c.ShowProfile, "show-profile", false, "print the effective profile and exit")
@@ -87,6 +90,12 @@ func parseArgs(args []string) (config, error) {
 		}
 	}
 	chosen := p
+	if c.Diagnostics != "" {
+		p.Diagnostics = true
+	}
+	if p.Diagnostics && c.Diagnostics == "" && !c.ShowProfile {
+		return c, errors.New("diagnostics requires --diagnostics FILE")
+	}
 	chosen.Hosts = slices.Clone(p.Hosts)
 	if *nav != "" {
 		p.Navigate = profile.Navigate(*nav)
@@ -145,10 +154,11 @@ func parseArgs(args []string) (config, error) {
 // state is what the run decided before lockdown. The macOS re-exec carries it
 // across as data: a profile is read once, never again inside the sandbox.
 type state struct {
-	Config    config
-	TempDir   string
-	HelperFD  int
-	HelperPID int
+	DiagnosticFD int
+	Config       config
+	TempDir      string
+	HelperFD     int
+	HelperPID    int
 }
 
 func encodeState(st state) (string, error) {
@@ -220,10 +230,28 @@ func runMain() int {
 		return 1
 	}
 	defer closeMedia()
+	diagnostic, err := diagnosticFile(&st, sandboxed)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	if diagnostic != nil {
+		defer diagnostic.Close()
+	}
 	strengths, err := lockDown(st, sandboxed)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
+	}
+	var trace *diagnostics.Recorder
+	if diagnostic != nil {
+		trace = diagnostics.New(diagnostic)
+		defer func() {
+			if err := trace.Close(); err != nil {
+				fmt.Fprintln(os.Stderr, "diagnostics:", err)
+			}
+		}()
+		trace.Record("session", map[string]any{"profile": c.Profile, "strengths": strengths})
 	}
 	// Process-wide soft heap cap: Goja has no per-runtime memory limit, so
 	// the GC is told to work harder past this point and dom/nthtml limits
@@ -249,10 +277,13 @@ func runMain() int {
 		return 2
 	}
 	subresCfg := subres.Config{Mode: mode}
-	l := loop.New(ctx, loop.Config{Chunked: c.Chunked, Profile: c.Profile, Width: c.Width, Script: script, Subresources: subresCfg, SubresourceTransport: app.SubresourceTransport(app.PolicyFor(c.Profile), subresCfg)}, sink)
+	policy := app.PolicyFor(c.Profile)
+	policy.Trace = trace
+	l := loop.New(ctx, loop.Config{Trace: trace, Chunked: c.Chunked, Profile: c.Profile, Width: c.Width, Script: script, Subresources: subresCfg, SubresourceTransport: app.SubresourceTransport(policy, subresCfg)}, sink)
 	go l.Run()
 
 	m := app.New(l, c.Profile, c.Start)
+	m.SetDiagnostics(trace)
 	defer m.Cleanup()
 	program = tea.NewProgram(m)
 	m.SetEnforced(strengths["files"] == profile.StrengthOS)
@@ -360,7 +391,7 @@ func lockDown(st state, sandboxed bool) (profile.Strengths, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := sandbox.Reexec(c.Profile, start, st.TempDir, []string{arg}); err != nil {
+		if err := sandbox.Reexec(c.Profile, start, st.TempDir, []string{arg}, c.Diagnostics); err != nil {
 			return nil, err
 		}
 	}
