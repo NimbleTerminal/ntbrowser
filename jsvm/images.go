@@ -91,7 +91,7 @@ func (s *Sandbox) installImages() {
 		s.underPressure(func() (err error) { n, err = s.tree.NewElement("img"); return err })
 		for i, name := range []string{"width", "height"} {
 			if i < len(c.Arguments) {
-				s.must(s.tree.SetAttr(n, name, strconv.FormatUint(uint64(imageUint32(c.Arguments[i])), 10)))
+				s.must(s.tree.SetAttr(n, name, strconv.FormatUint(uint64(webIDLUint32(c.Arguments[i])), 10)))
 			}
 		}
 		return s.wrap(n).(*goja.Object)
@@ -127,7 +127,7 @@ func (s *Sandbox) installImages() {
 			}
 			return s.vm.ToValue(st.height)
 		}, func(t, v goja.Value) {
-			s.must(s.tree.SetAttr(s.imageNode(t), name, strconv.FormatUint(uint64(imageUint32(v)), 10)))
+			s.must(s.tree.SetAttr(s.imageNode(t), name, strconv.FormatUint(uint64(webIDLUint32(v)), 10)))
 		})
 	}
 	s.accessor(p, "complete", func(t goja.Value) goja.Value {
@@ -284,7 +284,7 @@ func (s *Sandbox) UpdateImages(load func(string) (width, height int, done bool))
 	return false
 }
 
-func imageUint32(v goja.Value) uint32 {
+func webIDLUint32(v goja.Value) uint32 {
 	f := v.ToFloat()
 	if math.IsNaN(f) || math.IsInf(f, 0) || f == 0 {
 		return 0

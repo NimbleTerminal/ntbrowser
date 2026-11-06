@@ -464,20 +464,27 @@ func (l *Loop) LinkActivatedAt(gen uint64, link document.Link) {
 		if l.page == nil || gen != 0 && (!l.FrameCurrent(gen) || l.page.frameGen != gen || l.page.Tree.Dirty()) {
 			return
 		}
+		target := l.anchorFor(link)
 		href := document.ResolveURL(l.page.Base, link.Href)
+		if target != nil {
+			href = anchorHref(l.page, target)
+		}
 		if href == "" {
 			l.send(LogMsg{"warn", "link not openable: " + link.Href})
 			return
 		}
 		var prevented bool
-		if target := l.anchorFor(link); target != nil {
+		if target != nil {
 			var err error
 			prevented, err = l.page.Sandbox.Dispatch(jsvm.Event{Type: "click", Target: target.ID(), Href: href})
 			if !errors.Is(err, jsvm.ErrDisabled) {
 				l.report(err) // a dropped runtime cannot prevent; the link just opens
 			}
 		}
-		if !prevented {
+		if target != nil {
+			href = anchorHref(l.page, target)
+		} // listeners may edit href
+		if !prevented && href != "" {
 			l.send(NavigateMsg{Href: href})
 		}
 	})
@@ -526,17 +533,20 @@ func (l *Loop) ClickAtFrame(gen uint64, area image.Rectangle) {
 			l.userFocus(l.page, nil)
 		}
 		href := ""
+		var anchor *dom.Node
 		for n := target; n != nil; n = n.Parent() {
 			if n.Tag() == "a" {
-				if raw, ok := n.Attr("href"); ok {
-					href = document.ResolveURL(l.page.Base, raw)
-				}
+				anchor = n
+				href = anchorHref(l.page, n)
 				break
 			}
 		}
 		prevented, err := l.page.Sandbox.Dispatch(jsvm.Event{Type: "click", Target: target.ID(), Href: href})
 		if !errors.Is(err, jsvm.ErrDisabled) {
 			l.report(err)
+		}
+		if anchor != nil {
+			href = anchorHref(l.page, anchor)
 		}
 		if !prevented && href != "" {
 			l.send(NavigateMsg{Href: href})

@@ -86,6 +86,16 @@ New packages: `profile` (data, validation, printing; no system imports) and `con
    | `environment` | `off` | reserved: nothing in the sandbox reads the environment |
    | `process` | `off` | after startup the program starts no processes; there is no `on`. The media helper is started before lockdown (decision 22) |
 
+   **Anchor interface extension (2026-11-06).** URL/attribute/token-list bindings
+   are local DOM operations and create no new authority. Reader activation uses
+   the final anchor URL after click listeners, then the existing `navigate` gate
+   and `netpolicy` checks. `target`, `download`, `ping`, `rel` and `referrerPolicy`
+   reflect data only: no additional browsing contexts, disk downloads, audit
+   requests, credentials or referrers are enabled. Script `.click()` activation
+   is not exposed. A future implementation of any such effect must explicitly
+   define its gate here before adding the host action. The zero profile still
+   denies navigation. See README for the operation-to-gate table.
+
 2. **Closed by default** (**Evan**). The zero `Profile` is every gate `off`, and code reads the profile, not a flag. A profile only opens gates.
 3. **Three built-in profiles:**
 

@@ -310,12 +310,10 @@ func (l *Loop) ActivateAt(gen uint64) {
 func (l *Loop) activate(page *Page, n *dom.Node) {
 	switch kind := controlKind(n); kind {
 	case "link":
-		href := ""
-		if raw, ok := n.Attr("href"); ok {
-			href = document.ResolveURL(page.Base, raw)
-		}
+		href := anchorHref(page, n)
 		prevented, err := page.Sandbox.Dispatch(jsvm.Event{Type: "click", Target: n.ID(), Href: href})
 		l.report(ignoreDisabled(err))
+		href = anchorHref(page, n)
 		if !prevented && href != "" {
 			l.send(NavigateMsg{Href: href})
 		}

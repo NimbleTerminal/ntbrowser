@@ -76,6 +76,8 @@ type Sandbox struct {
 	disabled bool
 	running  bool
 
+	anchorProto   *goja.Object
+	relListSym    *goja.Symbol
 	imageProto    *goja.Object
 	images        map[dom.NodeID]*imageState
 	imageDecodes  int
@@ -189,6 +191,7 @@ func New(cfg Config, tree *dom.Tree, host Host) *Sandbox {
 	s.nodeSym = goja.NewSymbol("ntbrowser.node")
 	s.listSym = goja.NewSymbol("ntbrowser.listeners")
 	s.elemProto = s.buildElementProto()
+	s.installAnchors()
 	s.installImages()
 	s.installGlobals()
 	dom.Walk(tree.Root(), func(n *dom.Node) {
@@ -330,6 +333,7 @@ func (s *Sandbox) Close() {
 	s.wd.disarm()
 	s.images = nil
 	s.imageProto = nil
+	s.anchorProto = nil
 	s.vm = nil
 	s.wd.vm = nil
 	s.elemProto, s.docObj, s.promiseCtor, s.jsonParse = nil, nil, nil, nil

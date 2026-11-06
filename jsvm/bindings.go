@@ -47,6 +47,9 @@ func (s *Sandbox) wrap(n *dom.Node) goja.Value {
 	}
 	w := s.vm.NewObject()
 	_ = w.SetPrototype(s.elemProto)
+	if n.Tag() == "a" {
+		_ = w.SetPrototype(s.anchorProto)
+	}
 	if n.Tag() == "img" {
 		_ = w.SetPrototype(s.imageProto)
 	}

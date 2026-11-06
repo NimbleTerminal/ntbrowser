@@ -1822,6 +1822,17 @@ func (t *Tree) Listeners(typ string) []*Node {
 
 ### 7b. Bindings (`jsvm/bindings.go`)
 
+2026-11-06 anchor extension: `jsvm/anchors.go` and `anchor_tokens.go` expose the
+anchor surface documented in README. URLs use `github.com/nlnwa/whatwg-url`
+v0.6.2; parsing is a pure operation, not an admission decision. The loop uses
+the same parser for reader activation, re-reads href after click listeners,
+then applies the viewer's safe-link filter before handing the destination to
+app's navigation gate. Relative URLs use the page URL; `<base>` is not supported.
+Token lists retain their owner wrapper and share existing DOM mutation budgets.
+The profile design §5 documents the perimeter for attributes with potential
+host effects. No synthetic navigation capability is added.
+
+
 2026-11-06 extension: `jsvm/images.go` implements the basic `HTMLImageElement`
 lifecycle for parsed, created and detached images. The `Image` factory and
 `HTMLImageElement` prototype expose the surface and limits documented in README.
@@ -5478,6 +5489,7 @@ module nimbleterminal.dev/ntbrowser
 go 1.26.8
 
 require (
+	github.com/nlnwa/whatwg-url v0.6.2
 	charm.land/bubbles/v2 v2.2.1
 	charm.land/bubbletea/v2 v2.1.1
 	github.com/charmbracelet/x/ansi v0.11.9

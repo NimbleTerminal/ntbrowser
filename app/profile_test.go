@@ -9,6 +9,7 @@ import (
 
 	"nimbleterminal.dev/nthtml"
 
+	"nimbleterminal.dev/ntbrowser/loop"
 	"nimbleterminal.dev/ntbrowser/profile"
 )
 
@@ -50,5 +51,30 @@ func TestHelpSaysWhenNotEnforced(t *testing.T) {
 	m.SetEnforced(false)
 	if !strings.Contains(statusLines(m), "not OS-enforced") {
 		t.Fatal(statusLines(m))
+	}
+}
+
+// Anchor URL properties produce data. Every final reader-activated
+// destination still enters the same profile gate, regardless of its source.
+func TestAnchorDestinationProfilePerimeter(t *testing.T) {
+	for _, tc := range []struct {
+		mode            NavMode
+		href            string
+		allowed, prompt bool
+	}{
+		{profile.NavOff, "https://page.test/next", false, false},
+		{NavAllowlist, "https://other.test/next", false, false},
+		{NavAllowlist, "https://cdn.test/next", true, false},
+		{NavConfirm, "https://other.test/next", false, true},
+		{NavConfirm, "https://page.test/next", true, false},
+		{NavFree, "https://other.test/next", true, false},
+	} {
+		t.Run(string(tc.mode)+tc.href, func(t *testing.T) {
+			m := newModel(t, tc.mode)
+			_, cmd := m.Update(loop.NavigateMsg{Href: tc.href})
+			if (cmd != nil) != tc.allowed || (m.pendingNav != "") != tc.prompt {
+				t.Fatalf("cmd=%v prompt=%q status=%q", cmd != nil, m.pendingNav, m.status)
+			}
+		})
 	}
 }

@@ -186,6 +186,36 @@ Decoding runs in a separate binary, `ntbrowser-media`, built beside `ntbrowser`.
 
 `Tab`/`Shift+Tab` move focus through links and form controls · `Enter` opens the focused link or presses the focused button · `Space` toggles a focused checkbox or radio · `⌫` or `⌥←` back · `⌥→` forward · `^R` reload · `/` search · `q` quit. Mouse clicks reach page elements; the page cannot swallow these keys.
 
+**JavaScript anchors.** Parsed and script-created `<a>` elements share an
+`HTMLAnchorElement` prototype. The interface exposes `href`, URL components
+(`protocol`, `username`, `password`, `host`, `hostname`, `port`, `pathname`,
+`search`, `hash`, read-only `origin`), string conversion, `text`, `target`,
+`download`, `ping`, `rel`, `hreflang`, `type`, and `referrerPolicy`. URL properties
+use the published WHATWG URL parser; relative references use the page URL.
+`relList` is a stable, live token-list object with indexed reads, iteration,
+`item`, `contains`, `add`, `remove`, `toggle`, `replace`, `forEach`, and `value`.
+Its `supports()` returns false because per-link opener/referrer processing is
+not implemented. Token validation errors carry the standard error names but
+are not `DOMException` instances. `<base>` overrides, obsolete anchor properties,
+and script-triggered `.click()` navigation are not implemented.
+
+**Element APIs and security profiles.** A property is data, not permission.
+The effect determines which existing gate applies:
+
+| Operation | Boundary |
+|---|---|
+| Set/read anchor properties or edit `relList` | Local DOM only, under DOM and script budgets; no network or navigation |
+| Reader activates a link | Resolve the final destination after click listeners; `navigate` applies off/allowlist/confirm/free |
+| Make the admitted navigation request | `netpolicy` checks schemes, credentials, hosts, private addresses, DNS and redirects; content gates apply before consuming the response |
+| Set `target`, `download`, `ping`, `rel`, or `referrerPolicy` | Attributes only; no popup, download-to-disk, audit ping or relaxed request policy. Links continue in the current viewer |
+| Set an image source, attached or detached | `subresources`, with the shared image request and decoding budgets |
+
+URL parsing accepts more schemes than navigation allows. Parsing a `file:`,
+`javascript:`, credentialed or private-address URL grants no authority to use it.
+Neither JavaScript prototype changes nor attribute writes can change the host's
+profile. New host effects must get an explicit gate and denial tests before
+being exposed; existing gates are reused according to effect, not element type.
+
 **JavaScript images.** `new Image(width, height)`, `document.createElement("img")`,
 and parsed `<img>` elements share an `HTMLImageElement` prototype. Supported:
 `src`, `alt`, `width`, `height`, `complete`, `naturalWidth`, `naturalHeight`,
