@@ -108,6 +108,8 @@ type Sandbox struct {
 	extraTargets              map[dom.NodeID]bool
 	abortTimers               map[dom.NodeID]int
 	eventDepth                int
+	pendingRejections         []pendingRejection
+	rejectionsDropped         bool
 	rejectionReporting        bool
 	eventErrorReporting       bool
 
@@ -280,11 +282,7 @@ func (s *Sandbox) harden() {
 	vm.SetTimeSource(goja.Now(s.cfg.Clock))
 	vm.SetRandSource(goja.RandSource(s.cfg.Rand))
 	// Unhandled rejections surface in the terminal log instead of vanishing.
-	vm.SetPromiseRejectionTracker(func(p *goja.Promise, op goja.PromiseRejectionOperation) {
-		if op == goja.PromiseRejectionReject {
-			s.logPromiseRejection(p.Result())
-		}
-	})
+	vm.SetPromiseRejectionTracker(s.trackPromiseRejection)
 	// Capture pristine built-ins before any script can monkey-patch them.
 	s.jsonParse, _ = goja.AssertFunction(vm.Get("JSON").ToObject(vm).Get("parse"))
 	s.promiseCtor = vm.Get("Promise").ToObject(vm)
@@ -351,6 +349,8 @@ func (s *Sandbox) Run(fn func(vm *goja.Runtime) error) (err error) {
 	s.vm.ClearInterrupt()
 	s.wd.arm(s.cfg.Slice)
 	defer func() {
+		s.pendingRejections = nil
+		s.rejectionsDropped = false
 		s.wd.disarm()
 		s.running = false
 		s.checkHeap()
@@ -364,6 +364,13 @@ func (s *Sandbox) Run(fn func(vm *goja.Runtime) error) (err error) {
 	var interrupted *goja.InterruptedError
 	var overflow *goja.StackOverflowError
 	var exception *goja.Exception
+	// Goja has drained the microtask queue when fn returns. Report only promises
+	// still unhandled, while retaining this turn's active watchdog.
+	if !errors.As(err, &interrupted) && !errors.As(err, &overflow) {
+		if reportErr := s.flushPromiseRejections(); reportErr != nil {
+			err = reportErr
+		}
+	}
 	switch {
 	case errors.As(err, &interrupted):
 		s.strike()
@@ -403,6 +410,8 @@ func (s *Sandbox) Disabled() bool { return s.disabled }
 // when a page is replaced; after Close every entry point returns ErrDisabled
 // and Dispatch reports "not prevented". The dom.Tree is left to its owner.
 func (s *Sandbox) Close() {
+	s.pendingRejections = nil
+	s.rejectionsDropped = false
 	s.disabled = true
 	if s.messageTaskPending {
 		s.host.ClearTask(s.messageTask)

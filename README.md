@@ -360,6 +360,12 @@ they are not an exact browser `outerHTML`. There is no arbitrary JS evaluation,
 selector RPC, or inspection of caught exceptions. Original HTML supplies inline
 script sources; external script bodies and other response bodies are not saved.
 
+Promise rejections are reported after the current JavaScript entry and its
+microtasks finish. A handler attached during that turn suppresses the report;
+a handler attached in a later turn does not retract an earlier report. Tracking
+is limited to 256 pending rejections per turn, with one warning if tracking
+overflows. Handled entries immediately release their slots.
+
 Unhandled promise-rejection logs include up to 12 captured JavaScript frames
 (function, source URL, line, and column), within the existing 4 KiB log bound.
 Native Error values retain their creation stack; other rejection values use

@@ -49,7 +49,53 @@ func TestPromiseRejectionFormattingWatchdog(t *testing.T) {
 	if err := s.Eval("spin.js", `Promise.reject({toJSON(){while(true){}}})`); err == nil || s.strikes != 1 {
 		t.Fatalf("watchdog: %v strikes=%d", err, s.strikes)
 	}
-	if s.rejectionReporting {
+	if s.rejectionReporting || len(s.pendingRejections) != 0 {
 		t.Fatal("logger guard retained after interrupt")
+	}
+}
+
+func TestPromiseRejectionsHandledBeforeCheckpoint(t *testing.T) {
+	s, h := eventSandbox(t, Config{})
+	if err := s.Eval("handled.js", `
+ Promise.reject(Error('direct')).catch(()=>{});
+ Promise.reject(Error('google fallback')).then(()=>true).catch(()=>false);
+ const p=Promise.reject(Error('microtask'));Promise.resolve().then(()=>p.catch(()=>{}));
+ Promise.resolve().then(()=>{throw Error('callback')}).catch(()=>{});
+ `); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.lines) != 0 {
+		t.Fatalf("handled rejection reported: %v", h.lines)
+	}
+	if err := s.Eval("unhandled.js", `var late=Promise.reject(Error('real failure'));Promise.reject(Error('propagated')).then(()=>{});`); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.lines) != 2 || !strings.Contains(h.lines[0], "real failure") || !strings.Contains(h.lines[1], "propagated") {
+		t.Fatal(h.lines)
+	}
+	if err := s.Eval("later.js", `late.catch(()=>{});`); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.lines) != 2 || len(s.pendingRejections) != 0 {
+		t.Fatal("repeated report or retained promises")
+	}
+}
+
+func TestPromiseRejectionTrackingBoundedAndReclaimed(t *testing.T) {
+	s, h := eventSandbox(t, Config{Slice: time.Second})
+	if err := s.Eval("handled-many.js", `for(let i=0;i<1000;i++)Promise.reject(i).catch(()=>{});`); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.lines) != 0 {
+		t.Fatal("handled slots not reclaimed", h.lines)
+	}
+	if err := s.Eval("many.js", `for(let i=0;i<300;i++)Promise.reject(i);`); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.lines) != maxPendingRejections+1 || !strings.Contains(h.lines[len(h.lines)-1], "limit reached") {
+		t.Fatalf("log count %d", len(h.lines))
+	}
+	if len(s.pendingRejections) != 0 || s.rejectionsDropped {
+		t.Fatal("retained checkpoint state")
 	}
 }
