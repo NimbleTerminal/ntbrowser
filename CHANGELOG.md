@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Handle Ctrl+C before all focused UI and page input, including page search.
+  A second press during graphics shutdown quits immediately.
+
 - Confirm heap pressure after garbage collection before disabling scripting,
   avoiding shutdown caused only by transient renderer/navigation allocations.
   Preserve the 256 MiB default and report process-wide bytes and budget.

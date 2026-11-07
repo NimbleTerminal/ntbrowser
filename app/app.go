@@ -295,6 +295,14 @@ func (m *Model) admit(href string, form bool, script ...bool) tea.Cmd {
 
 func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	defer m.syncViewport()
+	// Ctrl+C belongs to the host, before search, editors, overlays or page
+	// dispatch. A second press bypasses pending graphics shutdown commands.
+	if key, ok := msg.(tea.KeyPressMsg); ok && key.String() == "ctrl+c" {
+		if m.closing {
+			return m, tea.Quit
+		}
+		return m, m.quit()
+	}
 	if m.closing {
 		if _, ok := msg.(shutdownReadyMsg); ok {
 			return m, tea.Quit

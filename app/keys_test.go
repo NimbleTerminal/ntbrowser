@@ -127,3 +127,44 @@ func TestReloadAndBackToFileStartPage(t *testing.T) {
 		t.Fatal("a file: link other than the start page was accepted")
 	}
 }
+
+func TestCtrlCAlwaysStartsShutdown(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		setup func(*Model)
+	}{
+		{"browse", func(m *Model) {}},
+		{"search", func(m *Model) {
+			m.viewer.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
+		}},
+		{"address", func(m *Model) { m.openAddress() }},
+		{"devtools", func(m *Model) { m.debug.open = true }},
+		{"editor", func(m *Model) { m.Update(textFocus("field", "Field", true)) }},
+		{"child frame", func(m *Model) { m.embeddedFocus = true }},
+		{"navigation prompt", func(m *Model) { m.pendingNav = "https://other.test/" }},
+		{"script prompt", func(m *Model) { m.scriptPermissions = []loop.ScriptPermissionMsg{{ID: 1}} }},
+		{"download", func(m *Model) { m.downloading.Store(true) }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := newModel(t, NavFree)
+			tc.setup(m)
+			if tc.name == "search" && !m.viewer.SearchInputActive() {
+				t.Fatal("search did not open")
+			}
+			cancelled := false
+			m.navCancel = func() { cancelled = true }
+			_, cmd := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+			if cmd == nil || !m.closing || !cancelled {
+				t.Fatalf("Ctrl+C did not start shutdown: closing=%v cancelled=%v", m.closing, cancelled)
+			}
+			// Without running any cleanup commands, another Ctrl+C must still exit.
+			_, cmd = m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+			if cmd == nil {
+				t.Fatal("second Ctrl+C ignored")
+			}
+			if _, ok := cmd().(tea.QuitMsg); !ok {
+				t.Fatal("second Ctrl+C did not quit immediately")
+			}
+		})
+	}
+}

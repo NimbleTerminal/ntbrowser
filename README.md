@@ -387,6 +387,10 @@ make Google Search compatible.
 
 JavaScript runs in a pure-Go interpreter with no `os`, `net` or environment access, a per-entry time slice, a heap budget, and a bounded DOM; the only network path is a `fetch()` confined to the page's origin plus `-allow`, dialled through an address-vetting transport. Page text reaches the terminal only through a control-stripping boundary.
 
+Ctrl+C exits from every focus mode, including page search, address entry,
+forms, frames, and devtools. Press it again during shutdown to quit immediately
+if graphics cleanup is waiting.
+
 The heap guard defaults to 256 MiB of **process-wide Go heap**, including the
 renderer. It collects garbage and rechecks before disabling scripting, then
 reports the measured bytes and budget. This is not a per-script memory meter;
