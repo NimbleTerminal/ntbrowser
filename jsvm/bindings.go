@@ -242,8 +242,7 @@ func (s *Sandbox) buildElementProto() *goja.Object {
 		func(t, v goja.Value) { s.must(s.tree.SetAttr(s.node(t), "class", v.String())) })
 	s.accessor(p, "textContent", func(t goja.Value) goja.Value { return vm.ToValue(dom.TextContent(s.node(t))) }, s.setText)
 	s.accessor(p, "innerText", func(t goja.Value) goja.Value { return vm.ToValue(dom.TextContent(s.node(t))) }, s.setText)
-	// innerHTML is deliberately absent: the setter would require parsing
-	// untrusted markup inside the VM slice. Pages build nodes instead.
+	s.accessor(p, "innerHTML", func(v goja.Value) goja.Value { return vm.ToValue(s.tree.InnerHTML(s.node(v))) }, s.setInnerHTML)
 	s.accessor(p, "parentElement", func(t goja.Value) goja.Value {
 		p := s.node(t).Parent()
 		if p == nil || p == s.tree.Root() {

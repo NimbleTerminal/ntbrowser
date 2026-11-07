@@ -819,3 +819,18 @@ callbacks. Node `ownerDocument` points to the current document, whose
 These lifecycle bindings do not implement HTML template parsing via
 `innerHTML`, iframe browsing contexts, or POST form submission. Loading
 reCAPTCHA's scripts successfully therefore does not imply a usable challenge.
+
+### Bounded HTML fragments
+
+Elements support `innerHTML` reads and atomic replacement. Parsing uses the
+receiving element's HTML context (including table repair), with a 64 KiB UTF-8
+input cap and 4096-token cap before parsing. The resulting nodes also fit the
+existing DOM budgets, including retained detached nodes. A failed replacement
+leaves the old subtree intact. Setting null clears the children.
+
+Fragment script elements remain inert after insertion, movement, or attribute
+changes, and event-handler attributes retain the existing inert policy. The
+getter includes inert scripts but excludes renderer-injected IDs and styles.
+Images and stylesheets still require subresource permission. This is local DOM
+parsing, not permission to execute generated code or load iframe documents.
+Fragment parsing is bounded but not preemptible inside x/net/html.
