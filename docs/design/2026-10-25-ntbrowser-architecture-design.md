@@ -5663,3 +5663,27 @@ root wrapper and recompute matches from the bounded tree on access.
 Inserted inline source requires dynamic-code and shares the active watchdog;
 external requests require scripts=external and the existing page fetch policy.
 See the profiles document for lifecycle, caps, MIME restrictions and limitations.
+
+### Inline declarations and mutation observers (2026-11-07)
+
+Decision 6's local DOM surface also includes bounded inline CSSStyleDeclaration
+reflection and MutationObserver. Style writes use Tree.SetAttr, retain attribute
+and total-byte budgets, and confer no authority to load resources. Parsing is
+limited to 64 KiB and 64 levels of component nesting; supported names and value
+handling are explicitly a subset, without computed CSS or shorthand expansion.
+
+Tree mutation hooks report committed data only. Staged fragment parsing is silent;
+failed transactions emit no records. The VM queues records and pins observed and
+referenced detached nodes until disconnect/delivery. Native Promise reactions,
+captured before page scripts, deliver notifications under the ordinary watchdog.
+Per runtime caps are 64 active observers, 256 registrations, 1024 records,
+1 MiB charged record data, 1024 transient registrations and 128 deliveries per
+entry; filters allow 64 names of at most 1024 bytes each. Queue/delivery overflow
+disconnects all observers and disables new observation for that runtime, without
+rolling back committed DOM changes. Registration overflow rejects the new request.
+
+Shared DOM mutation hooks never enter the target Goja runtime. The frame tree
+owner lock protects queuing; the target loop flushes at its own checkpoint before
+rendering. Foreign style access retains all origin/revision checks. Observation
+through foreign wrappers is unsupported. Interrupted jobs are re-armed at the
+next checkpoint; callback exceptions do not suppress other observers.

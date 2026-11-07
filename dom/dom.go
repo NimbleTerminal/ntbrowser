@@ -124,10 +124,11 @@ func (n *Node) HasListener(typ string) bool {
 // Tree is single-owner: only the VM goroutine mutates it. Serialize produces
 // an immutable snapshot string that may be rendered on another goroutine.
 type Tree struct {
-	frames map[NodeID]FrameImage
-	limits Limits
-	root   *Node // synthetic "document" node
-	nodes  map[NodeID]*Node
+	mutationHook func(Mutation)
+	frames       map[NodeID]FrameImage
+	limits       Limits
+	root         *Node // synthetic "document" node
+	nodes        map[NodeID]*Node
 	// detached holds every parentless non-root node: subtree roots removed
 	// from the document and nodes created but not (yet) inserted. The bridge
 	// releases them once no wrapper in the subtree is alive; see Release.
@@ -386,9 +387,11 @@ func (t *Tree) SetAttr(n *Node, name, value string) error {
 			if err := t.charge(textCost(value) - textCost(n.attrs[i].Value)); err != nil {
 				return err
 			}
+			old := n.attrs[i].Value
 			n.attrs[i].Value = value
 			t.dirty = true
 			t.styleMediaDelta(n)
+			t.emitMutation(Mutation{Type: "attributes", Target: n, AttributeName: name, OldValue: old, OldPresent: true})
 			return nil
 		}
 	}
@@ -401,6 +404,7 @@ func (t *Tree) SetAttr(n *Node, name, value string) error {
 	n.attrs = append(n.attrs, Attr{name, value})
 	t.dirty = true
 	t.styleMediaDelta(n)
+	t.emitMutation(Mutation{Type: "attributes", Target: n, AttributeName: name})
 	return nil
 }
 
@@ -408,10 +412,12 @@ func (t *Tree) RemoveAttr(n *Node, name string) {
 	name = strings.ToLower(name)
 	for i := range n.attrs {
 		if n.attrs[i].Name == name {
+			old := n.attrs[i].Value
 			t.bytes -= attrCost(n.attrs[i].Name, n.attrs[i].Value)
 			n.attrs = append(n.attrs[:i], n.attrs[i+1:]...)
 			t.dirty = true
 			t.styleMediaDelta(n)
+			t.emitMutation(Mutation{Type: "attributes", Target: n, AttributeName: name, OldValue: old, OldPresent: true})
 			return
 		}
 	}
@@ -422,11 +428,15 @@ func (t *Tree) SetText(n *Node, s string) error {
 		return fmt.Errorf("%w: text over %d bytes", ErrLimit, t.limits.TextBytes)
 	}
 	s = cleanText(s)
+	m := Mutation{Target: n}
 	switch n.kind {
 	case Text:
 		if err := t.charge(textCost(s) - textCost(n.text)); err != nil {
 			return err
 		}
+		m.Type = "characterData"
+		m.OldValue = n.text
+		m.OldPresent = true
 		n.text = s
 	case Element: // textContent setter semantics: replace all children
 		// Allocate first so a failed write leaves the children in place
@@ -439,6 +449,8 @@ func (t *Tree) SetText(n *Node, s string) error {
 				return err
 			}
 		}
+		m.Type = "childList"
+		m.Removed = n.Children()
 		for _, old := range n.children {
 			old.parent = nil
 			t.detached[old.id] = old // the bridge releases them once unreferenced
@@ -446,9 +458,13 @@ func (t *Tree) SetText(n *Node, s string) error {
 		n.children = nil
 		if c != nil {
 			t.attach(n, c)
+			m.Added = []*Node{c}
 		}
 	}
 	t.dirty = true
+	if m.Type != "childList" || len(m.Added)+len(m.Removed) > 0 {
+		t.emitMutation(m)
+	}
 	return nil
 }
 
@@ -491,11 +507,13 @@ func (t *Tree) InsertBefore(parent, child, ref *Node) error {
 		return nil // insertBefore(node, node) is a move to its own place: no-op
 	}
 	if child.parent != nil {
-		t.detach(child)
+		t.Detach(child)
 	}
 	if ref == nil {
 		t.attach(parent, child)
 		t.dirty = true
+		previous, next := siblings(child)
+		t.emitMutation(Mutation{Type: "childList", Target: parent, Added: []*Node{child}, PreviousSibling: previous, NextSibling: next})
 		return nil
 	}
 	for i, c := range parent.children {
@@ -504,6 +522,8 @@ func (t *Tree) InsertBefore(parent, child, ref *Node) error {
 			child.parent = parent
 			delete(t.detached, child.id)
 			t.dirty = true
+			previous, next := siblings(child)
+			t.emitMutation(Mutation{Type: "childList", Target: parent, Added: []*Node{child}, PreviousSibling: previous, NextSibling: next})
 			return nil
 		}
 	}
@@ -520,9 +540,12 @@ func (t *Tree) Detach(n *Node) {
 	if n == t.root || n.parent == nil {
 		return
 	}
+	parent := n.parent
+	previous, next := siblings(n)
 	t.detach(n)
 	t.detached[n.id] = n
 	t.dirty = true
+	t.emitMutation(Mutation{Type: "childList", Target: parent, Removed: []*Node{n}, PreviousSibling: previous, NextSibling: next})
 }
 
 // Release frees a detached subtree. The bridge calls it when no JS wrapper

@@ -760,6 +760,9 @@ func (l *Loop) afterTask() {
 			fn()
 		}
 	}
+	if !l.page.killed && l.cfg.Profile.ScriptsOn() {
+		l.report(l.page.Sandbox.FlushMutations())
+	}
 	l.reconcileFrames()
 	if l.page.scrollEvent && !l.page.killed {
 		l.page.scrollEvent = false
@@ -815,6 +818,9 @@ func (l *Loop) startRender() {
 		return
 	}
 	l.lastFrame = time.Now()
+	if !l.page.killed && l.cfg.Profile.ScriptsOn() {
+		l.report(l.page.Sandbox.FlushMutations())
+	}
 	l.runFrameCallbacks()
 	if l.page.Sandbox.Disabled() && !l.page.killed {
 		l.dropPage(l.page)

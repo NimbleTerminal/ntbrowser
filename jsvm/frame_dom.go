@@ -98,6 +98,11 @@ func (s *Sandbox) wrapForeign(ref DOMRef) goja.Value {
 	}
 	s.foreignNodes[ref] = w
 	s.foreignRefs[w] = ref
+	if ref.Kind == 1 {
+		s.accessor(w, "style", func(goja.Value) goja.Value { return s.elementStyle(w) }, func(_, v goja.Value) {
+			s.styleWrite(s.elementStyle(w), dom.SerializeInlineStyle(dom.ParseInlineStyle(s.styleString(v))))
+		})
+	}
 	call := func(op, key, text string) DOMReply {
 		return s.domRequest(DOMRequest{Ref: ref, Op: op, Key: key, Text: text})
 	}

@@ -939,3 +939,35 @@ browser object model; initial about:blank access before child load is not added.
 
 The origin boundary follows the [HTML same-origin definition](https://html.spec.whatwg.org/multipage/browsers.html#same-origin);
 scroll method names and arguments follow [CSSOM View](https://drafts.csswg.org/cssom-view/#dom-window-scrollto).
+
+### Inline styles and mutation observers
+
+Elements expose a stable, live `style` object backed by the real style attribute:
+named CSS properties (including camelCase aliases), `cssText`, `cssFloat`,
+`length`/`item()`, and `getPropertyValue`, `getPropertyPriority`,
+`setProperty`, and `removeProperty`. Common properties and bounded custom
+properties are supported. Declaration input is capped at 64 KiB, with the
+existing DOM attribute and total-byte limits still enforced. This is an inline
+declaration subset of [CSSOM](https://drafts.csswg.org/cssom/#the-cssstyledeclaration-interface):
+it does not add computed styles, stylesheet rules, full value grammar validation,
+or shorthand expansion. The renderer still determines which declarations paint.
+
+`MutationObserver` supports `observe`, `disconnect`, and `takeRecords`;
+attribute filters/old values, child lists, character data, and subtree observation
+follow the [DOM API](https://dom.spec.whatwg.org/#interface-mutationobserver).
+Records are delivered asynchronously through the microtask queue, under the normal
+watchdog. Text nodes expose `data` and `nodeValue`. Removed subtrees remain
+observable until delivery; fragment replacement emits one child-list record.
+Record node lists are read-only snapshots with indexing, `item()`, and iteration.
+
+Each runtime allows 64 active observers, 256 registrations, 1024 pending records,
+1 MiB of charged record data, 1024 transient registrations, and 128 callback
+deliveries per entry. Queue or delivery overflow disconnects that runtime's
+observers, releases retained nodes, logs one bounded diagnostic, and rejects further
+observation. Registration and filter limits reject the attempted registration.
+These local APIs grant no network, script, or filesystem authority.
+
+Same-origin foreign elements expose `style` through the existing frame DOM gate.
+Observers register only on their own runtime's nodes; foreign writes notify the
+target runtime's observers at its next owner checkpoint. No foreign callback
+runs synchronously in the calling runtime.

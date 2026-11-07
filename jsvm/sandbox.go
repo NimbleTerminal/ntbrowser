@@ -97,6 +97,18 @@ type FetchResponse struct {
 }
 
 type Sandbox struct {
+	mutationProto, mutationPromise                                                                *goja.Object
+	mutationNotify                                                                                goja.Value
+	mutationThen                                                                                  goja.Callable
+	mutationNext                                                                                  uint64
+	mutationObservers                                                                             map[uint64]*mutationObserver
+	mutationOrder, mutationPending                                                                []uint64
+	mutationPins                                                                                  map[dom.NodeID]int
+	mutationRegistrations, mutationRecords, mutationBytes, mutationTransients, mutationDeliveries int
+	mutationScheduled, mutationStopped                                                            bool
+
+	styleProto                *goja.Object
+	styleSym                  *goja.Symbol
 	foreignNodes              map[DOMRef]*goja.Object
 	foreignRefs               map[*goja.Object]DOMRef
 	foreignPins               map[dom.NodeID]int
@@ -267,6 +279,7 @@ func New(cfg Config, tree *dom.Tree, host Host) *Sandbox {
 	s.nodeSym = goja.NewSymbol("ntbrowser.node")
 	s.installEventCore()
 	s.elemProto = s.buildElementProto()
+	s.installStyle()
 	s.installAnchors()
 	s.installImages()
 	s.installScripts()
@@ -279,6 +292,7 @@ func New(cfg Config, tree *dom.Tree, host Host) *Sandbox {
 	s.installEncoding()
 	s.installMessages()
 	s.installWindowMessages()
+	s.installMutations()
 	dom.Walk(tree.Root(), func(n *dom.Node) {
 		if n.Tag() == "img" {
 			s.imageChanged(n)
@@ -372,19 +386,37 @@ func (s *Sandbox) Run(fn func(vm *goja.Runtime) error) (err error) {
 	s.reap() // apply GC reports before the page runs again
 	s.vm.ClearInterrupt()
 	s.wd.arm(s.cfg.Slice)
+	s.mutationDeliveries = 0
 	defer func() {
 		s.pendingRejections = nil
 		s.rejectionsDropped = false
 		s.wd.disarm()
 		s.running = false
 		s.checkHeap()
+		// An interrupted Goja entry drops its queued jobs. Re-arm notifications
+		// at the next owner checkpoint instead of leaving them stranded.
+		s.mutationScheduled = false
 		if r := recover(); r != nil {
 			// A Go panic inside a binding must never take the loop down.
 			err = fmt.Errorf("ntbrowser/jsvm: binding panic: %v", r)
 			s.strike()
 		}
+		if err != nil {
+			s.mutationPending = nil
+			for _, id := range s.mutationOrder {
+				o := s.mutationObservers[id]
+				o.pending = false
+				if len(o.records) > 0 || len(o.transients) > 0 {
+					s.pendingMutation(id, o)
+				}
+			}
+		}
 	}()
+	s.scheduleMutations()
 	err = fn(s.vm)
+	if err == nil {
+		s.scheduleMutations()
+	}
 	var interrupted *goja.InterruptedError
 	var overflow *goja.StackOverflowError
 	var exception *goja.Exception
@@ -437,6 +469,15 @@ func (s *Sandbox) Close() {
 	s.pendingRejections = nil
 	s.rejectionsDropped = false
 	s.disabled = true
+	s.tree.SetMutationHook(nil)
+	s.mutationObservers = nil
+	s.mutationOrder = nil
+	s.mutationPending = nil
+	s.mutationPins = nil
+	s.mutationProto = nil
+	s.mutationPromise = nil
+	s.mutationNotify = nil
+	s.mutationThen = nil
 	if s.messageTaskPending {
 		s.host.ClearTask(s.messageTask)
 	}
@@ -451,6 +492,8 @@ func (s *Sandbox) Close() {
 	s.foreignNodes = nil
 	s.foreignRefs = nil
 	s.foreignPins = nil
+	s.styleProto = nil
+	s.styleSym = nil
 	s.frameWindows = nil
 	s.iframeProto = nil
 	s.emptyMessagePorts = nil

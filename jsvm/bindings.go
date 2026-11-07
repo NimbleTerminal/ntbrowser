@@ -123,7 +123,7 @@ func (s *Sandbox) reap() {
 func (s *Sandbox) anyLiveWrapper(root *dom.Node) bool {
 	alive := false
 	dom.Walk(root, func(n *dom.Node) {
-		if s.foreignPins[n.ID()] > 0 {
+		if s.foreignPins[n.ID()] > 0 || s.mutationPins[n.ID()] > 0 {
 			alive = true
 		}
 		if st := s.images[n.ID()]; st != nil && st.pin != nil {
@@ -240,6 +240,25 @@ func (s *Sandbox) buildElementProto() *goja.Object {
 		}
 		return vm.ToValue(1)
 	}, nil)
+	for _, key := range []string{"data", "nodeValue"} {
+		s.accessor(p, key, func(t goja.Value) goja.Value {
+			n := s.node(t)
+			if n.Kind() != dom.Text {
+				if key == "nodeValue" {
+					return goja.Null()
+				}
+				return goja.Undefined()
+			}
+			return vm.ToValue(n.Text())
+		}, func(t, v goja.Value) {
+			if s.node(t).Kind() == dom.Text {
+				if key == "nodeValue" && goja.IsNull(v) {
+					v = vm.ToValue("")
+				}
+				s.setText(t, v)
+			}
+		})
+	}
 	s.accessor(p, "ownerDocument", func(t goja.Value) goja.Value { s.node(t); return s.docObj }, nil)
 	s.accessor(p, "isConnected", func(t goja.Value) goja.Value { return vm.ToValue(s.tree.Attached(s.node(t))) }, nil)
 	s.accessor(p, "id", func(t goja.Value) goja.Value { v, _ := s.node(t).Attr("id"); return vm.ToValue(v) },

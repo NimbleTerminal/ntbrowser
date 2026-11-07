@@ -30,3 +30,5 @@ Project rules for agents and humans. The design document `docs/design/2026-10-25
 - License `AGPL-3.0-only WITH LicenseRef-NimbleTerminal-Linking-Exception OR LicenseRef-Neomantra-Commercial` (see `LICENSE` and `LICENSE-COMMERCIAL.md`); copyright notice `Copyright (c) 2026 Neomantra Corp. All rights reserved.`; Taskfile header comment `# ntbrowser - Copyright (c) 2026 Neomantra Corp.`.
 - `GOOS=js GOARCH=wasm go build ./dom ./jsvm ./loop ./netpolicy ./subres ./profile ./content` must succeed (spec decision 14: compile-only in v1).
 - Commit after every task; conventional-commit subjects (`feat:`, `test:`, `chore:`, `ci:`, `docs:`).
+
+- Inline style reflection is bounded local DOM state, not computed CSS or new resource authority. MutationObserver delivery uses private native Promise reactions under the normal watchdog; cap active observers/registrations/queued records/bytes/transients/deliveries. DOM hooks queue committed data only. Shared-DOM writes notify observers on the target runtime's owner checkpoint, never by entering a foreign VM. Preserve detached-node pins, atomic mutation records, and fail-closed observer overflow.

@@ -69,10 +69,14 @@ func TestSharedDOMRevokedSynchronously(t *testing.T) {
 			l, sink, fetcher := scriptTestLoop(t, p, "https://example.test")
 			l.LoadPage(`<iframe id=f srcdoc="<p id=c>child</p>"></iframe><script>
     const f=document.getElementById('f');let done=false;
-    f.addEventListener('load',()=>{if(done)return;done=true;const d=f.contentDocument,c=d.getElementById('c');
+    f.addEventListener('load',()=>{if(done)return;done=true;const d=f.contentDocument,c=d.getElementById('c'),style=c.style;
     `+change+`;
     let denied=false;try{c.textContent='stale'}catch(e){denied=e.name==='SecurityError'}
-    if(!denied)throw Error('stale write allowed');console.log('revoked');
+    if(!denied)throw Error('stale write allowed');
+    denied=false;try{style.width='100px'}catch(e){denied=e.name==='SecurityError'}
+    if(!denied)throw Error('stale style write allowed');
+    denied=false;try{void style.width}catch(e){denied=e.name==='SecurityError'}
+    if(!denied)throw Error('stale style read allowed');console.log('revoked');
     });
    </script>`, "https://example.test/", fetcher)
 			waitLog(t, sink, "revoked")
@@ -130,4 +134,26 @@ func TestSharedDOMRetainsDetachedNodesAndBoundsHandles(t *testing.T) {
  });
  </script>`, "https://example.test/", f)
 	waitLog(t, sink, "handles-ok")
+}
+
+func TestSharedDOMStyleMutationObserver(t *testing.T) {
+	p := externalProfile
+	p.Frames = profile.FramesOrigin
+	p.FrameDOM = "same-origin"
+	l, sink, f := scriptTestLoop(t, p, "https://example.test")
+	child := `<p id=c>child</p><script>
+ const c=document.getElementById('c');
+ new MutationObserver(rs=>{
+  if(rs.length!==1||rs[0].attributeName!=='style'||c.style.width!=='42px')throw Error('shared style observer');
+  parent.postMessage('observed-style','*');
+ }).observe(c,{attributes:true});
+ parent.postMessage('ready','*');
+ </script>`
+	l.LoadPage(`<iframe id=f srcdoc="`+html.EscapeString(child)+`"></iframe><script>
+ addEventListener('message',e=>{
+  if(e.data==='ready')document.getElementById('f').contentDocument.getElementById('c').style.width='42px';
+  if(e.data==='observed-style')console.log(e.data);
+ });
+ </script>`, "https://example.test/", f)
+	waitLog(t, sink, "observed-style")
 }
