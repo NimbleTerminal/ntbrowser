@@ -72,3 +72,15 @@ func TestHelpExitsSuccessfully(t *testing.T) {
 		}
 	}
 }
+
+func TestOptionalStartAddress(t *testing.T) {
+	for _, args := range [][]string{nil, {"--profile=reader"}, {"--profile=locked"}} {
+		c, err := parseArgs(args)
+		if err != nil || c.Start != "" {
+			t.Fatalf("empty start: %+v %v", c, err)
+		}
+	}
+	if _, err := parseArgs([]string{"https://a.test", "https://b.test"}); err == nil {
+		t.Fatal("accepted two addresses")
+	}
+}

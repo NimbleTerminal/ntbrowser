@@ -15,6 +15,7 @@ import (
 
 func TestNavigateOffRefusesLinkButLoadsStart(t *testing.T) {
 	m := newModel(t, profile.NavOff)
+	m.start = "https://page.test/"
 	seq := m.navSeq
 	if cmd := m.admit("https://page.test/other", false); cmd != nil || m.navSeq != seq || !strings.Contains(m.status, "navigation is off") {
 		t.Fatalf("cmd %v seq %d→%d status %q", cmd != nil, seq, m.navSeq, m.status)

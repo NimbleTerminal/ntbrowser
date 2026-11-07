@@ -85,6 +85,9 @@ type Model struct {
 	chunk             loop.ChunkInfo
 	chunkFailed       bool
 	title             string
+	addressError      string
+	addressOpen       bool
+	address           textinput.Model
 	status            string
 	closing           bool
 	start             string
@@ -156,7 +159,12 @@ func PolicyFor(p profile.Profile) netpolicy.Policy {
 	return netpolicy.Policy{AllowHosts: append([]string(nil), p.Hosts...), AllowPrivate: p.PrivateNetwork}
 }
 
-func (m *Model) Init() tea.Cmd { return m.navigate(m.start, pushNew, true) }
+func (m *Model) Init() tea.Cmd {
+	if m.start == "" {
+		return m.openAddress()
+	}
+	return m.navigate(m.start, pushNew, true)
+}
 
 // navigate loads an absolute URL and hands the HTML to the loop.
 //
@@ -291,6 +299,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.viewer.Update(msg) // graphics cleanup still flows
 		}
 		return m, nil
+	}
+	if key, ok := msg.(tea.KeyPressMsg); ok && key.String() == "ctrl+l" {
+		return m, m.openAddress()
+	}
+	if m.addressOpen {
+		if handled, cmd := m.addressUpdate(msg); handled {
+			return m, cmd
+		}
 	}
 	switch v := msg.(type) {
 	case loop.ScriptPermissionMsg:
@@ -695,6 +711,9 @@ func (m *Model) View() tea.View {
 	if prompt := m.scriptPermissionStatus(); prompt != "" {
 		status = ansi.Truncate(prompt, max(1, m.cols), "…")
 	}
+	if m.addressOpen {
+		status = m.address.View()
+	}
 	pos := ""
 	if m.chunk.Count > 0 {
 		pos = fmt.Sprintf(" · chunk %d/%d · [ ] chunks", m.chunk.Index+1, m.chunk.Count)
@@ -706,7 +725,7 @@ func (m *Model) View() tea.View {
 	if m.notEnforced {
 		enforced = " (not OS-enforced)"
 	}
-	help := "\n ntbrowser · " + ansi.Truncate(clean(m.title), 40, "…") + pos + " · profile " + clean(m.profile.Name) + enforced + " · Tab focus · Enter open · ⌫ back · ⌥→ fwd · ^R reload · / search · q quit"
+	help := "\n ntbrowser · " + ansi.Truncate(clean(m.title), 40, "…") + pos + " · profile " + clean(m.profile.Name) + enforced + " · Tab focus · Enter open · ⌫ back · ⌥→ fwd · ^L address · ^R reload · / search · q quit"
 	if h := m.helpLine(); h != "" {
 		help = "\n" + h
 	}
@@ -717,6 +736,12 @@ func (m *Model) View() tea.View {
 		help = "\n Alt+O allow once · Alt+S session · Esc deny · q quit"
 		if ansi.StringWidth(m.scriptPermissionStatus()) > m.cols {
 			help = "\n Widen terminal to view both origins before allowing · Esc deny"
+		}
+	}
+	if m.addressOpen {
+		help = "\n Enter open · Esc cancel · Ctrl+U clear · Ctrl+C quit"
+		if m.addressError != "" {
+			help = "\n" + ansi.Truncate(clean(m.addressError), max(1, m.cols), "…")
 		}
 	}
 	v := tea.NewView(body + "\n" + status + help)

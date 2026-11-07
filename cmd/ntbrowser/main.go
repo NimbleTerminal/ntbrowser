@@ -194,8 +194,11 @@ func parseArgs(args []string) (config, error) {
 	if c.ShowProfile {
 		return c, nil
 	}
-	if fs.NArg() != 1 {
-		return c, errors.New("usage: ntbrowser [flags] <url|file://path>")
+	if fs.NArg() > 1 {
+		return c, errors.New("usage: ntbrowser [flags] [url|file://path]")
+	}
+	if fs.NArg() == 0 {
+		return c, nil
 	}
 	c.Start = fs.Arg(0)
 	return c, p.ValidateStart(c.Start)

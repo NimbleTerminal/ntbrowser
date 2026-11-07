@@ -125,7 +125,7 @@ Cask updates use GitHub's existing-file SHA check and never force-push.
 ## Usage
 
 ```
-ntbrowser [-profile locked|reader|browse] [-profile-file path] [-show-profile] [gate flags] [-width px] [-slice 50ms] [-seed n] URL
+ntbrowser [-profile locked|reader|browse] [-profile-file path] [-show-profile] [gate flags] [-width px] [-slice 50ms] [-seed n] [URL]
 ```
 
 `URL` is `http(s)://…` or, for the start page only, `file://…`.
@@ -777,3 +777,13 @@ The status line labels an individual failed image as `[image warning]` and
 other rendering/resource warnings as `[page warning]`. These warnings do not
 replace a load failure, script error, policy-blocked navigation, or pending
 navigation confirmation. Full resource errors remain in diagnostic captures.
+
+### Address entry
+
+Run `ntbrowser` without a URL to open the address prompt, or press **Ctrl+L**
+while browsing. Type or paste an HTTP(S) URL and press **Enter**; a hostname
+without a scheme uses HTTPS. **Ctrl+U** clears text before the cursor and
+**Esc** cancels. Terminal paste is supported without invoking clipboard tools.
+The address prompt captures input locally; typed text is not sent to the page.
+Navigation still obeys the profile's navigation, host, and network restrictions.
+Local files must be selected on the command line at startup, before lockdown.
