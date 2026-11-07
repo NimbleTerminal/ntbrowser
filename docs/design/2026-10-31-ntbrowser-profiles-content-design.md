@@ -75,6 +75,7 @@ New packages: `profile` (data, validation, printing; no system imports) and `con
    | `script-navigation-limit` | 0/default 8 or 1–100 | document request count and automatic chain budget |
    | `navigate` | `off`, `allowlist`, `confirm`, `free` | top-level navigation. `off`: only the start URL given at launch is fetched, and nothing after it |
    | `subresources` | `off`, `origin`, `any` | stylesheets and images, including detached script-created `Image` requests |
+   | `frame-dom` | `off`, `same-origin` | bounded synchronous DOM sharing between same-origin frame realms; off by default |
    | `frames` | `off`, `origin`, `allowlist` | isolated child document realms; off in all built-ins |
    | `frame-grants` | source/destination origin pairs | frame document admission only; independent of fetch/scripts/navigation |
    | `fetch` | `off`, `origin`, `allowlist` | `fetch()` from page script |
@@ -524,7 +525,8 @@ profile edits outside the sandboxed browser.
 
 Frames are opt-in independent document realms, including same-origin embeds:
 parent/child DOM objects never cross a realm boundary. Frame references expose
-only bounded postMessage and window identity; direct document access is denied.
+bounded postMessage and window identity; direct document access is denied
+unless the separate frame-dom gate below admits it.
 Frame navigation requires the frame source/destination policy, and script
 navigation additionally requires script-navigation=origin and navigate=free;
 confirmation/allowlist modes are not approximated by automatic approval. No
@@ -534,7 +536,7 @@ in child realms in this first isolated mode; no disk or process authority is
 added. Document/frame removal cancels descendants and stale messages/paints.
 Hard ceilings bound frame count, nesting, raster area, document bytes, and
 message queues across the frame tree. Unsupported sandbox capabilities,
-transfers and cross-realm DOM access fail closed.
+transfers and DOM accesses outside the explicit shared subset fail closed.
 
 
 The initial wire format is JSON-compatible values only, bounded by the existing
@@ -549,3 +551,34 @@ closed. Child input is generation-checked, but native child form editing and
 link/form navigation are not implemented. Renderer substitution preserves
 class/inline style, not iframe tag selectors. Srcdoc uses the parent URL for
 resolution and Location reporting in this subset.
+
+
+### Shared DOM and frame scrolling revision (2026-11-07)
+
+`frame-dom=same-origin` admits a bounded DOM bridge only when both realms opt in
+and their canonical non-opaque HTTP(S) origins match. Frame admission grants
+do not change this rule. Each operation validates the source and destination
+revisions and their live ancestor iframe elements, including src/srcdoc/sandbox
+attributes. Detachment or replacement revokes cached handles synchronously.
+No document.domain relaxation is available. Child cookies/storage remain off.
+
+A frame tree shares an execution mutex. Each Loop still enters its own Goja
+runtime; foreign operations touch only plain DOM data and internal wrapper
+lifetime bookkeeping under that mutex, never target JS callbacks. This avoids
+blocking RPC cycles and runtime reentry. Render workers still receive immutable
+snapshots; network workers and the UI never acquire this ownership lock.
+
+Foreign handles are capped at 256 per calling realm and retained until that
+realm closes. Pins participate in detached-node GC checks and are released on
+caller shutdown. Inputs are capped before string export at 64 KiB (attribute
+keys at 1 KiB); query/child snapshots contain at most 256 nodes. Existing target
+DOM budgets apply atomically. Classic script creation/editing/executable moves
+are denied; fragment scripts stay inert. Resource and frame effects keep their
+existing target gates. Cross-document adoption, foreign listener callbacks and
+arbitrary window globals are unsupported. See README for the precise DOM subset.
+
+Child scrolling retains a 1024×768 raster ceiling and 16,384-pixel layout cap.
+The paint carries its document origin and generation to parent presentation and
+hit-testing. Wheel/keyboard gestures are contained in the focused child;
+stale input cannot target replacement content. Scrolling creates no new host
+authority. It uses the existing coalesced render cadence and watchdog budgets.

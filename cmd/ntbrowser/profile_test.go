@@ -260,3 +260,17 @@ func TestFrameFlags(t *testing.T) {
 		}
 	}
 }
+
+func TestFrameDOMFlag(t *testing.T) {
+	c, err := parseArgs([]string{"--frames=origin", "--frame-dom=same-origin"})
+	if err != nil || c.Profile.FrameDOM != "same-origin" {
+		t.Fatalf("%+v %v", c.Profile, err)
+	}
+	if _, err := parseArgs([]string{"--frame-dom=any"}); err == nil {
+		t.Fatal("cross-origin DOM mode accepted")
+	}
+	c, err = parseArgs(nil)
+	if err != nil || c.Profile.FrameDOM != "" {
+		t.Fatal("shared DOM enabled by default")
+	}
+}

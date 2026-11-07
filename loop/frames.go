@@ -122,6 +122,7 @@ func (h *frameHub) post(source, revision uint64, m jsvm.FramePost) error {
 }
 
 type childFrame struct {
+	offset     image.Point
 	id         uint64
 	spec       jsvm.FrameSpec
 	revision   uint64
@@ -132,6 +133,7 @@ type childFrame struct {
 	pending    bool
 }
 type framePresentation struct {
+	offset     image.Point
 	revision   uint64
 	frame      *childFrame
 	image      image.Image
@@ -162,6 +164,8 @@ func (l *Loop) setupFrameRealm(page *Page, cfg *jsvm.Config) {
 		ownOrigin = "null"
 	}
 	revision := h.bind(id, l, ownOrigin)
+	cfg.FrameDOM = func(r jsvm.DOMRequest) (jsvm.DOMReply, error) { return l.frameDOM(page, revision, r) }
+	cfg.CloseFrameDOM = func() { l.releaseFrameDOM(page) }
 	cfg.FrameSelf = id
 	cfg.FrameParent = l.cfg.frameParent
 	cfg.FrameTop = l.cfg.frameTop
@@ -248,7 +252,7 @@ func (l *Loop) ensureChildFrame(page *Page, spec jsvm.FrameSpec) (uint64, error)
 			cfg.Width = spec.Width
 			cfg.Chunked = false
 			cfg.DOMLimits = dom.Limits{Nodes: 2000, Depth: 32, TotalBytes: 256 << 10}
-			cfg.RenderLimit = document.Limits{Bytes: 256 << 10, Nodes: 2500, Depth: 40, Rules: 1024, Pixels: 1024 * 768, Height: spec.Height, LayoutHeight: 16384}
+			cfg.RenderLimit = document.Limits{Bytes: 256 << 10, Nodes: 2500, Depth: 40, Rules: 1024, Pixels: 1024 * 768, Height: 16384, LayoutHeight: 16384}
 			cfg.Script.MaxTimers = 32
 			cfg.Script.MaxListeners = 256
 			cfg.Script.MaxMessages = 64
@@ -395,6 +399,10 @@ func (l *Loop) reconcileFrames() {
 			}
 			l.cfg.frameHub.remove(f.id)
 			delete(p.frames, node)
+			if p.frameFocus == node {
+				p.frameFocus = 0
+				l.announceFrameFocus()
+			}
 			p.Tree.MarkDirty()
 		}
 	}
@@ -437,6 +445,7 @@ func (s frameSink) Send(msg tea.Msg) {
 			}
 			if m.FrameImage != nil && m.Err == nil {
 				s.frame.image = m.FrameImage
+				s.frame.offset = m.FrameOrigin
 				s.frame.generation = m.Gen
 				s.page.Tree.MarkDirty()
 			}
@@ -498,7 +507,7 @@ func (l *Loop) frameImages(p *Page, opts *document.Options) (map[dom.NodeID]dom.
 		}
 		opts.Images[key] = f.image
 		html[node] = dom.FrameImage{Source: key, Width: f.spec.Width, Height: f.spec.Height}
-		shown[node] = framePresentation{f.revision, f, f.image, f.generation}
+		shown[node] = framePresentation{f.offset, f.revision, f, f.image, f.generation}
 	}
 	return html, shown
 }
@@ -521,7 +530,8 @@ func (l *Loop) clickFrame(area image.Rectangle) bool {
 		x := (area.Min.X - b.Bounds.Min.X) * bounds.Dx() / width
 		y := (area.Min.Y - b.Bounds.Min.Y) * bounds.Dy() / height
 		p.frameFocus = n.ID()
-		shown.frame.child.ClickAtFrame(shown.generation, image.Rect(x, y, x+1, y+1))
+		l.announceFrameFocus()
+		shown.frame.child.ClickAtFrame(shown.generation, image.Rect(x, y, x+1, y+1).Add(shown.offset))
 		return true
 	}
 	return false

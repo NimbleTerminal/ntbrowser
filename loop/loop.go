@@ -25,8 +25,10 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/draw"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -51,12 +53,14 @@ type Sink interface{ Send(tea.Msg) }
 // Messages the loop sends to the Bubble Tea model.
 type (
 	FrameMsg struct {
-		FrameImage image.Image
-		Painted    *nthtml.PaintedResult // CSS layout and initial band, installed atomically
-		Navigation uint64
-		Gen        uint64 // monotonically increasing; stale frames are dropped by the host
-		Result     *document.Result
-		Err        error
+		FrameImage   image.Image
+		FrameOrigin  image.Point
+		FrameRegions []image.Rectangle
+		Painted      *nthtml.PaintedResult // CSS layout and initial band, installed atomically
+		Navigation   uint64
+		Gen          uint64 // monotonically increasing; stale frames are dropped by the host
+		Result       *document.Result
+		Err          error
 		// Warnings are the loader's (a refused stylesheet, an oversize
 		// image); Result.Warnings stay nthtml's. Page-controlled text:
 		// the host passes them through app.clean.
@@ -79,6 +83,9 @@ type (
 // Page is one navigation: tree + sandbox + policy. Replacing it discards the
 // whole JS heap, which is how cross-page isolation is achieved.
 type Page struct {
+	domPins         map[jsvm.DOMRef]bool
+	frameScroll     image.Point
+	scrollEvent     bool
 	frameID         uint64
 	frames          map[dom.NodeID]*childFrame
 	displayedFrames map[dom.NodeID]framePresentation
@@ -146,6 +153,7 @@ type Config struct {
 	DOMLimits                      dom.Limits
 	FrameHeight                    int // nonzero only for embedded child raster viewports
 	frameHub                       *frameHub
+	frameOwner                     *sync.Mutex
 	frameID, frameParent, frameTop uint64
 	frameDepth                     int
 	frameOpaque                    bool
@@ -205,6 +213,9 @@ type Loop struct {
 }
 
 func New(ctx context.Context, cfg Config, sink Sink) *Loop {
+	if cfg.frameOwner == nil {
+		cfg.frameOwner = &sync.Mutex{}
+	}
 	if !cfg.Profile.Diagnostics {
 		cfg.Trace = nil
 	}
@@ -241,41 +252,48 @@ func New(ctx context.Context, cfg Config, sink Sink) *Loop {
 }
 
 // Run is the VM goroutine. It is the only goroutine that may touch l.page.
+// All realms in a frame tree serialize their turns. Each VM is still entered
+// only by its own loop; synchronous foreign DOM operations touch plain DOM
+// data under this same lock, never another runtime's JS objects.
 func (l *Loop) Run() {
 	defer func() {
+		l.cfg.frameOwner.Lock()
+		defer l.cfg.frameOwner.Unlock()
+		l.scriptSessions = nil
 		if l.page != nil {
 			l.dropPage(l.page)
 		}
-	}()
-	defer l.storage.Clear()
-	defer func() {
-		l.scriptSessions = nil
-		if l.page != nil {
-			for _, request := range l.page.scriptPermissions {
-				request.timer.Stop()
-			}
-			l.page.scriptPermissions = nil
-		}
+		l.storage.Clear()
 	}()
 	for {
+		var task func()
 		select {
 		case <-l.ctx.Done():
 			return
-		case task := <-l.inbox:
-			task()
+		case task = <-l.inbox:
 		case <-l.resizeWake:
-			width := int(l.resizeWidth.Load())
-			if width > 0 && width != l.cfg.Width {
-				l.cfg.Width = width
-				l.pendingFrame = true
-				l.scheduleFrame()
+			task = func() {
+				width := int(l.resizeWidth.Load())
+				if width > 0 && width != l.cfg.Width {
+					l.cfg.Width = width
+					l.pendingFrame = true
+					l.scheduleFrame()
+				}
 			}
 		case <-l.timerT.C:
-			l.fireTimers()
+			task = l.fireTimers
 		case <-l.frameTimer.C:
-			l.startRender()
+			task = l.startRender
 		}
-		l.afterTask()
+		func() {
+			l.cfg.frameOwner.Lock()
+			defer l.cfg.frameOwner.Unlock()
+			if l.ctx.Err() != nil {
+				return
+			}
+			task()
+			l.afterTask()
+		}()
 	}
 }
 
@@ -419,6 +437,7 @@ func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) ui
 			}
 		}
 		l.setupFrameRealm(page, &cfg)
+		l.installFrameScroll(page, &cfg)
 		page.Sandbox = jsvm.New(cfg, tree, (*host)(l))
 		page.Sandbox.SetFormHooks(l.formHooks(page))
 		l.page = page
@@ -614,6 +633,7 @@ func (l *Loop) ClickAtFrame(gen uint64, area image.Rectangle) {
 			return
 		}
 		l.page.frameFocus = 0
+		l.announceFrameFocus()
 		var best *document.Box
 		for i := range l.page.boxes {
 			b := &l.page.boxes[i]
@@ -741,6 +761,13 @@ func (l *Loop) afterTask() {
 		}
 	}
 	l.reconcileFrames()
+	if l.page.scrollEvent && !l.page.killed {
+		l.page.scrollEvent = false
+		if l.cfg.Profile.ScriptsOn() {
+			_, err := l.page.Sandbox.Dispatch(jsvm.Event{Type: "scroll", NonCancelable: true})
+			l.report(err)
+		}
+	}
 	l.updateImages()
 	l.completeDocument()
 	if l.page.Sandbox.Disabled() && !l.page.killed {
@@ -793,7 +820,7 @@ func (l *Loop) startRender() {
 		l.dropPage(l.page)
 	}
 	page := l.page
-	opts := document.Options{NoImage: !l.cfg.Chunked, Width: l.cfg.Width, Limits: l.cfg.RenderLimit, Fonts: l.cfg.Fonts, FallbackFaces: fallbackFaces}
+	opts := document.Options{ViewportHeight: l.cfg.FrameHeight, NoImage: !l.cfg.Chunked, Width: l.cfg.Width, Limits: l.cfg.RenderLimit, Fonts: l.cfg.Fonts, FallbackFaces: fallbackFaces}
 	var loaderWarnings []string
 	var injected []string // hrefs whose sheet is in this snapshot
 	if page.subres != nil {
@@ -809,6 +836,7 @@ func (l *Loop) startRender() {
 		opts.BackgroundImages = page.subres.BackgroundImages() // worker reads is written again
 	}
 	frameHTML, frameImages := l.frameImages(page, &opts)
+	requestedScroll := page.frameScroll
 	rebuildChunks := page.Tree.Dirty()
 	if rebuildChunks {
 		l.currentFrame.Store(0)
@@ -879,13 +907,23 @@ func (l *Loop) startRender() {
 				// retry once so an image-heavy page degrades to placeholders
 				// instead of a blank viewer (decision 16).
 				opts.Images, opts.BackgroundImages = nil, nil
+				frameImages = nil
 				res, err = doc.Render(ctx, opts)
 				loaderWarnings = append(loaderWarnings, "page too large with images; rendered without them")
 			}
 		}
 		var embeddedImage image.Image
+		embeddedOrigin := requestedScroll
 		if l.cfg.FrameHeight > 0 && err == nil && res != nil {
-			embeddedImage, err = res.Paint(ctx, image.Rect(0, 0, opts.Width, l.cfg.FrameHeight), 1)
+			embeddedOrigin.X = max(0, min(embeddedOrigin.X, res.Bounds().Dx()-opts.Width))
+			embeddedOrigin.Y = max(0, min(embeddedOrigin.Y, res.Bounds().Dy()-l.cfg.FrameHeight))
+			embeddedImage, err = res.Paint(ctx, image.Rect(0, 0, opts.Width, l.cfg.FrameHeight).Add(embeddedOrigin), 1)
+			if err == nil && embeddedImage.Bounds().Size() != image.Pt(opts.Width, l.cfg.FrameHeight) {
+				canvas := image.NewRGBA(image.Rect(0, 0, opts.Width, l.cfg.FrameHeight))
+				draw.Draw(canvas, canvas.Bounds(), image.NewUniform(res.Background()), image.Point{}, draw.Src)
+				draw.Draw(canvas, embeddedImage.Bounds(), embeddedImage, image.Point{}, draw.Src)
+				embeddedImage = canvas
+			}
 		}
 		if l.cfg.FrameHeight == 0 && !useChunks && err == nil && res != nil {
 			var painter *document.Painter
@@ -956,6 +994,12 @@ func (l *Loop) startRender() {
 			if res != nil && err == nil {
 				page.boxes, page.result = res.Boxes, res
 				page.displayedFrames = frameImages
+				if l.cfg.FrameHeight > 0 && page.frameScroll == requestedScroll {
+					if page.frameScroll != embeddedOrigin {
+						page.scrollEvent = true
+					}
+					page.frameScroll = embeddedOrigin
+				}
 				l.autofocus(page)
 			}
 			if page.subres != nil {
@@ -975,7 +1019,7 @@ func (l *Loop) startRender() {
 				}
 				page.firstFrame = false
 			}
-			l.send(FrameMsg{FrameImage: embeddedImage, Painted: painted, Navigation: navigation, Gen: gen, Result: res, Err: err, Warnings: loaderWarnings, Chunk: chunkInfo})
+			l.send(FrameMsg{FrameImage: embeddedImage, FrameOrigin: embeddedOrigin, FrameRegions: l.frameRegions(page), Painted: painted, Navigation: navigation, Gen: gen, Result: res, Err: err, Warnings: loaderWarnings, Chunk: chunkInfo})
 		})
 	}
 }

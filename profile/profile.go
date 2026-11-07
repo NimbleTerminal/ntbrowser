@@ -91,6 +91,7 @@ const defaultClockMillis = 10
 // Profile is one position for each gate. Code compares against the open
 // values, so an empty field is closed.
 type Profile struct {
+	FrameDOM      string        `json:"frame-dom,omitempty"`
 	Frames        Frames        `json:"frames,omitempty"`
 	FrameGrants   []ScriptGrant `json:"frame-grants,omitempty"`
 	ScriptGrants  []ScriptGrant `json:"script-grants,omitempty"`
@@ -215,6 +216,7 @@ func (p Profile) check() error {
 		oneOf("session-storage", p.SessionStorage, SessionStorageOff, SessionStorageOn),
 		oneOf("cookies", p.Cookies, CookiesOff, CookiesSession),
 		oneOf("frames", p.Frames, FramesOff, FramesOrigin, FramesAllowlist),
+		oneOf("frame-dom", p.FrameDOM, "off", "same-origin"),
 		oneOf("dynamic-code", p.DynamicCode, DynamicOff, DynamicOn),
 		oneOf("files", p.Files, FilesOff, FilesStartPage, FilesTemp),
 		oneOf("media", p.Media, MediaOff, MediaImage, MediaAnimation, MediaVideo),
@@ -356,6 +358,7 @@ func (p Profile) Table(s Strengths) string {
 		{"session-storage-bytes", strconv.Itoa(p.StorageBytes()), "per-origin key/value bytes"},
 		{"session-storage-total-bytes", strconv.Itoa(p.StorageTotalBytes()), "session-wide key/value bytes"},
 		{"cookies", orOff(p.Cookies), "in-memory session cookies; cross-origin subrequests excluded"},
+		{"frame-dom", orOff(p.FrameDOM), "bounded same-origin DOM bridge; no shared JavaScript globals"},
 		{"frames", orOff(p.Frames), "isolated child pages; same origin or explicit frame grants"},
 		{"frame-grants", fmt.Sprint(p.FrameGrants), "frame source/destination origins; no script or fetch grants"},
 		{"dynamic-code", orOff(p.DynamicCode), "eval and Function-family string compilation"},

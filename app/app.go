@@ -82,6 +82,8 @@ type Model struct {
 	rows              int
 	gen               uint64
 	lastFrame         uint64
+	frameRegions      []image.Rectangle
+	embeddedFocus     bool
 	chunk             loop.ChunkInfo
 	chunkFailed       bool
 	title             string
@@ -376,6 +378,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.status = ""
 		}
 		return m, cmd
+	case loop.FrameFocusMsg:
+		if v.Gen == m.gen {
+			m.embeddedFocus = v.Active
+		}
+		return m, nil
 	case loop.FrameMsg:
 		if v.Navigation != 0 && !m.loop.NavigationCurrent(v.Navigation) {
 			return m, nil
@@ -385,9 +392,15 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if v.Gen <= m.lastFrame {
 			return m, nil
 		}
+		if m.resetView {
+			m.embeddedFocus = false
+		}
 		m.lastFrame = v.Gen
 		if v.Err == nil || v.Chunk.Count > 0 {
 			m.gen = v.Gen
+		}
+		if v.Err == nil {
+			m.frameRegions = v.FrameRegions
 		}
 		oldChunk := m.chunk
 		m.chunk, m.chunkFailed = v.Chunk, v.Err != nil && v.Chunk.Count > 0
@@ -535,6 +548,29 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.MouseWheelMsg:
+		if !m.overlay() && m.viewer != nil {
+			if area, ok := m.viewer.CellToDocument(image.Pt(v.X, v.Y)); ok {
+				delta := image.Point{}
+				switch v.Button {
+				case tea.MouseWheelDown:
+					delta.Y = 40
+				case tea.MouseWheelUp:
+					delta.Y = -40
+				case tea.MouseWheelRight:
+					delta.X = 40
+				case tea.MouseWheelLeft:
+					delta.X = -40
+				}
+				for _, region := range m.frameRegions {
+					if region.Overlaps(area) && delta != (image.Point{}) {
+						if m.frameInputReady() {
+							m.loop.ScrollFrameAt(m.gen, area, delta)
+						}
+						return m, nil
+					}
+				}
+			}
+		}
 		if !m.overlay() && m.chunk.Count > 0 {
 			key := ""
 			if v.Button == tea.MouseWheelDown {
@@ -613,6 +649,19 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// The terminal keeps its own navigation keys; the page gets a copy
 			// as keydown and cannot swallow them. Text typed into the viewer's
 			// / search box never reaches the page.
+			if m.embeddedFocus {
+				switch v.String() {
+				case "esc":
+					m.embeddedFocus = false
+					m.loop.LeaveFrameFocus(m.gen)
+					return m, nil
+				case "up", "down", "left", "right", "pgup", "pgdown", "home", "end":
+					if m.frameInputReady() {
+						m.loop.ScrollFocusedFrameAt(m.gen, v.String())
+					}
+					return m, nil
+				}
+			}
 			if m.frameInputReady() {
 				m.loop.InputAt(m.gen, v)
 			}

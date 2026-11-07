@@ -86,7 +86,13 @@ func (s *Sandbox) installFrames() {
 		}
 		return s.frameWindow(id)
 	}, nil)
-	s.accessor(p, "contentDocument", func(goja.Value) goja.Value { return goja.Null() }, nil)
+	s.accessor(p, "contentDocument", func(v goja.Value) goja.Value {
+		id := s.frameID(s.node(v))
+		if id == 0 {
+			return goja.Null()
+		}
+		return s.frameDocument(id, true)
+	}, nil)
 	ctor := s.vm.ToValue(func(goja.ConstructorCall) *goja.Object { panic(s.vm.NewTypeError("Illegal constructor")) }).(*goja.Object)
 	_ = ctor.Set("prototype", p)
 	defineFrozen(p, "constructor", ctor)
@@ -102,8 +108,15 @@ func (s *Sandbox) frameWindow(id uint64) *goja.Object {
 	w := s.vm.NewObject()
 	plainProto := w.Prototype()
 	s.frameWindows[id] = w
-	// Same-origin frame DOM access is intentionally not part of isolated mode.
-	for _, key := range []string{"document", "location", "localStorage", "sessionStorage"} {
+	s.accessor(w, "document", func(goja.Value) goja.Value { return s.frameDocument(id, false) }, nil)
+	s.installScrollOn(w, func() (float64, float64) {
+		r := s.domRequest(DOMRequest{Ref: DOMRef{Frame: id}, Op: "scrollPosition"})
+		return r.X, r.Y
+	}, func(x, y float64, relative bool) {
+		s.domRequest(DOMRequest{Ref: DOMRef{Frame: id}, Op: "scrollWindow", X: x, Y: y, Relative: relative})
+	})
+
+	for _, key := range []string{"location", "localStorage", "sessionStorage"} {
 		s.accessor(w, key, func(goja.Value) goja.Value { panic(s.eventException("SecurityError", "isolated frame access denied")) }, nil)
 	}
 	for _, key := range []string{"window", "self"} {

@@ -123,6 +123,9 @@ func (s *Sandbox) reap() {
 func (s *Sandbox) anyLiveWrapper(root *dom.Node) bool {
 	alive := false
 	dom.Walk(root, func(n *dom.Node) {
+		if s.foreignPins[n.ID()] > 0 {
+			alive = true
+		}
 		if st := s.images[n.ID()]; st != nil && st.pin != nil {
 			alive = true
 		}

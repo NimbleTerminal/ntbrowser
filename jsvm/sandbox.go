@@ -31,6 +31,10 @@ import (
 
 // Config bounds one page's scripting. Zero fields use the defaults below.
 type Config struct {
+	FrameDOM                         func(DOMRequest) (DOMReply, error)
+	CloseFrameDOM                    func()
+	ScrollPosition                   func() (float64, float64)
+	Scroll                           func(float64, float64, bool)
 	FrameSelf, FrameParent, FrameTop uint64
 	FrameOpaque                      bool
 	EnsureFrame                      func(FrameSpec) (uint64, error)
@@ -93,6 +97,9 @@ type FetchResponse struct {
 }
 
 type Sandbox struct {
+	foreignNodes              map[DOMRef]*goja.Object
+	foreignRefs               map[*goja.Object]DOMRef
+	foreignPins               map[dom.NodeID]int
 	iframeProto               *goja.Object
 	frameWindows              map[uint64]*goja.Object
 	frameChildCount           int
@@ -266,6 +273,7 @@ func New(cfg Config, tree *dom.Tree, host Host) *Sandbox {
 	s.installFrames()
 	s.installCollections()
 	s.installGlobals()
+	s.installScroll()
 	s.installStorage()
 	s.installPerformance()
 	s.installEncoding()
@@ -437,6 +445,12 @@ func (s *Sandbox) Close() {
 	s.portMessages = nil
 	s.messageBytes = 0
 	s.cloneMessage = nil
+	if s.cfg.CloseFrameDOM != nil {
+		s.cfg.CloseFrameDOM()
+	}
+	s.foreignNodes = nil
+	s.foreignRefs = nil
+	s.foreignPins = nil
 	s.frameWindows = nil
 	s.iframeProto = nil
 	s.emptyMessagePorts = nil

@@ -186,6 +186,7 @@ supported.
 | `--media off\|image\|animation\|video` | The most a top-level response may be shown as. Images inside a page are `--subresources`. `video` also opens `native-code` and `files=temp` |
 | `--max-media-bytes n` | Download cap for media (64 MiB) |
 | `--width px` | Initial document width; the terminal's pixel geometry takes over once known |
+| `--frame-dom off/same-origin` | Bounded same-origin DOM sharing between enabled frames (default off) |
 | `--frames MODE` | Isolated iframe documents (default off) |
 | `--allow-frame SOURCE=DEST` | Repeatable frame origin pair, used with `--frames=allowlist` |
 | `--frame-ms n` | Minimum frame interval in ms (default 33, range 1–1000) |
@@ -856,9 +857,10 @@ delivery. This first cross-realm wire format accepts JSON-compatible data.
 Cycles, undefined, non-finite numbers, special collection/buffer types, and
 transfers are rejected. Page-local messaging retains its existing clone support.
 
-This mode deliberately isolates even same-origin frame DOMs:
+By default this mode isolates even same-origin frame DOMs:
 `contentDocument` is null and proxy document/location/storage access throws
-`SecurityError`. Child cookies and session storage are disabled. Sandbox
+`SecurityError`. The separate `--frame-dom=same-origin` gate enables the bounded
+DOM bridge described below; Location and storage access remain denied. Child cookies and session storage are disabled. Sandbox
 supports `allow-scripts` and `allow-same-origin`; other tokens fail closed.
 Opaque sandbox children report origin `null`, cannot use fetch, and cannot
 create descendants. Embedding restrictions are enforced conservatively:
@@ -872,9 +874,8 @@ a 64-message/4 MiB queue. Each message is at most 1 MiB. Removal and replacement
 cancel children and discard stale messages, paints, and input.
 
 Child pixels are embedded as renderer-only images; class and inline style are
-preserved, but iframe tag selectors and normal scrolling inside frames are not
-implemented. Pointer clicks and focused keyboard events route to the displayed
-child generation. Native form editing, link/form navigation, cross-window DOM,
+preserved, but iframe tag selectors are not implemented. Pointer clicks and focused keyboard events route to the displayed
+child generation. Native form editing, link/form navigation, cross-window JavaScript globals,
 and MessagePort transfers remain unsupported. Same-origin child Location
 navigation requires both `--script-navigation=origin` and `--nav=free`;
 other navigation modes fail closed. Srcdoc currently uses its parent's URL
@@ -884,3 +885,57 @@ This enables isolated scripted embeds; it does not establish reCAPTCHA
 compatibility. See the [HTML iframe specification](https://html.spec.whatwg.org/multipage/iframe-embed-object.html#the-iframe-element)
 and [cross-document messaging](https://html.spec.whatwg.org/multipage/web-messaging.html#crossDocumentMessages)
 for the broader browser interfaces.
+
+
+### Frame scrolling and same-origin DOM sharing
+
+With frames enabled, wheel gestures over a child scroll its viewport without
+scrolling the parent. Clicking or wheeling inside a child focuses its scrolling:
+arrows, PageUp/PageDown, Home/End stay in that frame; Escape returns scrolling to
+the parent. Nested gestures route to the deepest displayed frame. Gestures at
+a frame boundary stay contained instead of chaining into the parent.
+
+Child scripts can use `scroll`, `scrollTo`, `scrollBy`, `scrollX/Y`, and
+`pageXOffset/YOffset`. Numeric and options-dictionary calls are supported;
+smooth requests currently move immediately. Scroll events are coalesced.
+Layout height is capped at 16,384 CSS pixels while each resident child raster
+remains at most 1024×768 pixels. Short documents are padded to their viewport
+instead of stretched. Input uses the offset attached to the displayed raster,
+and stale generations are rejected. The renderer currently bounds horizontal
+overflow to the layout width; arbitrary element scroll containers are not added.
+
+Use `--frames=origin --frame-dom=same-origin` to enable shared DOM access.
+For cross-origin frame admission, keep using explicit frame origin grants;
+those grants **never** authorize cross-origin DOM access. DOM sharing requires
+the same non-opaque HTTP(S) origin, including port. It does not implement
+`document.domain` relaxation. A sandbox without `allow-same-origin` remains opaque.
+
+After the child's load event, `iframe.contentDocument`,
+`iframe.contentWindow.document`, and same-origin `parent.document` expose
+live, revision-bound wrappers. Supported operations include document/body/head
+and node traversal, selectors, attributes, `textContent`, bounded `innerHTML`,
+form `value`, element/text creation, insertion, and removal. Wrappers preserve
+identity within the calling realm; detached referenced nodes stay alive and
+charged. Each calling realm may retain at most 256 distinct foreign handles
+until it closes; child collections are bounded snapshots. Mutation input is
+at most 64 KiB and retains the target DOM's existing budgets.
+
+Every access rechecks origin, endpoint revision, attachment, and source/sandbox
+attributes. Removing or replacing a frame revokes old handles immediately,
+including earlier in the same script turn. Cross-origin `contentDocument`
+returns null; denied or stale proxy accesses throw `SecurityError`.
+Same-origin `contentWindow.scrollTo/scrollBy` uses the same gate.
+Window proxies follow navigation; retained document/node wrappers do not.
+
+Frame-tree turns are serialized to make synchronous DOM operations safe;
+Goja values never cross runtime boundaries. The bridge does not run foreign
+event callbacks, expose arbitrary window globals, adopt nodes between documents,
+or prepare executable classic scripts. Creating/editing/moving executable
+script nodes is rejected; innerHTML fragment scripts remain inert. Resource
+and iframe effects continue through the target profile's existing gates.
+Event-listener registration and activation through foreign wrappers fail with
+`NotSupportedError`. This is a bounded DOM bridge, not a complete cross-realm
+browser object model; initial about:blank access before child load is not added.
+
+The origin boundary follows the [HTML same-origin definition](https://html.spec.whatwg.org/multipage/browsers.html#same-origin);
+scroll method names and arguments follow [CSSOM View](https://drafts.csswg.org/cssom-view/#dom-window-scrollto).

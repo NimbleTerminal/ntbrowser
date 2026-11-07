@@ -59,6 +59,7 @@ func parseArgs(args []string) (config, error) {
 	name := fs.String("profile", "browse", "built-in profile: locked, reader, browse")
 	file := fs.String("profile-file", "", "JSON profile file (overrides --profile)")
 	fs.BoolVar(&c.ShowProfile, "show-profile", false, "print the effective profile and exit")
+	frameDOM := fs.String("frame-dom", "", "shared frame DOM: off, same-origin (default off)")
 	frames := fs.String("frames", "", "isolated iframes: off, origin, allowlist (default off)")
 	frameGrants := fs.StringArray("allow-frame", nil, "frame grant SOURCE_ORIGIN=DESTINATION_ORIGIN (repeatable)")
 	scriptGrants := fs.StringArray("allow-script", nil, "script grant SOURCE_ORIGIN=DESTINATION_ORIGIN (repeatable)")
@@ -123,6 +124,9 @@ func parseArgs(args []string) (config, error) {
 	}
 	if *external {
 		p.Scripts = profile.ScriptsExternal
+	}
+	if *frameDOM != "" {
+		p.FrameDOM = *frameDOM
 	}
 	if *frames != "" {
 		p.Frames = profile.Frames(*frames)

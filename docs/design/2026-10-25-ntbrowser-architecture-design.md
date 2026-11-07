@@ -1874,13 +1874,28 @@ is introduced. README documents the supported clone types and exclusions.
 
 **Isolated scripted frames (2026-11-07).** The opt-in frames gate creates a
 separate Loop, DOM, and VM per child, with shared network concurrency and a
-revision-checked message broker. Even same-origin DOMs remain isolated.
+revision-checked message broker. Same-origin DOMs remain isolated by default;
+the frame-dom extension below adds an explicitly gated data bridge.
 Rendering embeds bounded child rasters and routes input only to the displayed
-realm revision and frame generation. Unsupported sandbox tokens, cross-window
-DOM, and navigation confirmation modes fail closed. See the isolated-frame
+realm revision and frame generation. Unsupported sandbox tokens, DOM operations outside the gated subset,
+and navigation confirmation modes fail closed. See the isolated-frame
 extension of the profiles design and README for the exact supported subset,
 budgets, origin grants, and rendering limitations. This does not promise full
 browser iframe or reCAPTCHA compatibility.
+
+**Frame scrolling and shared DOM (2026-11-07).** Frame-tree turns now serialize
+under one ownership mutex while each runtime retains its own watchdog and
+entry points. Same-origin DOM operations validate live endpoint/element
+revisions and operate on plain DOM through bounded local wrappers; no Goja
+values or callbacks cross realms. Foreign wrapper pins participate in detached
+node lifetime. The separate frame-dom gate and its limits are normative in the
+profiles extension. This revises the original exclusive-per-loop DOM ownership
+rule for these explicitly synchronized operations.
+
+Child layouts may reach 16,384 CSS pixels; child raster allocations still cover
+only their bounded viewport. Paint origins are captured with generations, so
+scrolling and hit-testing refer to the same pixels. Wheel and focused keyboard
+scrolling do not move the parent; script scrolling uses the same bounded path.
 
 **Window self-messaging (2026-11-06).** `jsvm/window_messages.go` adds
 postMessage overloads for a target-origin string or options dictionary. The
