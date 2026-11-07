@@ -306,7 +306,7 @@ func (l *Loop) fetchFrame(ctx context.Context, page *Page, spec jsvm.FrameSpec) 
 			}
 		}
 	}
-	fetcher = page.Fetcher.ForFrame(page.Base, l.cfg.Profile.FrameOrigins(page.Base))
+	fetcher = page.Fetcher.ForFrameSources(page.Base, l.cfg.Profile.FrameOrigins(page.Base), l.cfg.Profile.Frames == profile.FramesAny)
 	base = page.Base
 	if spec.HasSrcdoc {
 		if len(spec.Srcdoc) > dom.MaxFragmentBytes {

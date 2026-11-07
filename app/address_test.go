@@ -73,3 +73,41 @@ func TestAddressStartupPasteAndNavigationGate(t *testing.T) {
 		t.Fatal("escape did not dismiss")
 	}
 }
+
+func TestGlynxBrowsingInput(t *testing.T) {
+	for raw, want := range map[string]string{
+		"google.com":                  "https://google.com",
+		"hello world":                 "https://www.google.com/search?q=hello+world",
+		"hello":                       "https://www.google.com/search?q=hello",
+		"https://example.test/?q=a+b": "https://example.test/?q=a+b",
+	} {
+		if got, err := BrowsingURL(raw); err != nil || got != want {
+			t.Fatal(raw, got, err)
+		}
+	}
+	for _, raw := range []string{"javascript:alert(1)", "file:///etc/passwd", "https://user:pass@site.test", ""} {
+		if _, err := BrowsingURL(raw); err == nil {
+			t.Fatal("invalid scheme/address accepted", raw)
+		}
+	}
+	m := newModel(t, NavFree)
+	m.SetGlynx()
+	m.Update(tea.KeyPressMsg{Code: 'g', Text: "g"})
+	if !m.addressOpen || !strings.Contains(m.address.Placeholder, "search") {
+		t.Fatal("g did not open browsing input")
+	}
+	m.address.SetValue("hello world")
+	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.navSeq != 1 || m.addressOpen {
+		t.Fatal("search did not navigate")
+	}
+	if !strings.Contains(m.View().Content, "glynx") {
+		t.Fatal("wrong application identity")
+	}
+	// A typed g in a form must not become a browser command.
+	m.mode = modeEdit
+	m.Update(tea.KeyPressMsg{Code: 'g', Text: "g"})
+	if m.addressOpen {
+		t.Fatal("browse shortcut stole form input")
+	}
+}

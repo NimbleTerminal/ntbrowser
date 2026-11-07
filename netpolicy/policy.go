@@ -547,21 +547,27 @@ func (f *Fetcher) SetDocumentCookie(base, value string) { f.p.Cookies.SetDocumen
 // and AnyOrigin can never become script authority. Each derived policy remains
 // immutable, including while older requests are in flight.
 func (f *Fetcher) ForScripts(base string, origins []string) *Fetcher {
+	return f.ForScriptSources(base, origins, false)
+}
+
+// ForScriptSources admits any public script origin only when the caller has
+// the explicit script-sources=any gate. Parent AnyOrigin is never inherited.
+func (f *Fetcher) ForScriptSources(base string, origins []string, any bool) *Fetcher {
 	if f.p.Origin == nil {
 		return New(Policy{})
 	}
 	p := f.p
 	p.AllowHosts = nil
-	p.AnyOrigin = false
+	p.AnyOrigin = any
 	p.AllowOrigins = append([]string(nil), origins...)
 	u, err := url.Parse(base)
-	if err != nil || (u.Scheme != "https" && u.Scheme != "http") {
-		p.Origin = nil
-		p.AllowOrigins = nil
+	if err != nil || (u.Scheme != "https" && u.Scheme != "http") || u.Host == "" || u.User != nil {
+		return New(Policy{})
 	} else {
 		p.Origin = u
 		p.NoDowngradeFrom = u.Scheme
 	}
+
 	derived := New(p)
 	derived.sem = f.sem
 	return derived

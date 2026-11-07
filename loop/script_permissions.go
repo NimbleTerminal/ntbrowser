@@ -32,7 +32,7 @@ func (l *Loop) fetchScript(page *Page, generation uint64, src, integrity, cors s
 			targets = append(targets, grant.Destination)
 		}
 	}
-	baseFetcher := page.Fetcher.ForScripts(page.Base, targets)
+	baseFetcher := page.Fetcher.ForScriptSources(page.Base, targets, l.cfg.Profile.ScriptSources == profile.ScriptSourcesAny)
 	_, resolveErr := baseFetcher.Resolve(src)
 	destination := ""
 	if parsed, err := url.Parse(src); err == nil {

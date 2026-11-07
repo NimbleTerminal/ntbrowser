@@ -152,3 +152,22 @@ func TestScriptPermissionExpiryDoesNotFetch(t *testing.T) {
 	})
 	<-done
 }
+
+func TestGlynxExternalScriptsDoNotAuthorizeFetch(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/javascript")
+		fmt.Fprint(w, `console.log('EXTERNAL OK')`)
+	}))
+	defer server.Close()
+	p, _ := profile.Builtin("glynx")
+	l, sink, _ := permissionFixture(t, p)
+	base, _ := url.Parse("http://page.test/")
+	f := netpolicy.New(netpolicy.Policy{Origin: base, AllowPrivate: true})
+	body := fmt.Sprintf(`<script src=%q></script><script>
+ const sc=document.createElement('script');sc.src=%q;
+ sc.onload=()=>fetch(%q).then(()=>console.log('FETCH LEAK')).catch(()=>console.log('FETCH DENIED'));
+ document.head.appendChild(sc);
+ </script>`, server.URL, server.URL, server.URL)
+	l.LoadPage(body, base.String(), f)
+	waitLog(t, sink, "FETCH DENIED")
+}

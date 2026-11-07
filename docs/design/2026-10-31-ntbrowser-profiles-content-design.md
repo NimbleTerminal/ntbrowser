@@ -76,18 +76,19 @@ New packages: `profile` (data, validation, printing; no system imports) and `con
    | `navigate` | `off`, `allowlist`, `confirm`, `free` | top-level navigation. `off`: only the start URL given at launch is fetched, and nothing after it |
    | `subresources` | `off`, `origin`, `any` | stylesheets and images, including detached script-created `Image` requests |
    | `frame-dom` | `off`, `same-origin` | bounded synchronous DOM sharing between same-origin frame realms; off by default |
-   | `frames` | `off`, `origin`, `allowlist` | isolated child document realms; off in all built-ins |
+   | `frames` | `off`, `origin`, `allowlist`, `any` | isolated child document realms; off except in glynx |
    | `frame-grants` | source/destination origin pairs | frame document admission only; independent of fetch/scripts/navigation |
    | `fetch` | `off`, `origin`, `allowlist` | `fetch()` from page script |
    | `hosts` | list | fetch/navigation allowlist hosts; does not authorize scripts |
+   | `script-sources` | `grants` (default), `any` | external script origin admission only; requires scripts=external |
    | `script-grants` | source/destination origin pairs | cross-origin script admission only |
    | `script-prompts` | off/on | reader may admit one script request or grant the origin pair for this session; default off |
    | `private-network` | `off`, `on` | loopback and private addresses |
    | `scripts` | `off`, `inline`, `external` | page script |
    | `diagnostics` | boolean, default false | host writes observations to one preopened private file; no page access |
    | `session-storage` | `off`, `on` | bounded per-origin memory store for one browser session; off by default |
-   | `cookies` | `off`, `session` | bounded memory-only cookie store shared across navigation; off in all built-ins |
-   | `dynamic-code` | `off`, `on` | native direct/indirect eval and Function-family string compilation; off in every built-in |
+   | `cookies` | `off`, `session` | bounded memory-only cookie store shared across navigation; off in locked/reader/browse |
+   | `dynamic-code` | `off`, `on` | native direct/indirect eval and Function-family string compilation; off in locked/reader/browse |
    | `clock` | milliseconds | shared resolution for Date, performance and animation-frame timestamps (speculation timing) |
    | `files` | `off`, `start-page`, `temp` | `start-page` reads the one `file:` URL given at launch; `temp` adds the private media directory |
    | `native-code` | `off`, `on` | native code, which exists only in the media helper (decision 21); the main binary never loads any |
@@ -582,3 +583,27 @@ The paint carries its document origin and generation to parent presentation and
 hit-testing. Wheel/keyboard gestures are contained in the focused child;
 stale input cannot target replacement content. Scrolling creates no new host
 authority. It uses the existing coalesced render cadence and watchdog budgets.
+
+
+### Glynx browsing policy (2026-11-07)
+
+The glynx executable defaults to the glynx profile. The ntbrowser executable
+continues to default to browse; locked, reader and browse retain their existing
+permissions. Both use the same runtime and lockdown startup.
+
+Glynx enables scripts=external, script-sources=any, dynamic-code=on,
+subresources=any, frames=any, frame-dom=same-origin, cookies=session,
+session-storage=on, navigate=free and script-navigation=confirm. Fetch remains
+origin-only; script/frame admission never grants fetch response access. The new
+script-sources=any and frames=any modes admit public HTTP(S) destinations and
+redirects only for their respective request purpose. They retain DNS/address
+vetting, credentials restrictions, HTTPS downgrade rejection, MIME/SRI checks,
+body/time limits, and the shared network semaphore. Private network access is
+still off. Invalid/missing base origins fail closed. Explicit grants retain
+their source/destination semantics when script-sources=grants or frames=allowlist.
+
+Same-origin DOM isolation, iframe sandbox restrictions, child budgets, disabled
+child cookies/storage, VM limits, and host filesystem/process confinement remain
+unchanged. No persistence is added. --profile and --profile-file replace the
+application default rather than merging glynx permissions into a restricted
+profile. All gate flags still override the selected profile explicitly.

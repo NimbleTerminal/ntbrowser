@@ -7,6 +7,7 @@ import "nimbleterminal.dev/ntbrowser/origin"
 type Frames string
 
 const (
+	FramesAny       Frames = "any"
 	FramesOff       Frames = "off"
 	FramesOrigin    Frames = "origin"
 	FramesAllowlist Frames = "allowlist"
@@ -29,4 +30,6 @@ func (p Profile) FrameOrigins(source string) []string {
 	}
 	return out
 }
-func (p Profile) FramesOn() bool { return p.Frames == FramesOrigin || p.Frames == FramesAllowlist }
+func (p Profile) FramesOn() bool {
+	return p.Frames == FramesOrigin || p.Frames == FramesAllowlist || p.Frames == FramesAny
+}

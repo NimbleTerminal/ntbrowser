@@ -293,3 +293,18 @@ func TestFrameTreeLimits(t *testing.T) {
 		t.Fatal("churn cap bypassed")
 	}
 }
+
+func TestGlynxCrossOriginFrameKeepsDOMIsolation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprint(w, `<p>child</p><script>
+   let denied=false;try{parent.document}catch(e){denied=e.name==='SecurityError'}
+   parent.postMessage(denied?'ISOLATED CHILD':'DOM LEAK','*');
+  </script>`)
+	}))
+	defer server.Close()
+	p, _ := profile.Builtin("glynx")
+	l, sink, f := permissionFixture(t, p)
+	l.LoadPage(fmt.Sprintf(`<script>addEventListener('message',e=>console.log(e.data))</script><iframe src=%q></iframe>`, server.URL), "http://page.test/", f)
+	waitLog(t, sink, "ISOLATED CHILD")
+}

@@ -31,7 +31,7 @@ def release_notes(changelog, tag):
 def verify_archives(dist):
     expected_targets = {(os, arch) for os in ("linux", "darwin") for arch in ("amd64", "arm64")}
     required = {
-        "ntbrowser", "ntbrowser-media", "README.md", "CHANGELOG.md", "LICENSE",
+        "ntbrowser", "glynx", "ntbrowser-media", "README.md", "CHANGELOG.md", "LICENSE",
         "LICENSE-COMMERCIAL.md", "THIRD_PARTY_NOTICES.md",
         "licenses/ntbrowser-media-THIRD_PARTY_NOTICES.md",
     }
@@ -61,7 +61,7 @@ def verify_archives(dist):
                 raise ValueError(f"wrong package contents: {archive.name}: {sorted(files)}")
             if any(m.size == 0 for m in members):
                 raise ValueError(f"empty package member: {archive.name}")
-            for binary in ("ntbrowser", "ntbrowser-media"):
+            for binary in ("ntbrowser", "glynx", "ntbrowser-media"):
                 if not files[binary].mode & 0o111:
                     raise ValueError(f"non-executable {binary}: {archive.name}")
     if seen != expected_targets:
@@ -90,6 +90,7 @@ def homebrew_cask(dist, tag):
   homepage "https://github.com/NimbleTerminal/ntbrowser"
 
   binary "ntbrowser"
+  binary "glynx"
   binary "ntbrowser-media"
 
   caveats <<~EOS

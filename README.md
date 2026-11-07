@@ -4,6 +4,64 @@ A secure, non-JIT terminal web runtime: a hardened pure-Go JavaScript interprete
 
 `ntbrowser` is a terminal reader mode and small-application runtime. It takes an HTML page that may carry JavaScript, runs that JavaScript inside a pure-Go bytecode interpreter with no path to the operating system, lets the script change the page through a narrow proxy API, and shows the result through `nthtml`'s Bubble Tea viewer. The point is a "cognitive shield": the user gets the page's content and legitimate interactivity, and nothing the page does can reach files, sockets, the environment, or the terminal's escape-sequence surface.
 
+## Two applications, one engine
+
+`ntbrowser` launches a page under a controlled sandbox policy. **glynx** is the
+browsing-oriented application: it grew out of needing a long command-line
+incantation just to visit Google. Both share the DOM, JavaScript runtime,
+networking, renderer and confinement code; compatibility fixes benefit both.
+
+| | ntbrowser | glynx |
+|---|---|---|
+| Purpose | Launch a page under an explicit security profile | Browse from site to site |
+| Default profile | `browse`: inline scripts, explicit extra permissions | `glynx`: external scripts, dynamic code, frames and session state enabled |
+| Interface | Runtime and policy controls | Lynx-style navigation, address/search input |
+| State today | Explicit, limited session features | Memory-only cookies, session storage and navigation history |
+| Persistence | No automatic persistence | Bookmarks and persistent browsing state are future work |
+| Implementation | Shared browser engine | Separate executable using the same engine |
+
+Build both with `task build`, then run:
+
+```sh
+bin/glynx https://www.google.com
+bin/glynx                         # opens address/search input
+bin/glynx "hello world"           # Google search
+bin/glynx --show-profile          # inspect effective permissions
+bin/glynx --profile reader        # replace browsing defaults with reader policy
+```
+
+In glynx, `g` or `Ctrl+L` opens address/search input. Use ↑/↓ to move focus,
+→/Enter to open, ← to go back, `f` to go forward, Page Up/Down to scroll,
+`/` to search the page, `Ctrl+R` to reload, and `q` to quit. Editing fields,
+search input and focused child-frame scrolling keep their own key handling.
+Addresses can omit `https://`; plain words or phrases search Google.
+The name and keymap recall the [historical graphical Lynx proposal](https://wearcam.org/glynx.htm).
+
+Glynx enables `scripts=external`, `script-sources=any`, `dynamic-code=on`,
+`subresources=any`, `frames=any`, `frame-dom=same-origin`,
+`cookies=session`, `session-storage=on`, `navigate=free`, and
+`script-navigation=confirm`. Script and frame admission includes public HTTP(S)
+origins and redirects without per-site grants. HTTPS subrequests cannot downgrade
+to HTTP. Script-request MIME/SRI checks, private-network restrictions, same-origin
+DOM isolation, watchdogs, body limits and host confinement still apply.
+Script fetch remains origin-only; broad script/frame admission does not grant
+cross-origin fetch response access. Script-triggered navigation asks first.
+Child-frame cookies and storage remain disabled.
+
+All policy flags are available in both commands. For example,
+`--script-sources=grants` restores explicit cross-origin script grants and
+`--frames=origin` confines child admission to the page origin.
+`--profile` and `--profile-file` replace the executable's defaults; they never
+silently inherit glynx permissions. Existing ntbrowser defaults are unchanged.
+The zero profile remains closed.
+
+This is a supported `cmd/glynx` application in this repository, not a fork or
+a separate browser engine. Startup and sandbox re-exec live in
+`internal/browsercmd`. More permissive defaults remove setup friction; they do
+not supply missing browser APIs or guarantee that Google/reCAPTCHA accepts the
+browser. Persistent bookmarks, cookies, and downloads are not added by this
+initial separation.
+
 ## Development dependencies
 
 Use Go 1.26.8 and run `task ci` for the full local and GitHub Actions gate:

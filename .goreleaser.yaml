@@ -1,5 +1,5 @@
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
-# Both binaries must be installed together. ntbrowser is also the Linux stage.
+# Browsers share the media helper. Each browser can act as the Linux stage.
 version: 2
 project_name: ntbrowser
 
@@ -16,6 +16,14 @@ builds:
     flags: [-trimpath, -mod=readonly]
     ldflags: [-s -w]
     mod_timestamp: '{{ .CommitTimestamp }}'
+  - id: glynx
+    main: ./cmd/glynx
+    binary: glynx
+    goos: [linux, darwin]
+    goarch: [amd64, arm64]
+    flags: [-trimpath, -mod=readonly]
+    ldflags: [-s -w]
+    mod_timestamp: '{{ .CommitTimestamp }}'
   - id: ntbrowser-media
     dir: cmd/ntbrowser-media
     main: .
@@ -27,7 +35,7 @@ builds:
     mod_timestamp: '{{ .CommitTimestamp }}'
 
 archives:
-  - ids: [ntbrowser, ntbrowser-media]
+  - ids: [ntbrowser, glynx, ntbrowser-media]
     formats: [tar.gz]
     name_template: '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}'
     files:
@@ -56,7 +64,7 @@ release:
 notarize:
   macos:
     - enabled: '{{ not .IsSnapshot }}'
-      ids: [ntbrowser]
+      ids: [ntbrowser, glynx]
       sign:
         certificate: '{{ .Env.MACOS_SIGN_P12 }}'
         password: '{{ .Env.MACOS_SIGN_PASSWORD }}'

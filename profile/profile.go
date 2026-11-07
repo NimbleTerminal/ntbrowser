@@ -25,6 +25,7 @@ type (
 	Subresources     string
 	Fetch            string
 	Scripts          string
+	ScriptSources    string
 	DynamicCode      string
 	Cookies          string
 	SessionStorage   string
@@ -62,6 +63,9 @@ const (
 	DynamicOff DynamicCode = "off"
 	DynamicOn  DynamicCode = "on"
 
+	ScriptSourcesGrants ScriptSources = "grants"
+	ScriptSourcesAny    ScriptSources = "any"
+
 	ScriptsOff      Scripts = "off"
 	ScriptsInline   Scripts = "inline"
 	ScriptsExternal Scripts = "external"
@@ -91,6 +95,7 @@ const defaultClockMillis = 10
 // Profile is one position for each gate. Code compares against the open
 // values, so an empty field is closed.
 type Profile struct {
+	ScriptSources ScriptSources `json:"script-sources,omitempty"`
 	FrameDOM      string        `json:"frame-dom,omitempty"`
 	Frames        Frames        `json:"frames,omitempty"`
 	FrameGrants   []ScriptGrant `json:"frame-grants,omitempty"`
@@ -124,9 +129,22 @@ type Profile struct {
 	Enforcement              Enforcement      `json:"enforcement,omitempty"`
 }
 
-// Builtin returns a built-in profile: locked, reader or browse.
+// Builtin returns a built-in profile: locked, reader, browse or glynx.
 func Builtin(name string) (Profile, bool) {
 	switch name {
+	case "glynx":
+		p, _ := Builtin("browse")
+		p.Name = name
+		p.Scripts = ScriptsExternal
+		p.ScriptSources = ScriptSourcesAny
+		p.DynamicCode = DynamicOn
+		p.Cookies = CookiesSession
+		p.SessionStorage = SessionStorageOn
+		p.Frames = FramesAny
+		p.FrameDOM = "same-origin"
+		p.Fetch = FetchOrigin
+		p.ScriptNavigation = ScriptNavConfirm
+		return p, true
 	case "locked":
 		return Profile{Name: name, Navigate: NavOff, Subresources: SubOff, Fetch: FetchOff, Scripts: ScriptsOff, Files: FilesOff, Media: MediaOff, Clipboard: ClipboardOff, ClockMillis: defaultClockMillis, MaxMediaBytes: DefaultMaxMediaBytes, Enforcement: EnforceRequired}, true
 	case "reader":
@@ -212,10 +230,11 @@ func (p Profile) check() error {
 		oneOf("navigate", p.Navigate, NavOff, NavAllowlist, NavConfirm, NavFree),
 		oneOf("subresources", p.Subresources, SubOff, SubOrigin, SubAny),
 		oneOf("fetch", p.Fetch, FetchOff, FetchOrigin, FetchAllowlist),
+		oneOf("script-sources", p.ScriptSources, ScriptSourcesGrants, ScriptSourcesAny),
 		oneOf("scripts", p.Scripts, ScriptsOff, ScriptsInline, ScriptsExternal),
 		oneOf("session-storage", p.SessionStorage, SessionStorageOff, SessionStorageOn),
 		oneOf("cookies", p.Cookies, CookiesOff, CookiesSession),
-		oneOf("frames", p.Frames, FramesOff, FramesOrigin, FramesAllowlist),
+		oneOf("frames", p.Frames, FramesOff, FramesOrigin, FramesAllowlist, FramesAny),
 		oneOf("frame-dom", p.FrameDOM, "off", "same-origin"),
 		oneOf("dynamic-code", p.DynamicCode, DynamicOff, DynamicOn),
 		oneOf("files", p.Files, FilesOff, FilesStartPage, FilesTemp),
@@ -350,6 +369,7 @@ func (p Profile) Table(s Strengths) string {
 		{"fetch", orOff(p.Fetch), "fetch() from page script"},
 		{"hosts", strings.Join(p.Hosts, ","), "fetch/navigation allowlists; does not authorize scripts"},
 		{"script-prompts", onOff(p.ScriptPrompts), "ask for one-request or session script grants"},
+		{"script-sources", p.ScriptSourceMode(), "external script origins; independent of fetch/navigation"},
 		{"script-grants", fmt.Sprint(p.ScriptGrants), "source origin to destination origin; scripts only"},
 		{"private-network", onOff(p.PrivateNetwork), "loopback and private addresses"},
 		{"scripts", orOff(p.Scripts), "page script"},
@@ -359,7 +379,7 @@ func (p Profile) Table(s Strengths) string {
 		{"session-storage-total-bytes", strconv.Itoa(p.StorageTotalBytes()), "session-wide key/value bytes"},
 		{"cookies", orOff(p.Cookies), "in-memory session cookies; cross-origin subrequests excluded"},
 		{"frame-dom", orOff(p.FrameDOM), "bounded same-origin DOM bridge; no shared JavaScript globals"},
-		{"frames", orOff(p.Frames), "isolated child pages; same origin or explicit frame grants"},
+		{"frames", orOff(p.Frames), "isolated child pages; origin, explicit grants, or any public origin"},
 		{"frame-grants", fmt.Sprint(p.FrameGrants), "frame source/destination origins; no script or fetch grants"},
 		{"dynamic-code", orOff(p.DynamicCode), "eval and Function-family string compilation"},
 		{"frame-ms", strconv.Itoa(p.FrameInterval()), "minimum frame interval"},
@@ -427,4 +447,12 @@ func (p Profile) StorageTotalBytes() int {
 		return p.SessionStorageTotalBytes
 	}
 	return 8 << 20
+}
+
+// ScriptSourceMode reports the restrictive default explicitly.
+func (p Profile) ScriptSourceMode() string {
+	if p.ScriptSources == ScriptSourcesAny {
+		return "any"
+	}
+	return "grants"
 }

@@ -70,6 +70,7 @@ tasks:
     cmds:
       - go build -mod=readonly ./...
       - go build -mod=readonly -o bin/ntbrowser{{.EXE}} ./cmd/ntbrowser
+      - go build -mod=readonly -o bin/glynx{{.EXE}} ./cmd/glynx
       - cd cmd/ntbrowser-media && go build -mod=readonly -o ../../bin/ntbrowser-media{{.EXE}} .
 
   test:
@@ -82,6 +83,7 @@ tasks:
     desc: Build the binary without the CJK fallback face (about 4 MB smaller)
     cmds:
       - go build -mod=readonly -tags nocjk -o bin/ntbrowser-nocjk{{.EXE}} ./cmd/ntbrowser
+      - go build -mod=readonly -tags nocjk -o bin/glynx-nocjk{{.EXE}} ./cmd/glynx
 
   test-nocjk:
     desc: Run the loop tests with -tags nocjk

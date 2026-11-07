@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Neomantra Corp. All rights reserved.
 // SPDX-License-Identifier: AGPL-3.0-only WITH LicenseRef-NimbleTerminal-Linking-Exception OR LicenseRef-Neomantra-Commercial
 
-package main
+package browsercmd
 
 import (
 	"os"
@@ -102,7 +102,7 @@ func TestHelperOnlyWhenVideo(t *testing.T) {
 // All native code lives in cmd/ntbrowser-media: a compromised page must never
 // share a process with it.
 func TestMainDoesNotLinkNativeCode(t *testing.T) {
-	out, err := exec.Command("go", "list", "-deps", ".").CombinedOutput()
+	out, err := exec.Command("go", "list", "-deps", "../../cmd/ntbrowser", "../../cmd/glynx").CombinedOutput()
 	if err != nil {
 		t.Fatalf("%v: %s", err, out)
 	}
@@ -254,7 +254,7 @@ func TestFrameFlags(t *testing.T) {
 	if c.Profile.Frames != profile.FramesAllowlist || len(c.Profile.FrameOrigins("https://parent.test")) != 1 || len(c.Profile.ScriptGrants) != 0 {
 		t.Fatalf("%+v", c.Profile)
 	}
-	for _, args := range [][]string{{"--frames=any"}, {"--allow-frame=child.test"}} {
+	for _, args := range [][]string{{"--frames=unknown"}, {"--allow-frame=child.test"}} {
 		if _, err := parseArgs(args); err == nil {
 			t.Fatalf("accepted %v", args)
 		}

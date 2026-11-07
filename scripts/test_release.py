@@ -27,7 +27,7 @@ class ReleaseTests(unittest.TestCase):
 
     def packages(self, dist, missing=None, executable=True):
         paths = []
-        files = ["ntbrowser", "ntbrowser-media", "README.md", "CHANGELOG.md", "LICENSE", "LICENSE-COMMERCIAL.md", "THIRD_PARTY_NOTICES.md", "licenses/ntbrowser-media-THIRD_PARTY_NOTICES.md"]
+        files = ["ntbrowser", "glynx", "ntbrowser-media", "README.md", "CHANGELOG.md", "LICENSE", "LICENSE-COMMERCIAL.md", "THIRD_PARTY_NOTICES.md", "licenses/ntbrowser-media-THIRD_PARTY_NOTICES.md"]
         for os in ("linux", "darwin"):
             for arch in ("amd64", "arm64"):
                 path = dist / f"ntbrowser_0.1.0_{os}_{arch}.tar.gz"
@@ -38,7 +38,7 @@ class ReleaseTests(unittest.TestCase):
                             continue
                         member = tarfile.TarInfo(name)
                         member.size = 7
-                        member.mode = 0o755 if executable and name.startswith("ntbrowser") else 0o644
+                        member.mode = 0o755 if executable and name in ("ntbrowser", "glynx", "ntbrowser-media") else 0o644
                         archive.addfile(member, io.BytesIO(b"fixture"))
         (dist / "checksums.txt").write_text("".join(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.name}\n" for p in paths))
         return paths
@@ -50,7 +50,7 @@ class ReleaseTests(unittest.TestCase):
             verify_archives(dist)
 
     def test_missing_helper_or_license_and_nonexecutable_binary(self):
-        for missing, executable in (("ntbrowser-media", True), ("licenses/ntbrowser-media-THIRD_PARTY_NOTICES.md", True), (None, False)):
+        for missing, executable in (("glynx", True), ("ntbrowser-media", True), ("licenses/ntbrowser-media-THIRD_PARTY_NOTICES.md", True), (None, False)):
             with tempfile.TemporaryDirectory() as directory:
                 dist = Path(directory)
                 self.packages(dist, missing, executable)
@@ -79,6 +79,7 @@ class ReleaseTests(unittest.TestCase):
                 if "_darwin_" in archive.name:
                     self.assertIn(hashlib.sha256(archive.read_bytes()).hexdigest(), cask)
             self.assertIn('binary "ntbrowser"', cask)
+            self.assertIn('binary "glynx"', cask)
             self.assertIn('binary "ntbrowser-media"', cask)
             self.assertIn('version "0.1.0"', cask)
             with self.assertRaises(FileNotFoundError):

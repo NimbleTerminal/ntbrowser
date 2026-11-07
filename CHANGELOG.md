@@ -2,11 +2,18 @@
 
 ## Unreleased
 
+- Add `glynx`, a browsing-focused executable sharing ntbrowser's engine and
+  sandbox startup. Its profile enables public script/frame admission and
+  memory-only session state without per-site command-line grants. Add Lynx-style
+  navigation and address/search input; retain ntbrowser's existing defaults,
+  network vetting and same-origin DOM isolation. Build and package both browser
+  executables with the shared media helper.
+
 - Add mandatory macOS signing/notarization and stable Homebrew cask publishing
-  alongside verified Linux/macOS release archives containing both executables.
+  alongside verified Linux/macOS release archives containing both browsers and their media helper.
 
 - Add Linux/macOS CI gates and release packaging for amd64/arm64. Archives
-  contain both executables and their license notices, with SHA-256 checksums.
+  contain both browsers and their media helper and their license notices, with SHA-256 checksums.
   Version tags publish after source checks and archive verification; manual
   dispatch can package an existing tag without moving it.
 

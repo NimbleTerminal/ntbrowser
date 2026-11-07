@@ -7,7 +7,12 @@ import "net/url"
 // ForFrame retains network vetting and the parent's semaphore, but grants only
 // explicit frame destinations. Frame requests carry no cookies.
 func (f *Fetcher) ForFrame(base string, origins []string) *Fetcher {
-	d := f.ForScripts(base, origins)
+	return f.ForFrameSources(base, origins, false)
+}
+
+// ForFrameSources applies the explicit frames=any gate without granting fetch or script authority.
+func (f *Fetcher) ForFrameSources(base string, origins []string, any bool) *Fetcher {
+	d := f.ForScriptSources(base, origins, any)
 	p := d.p
 	p.MaxBody = 256 << 10
 	p.Cookies = nil

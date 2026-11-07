@@ -3,7 +3,7 @@
 
 //go:build darwin || linux
 
-package main
+package browsercmd
 
 import (
 	"net"

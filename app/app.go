@@ -68,6 +68,7 @@ type shutdownReadyMsg struct{}
 const shutdownGrace = 150 * time.Millisecond
 
 type Model struct {
+	glynx             bool
 	scriptPermissions []loop.ScriptPermissionMsg
 
 	loop              *loop.Loop
@@ -618,6 +619,23 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if !searching {
+			if m.glynx && m.mode == modeBrowse && !m.overlay() && !m.embeddedFocus && m.pendingNav == "" {
+				switch v.String() {
+				case "g":
+					return m, m.openAddress()
+				case "left":
+					return m, m.step(-1)
+				case "f":
+					return m, m.step(1)
+				case "right":
+					v = tea.KeyPressMsg{Code: tea.KeyEnter}
+				case "down":
+					v = tea.KeyPressMsg{Code: tea.KeyTab}
+				case "up":
+					v = tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
+				}
+				msg = v
+			}
 			if m.media != nil {
 				switch v.String() {
 				case "esc":
@@ -774,7 +792,11 @@ func (m *Model) View() tea.View {
 	if m.notEnforced {
 		enforced = " (not OS-enforced)"
 	}
-	help := "\n ntbrowser · " + ansi.Truncate(clean(m.title), 40, "…") + pos + " · profile " + clean(m.profile.Name) + enforced + " · Tab focus · Enter open · ⌫ back · ⌥→ fwd · ^L address · ^R reload · / search · q quit"
+	name, keys := "ntbrowser", "Tab focus · Enter open · ⌫ back · ⌥→ fwd · ^L address"
+	if m.glynx {
+		name, keys = "glynx", "↑↓ focus · → open · ← back · f fwd · g address/search"
+	}
+	help := "\n " + name + " · " + ansi.Truncate(clean(m.title), 40, "…") + pos + " · profile " + clean(m.profile.Name) + enforced + " · " + keys + " · ^R reload · / search · q quit"
 	if h := m.helpLine(); h != "" {
 		help = "\n" + h
 	}
@@ -851,3 +873,6 @@ func (m *Model) SetCookies(s *cookies.Store) {
 		m.policy.Cookies = s
 	}
 }
+
+// SetGlynx selects the browsing interface independently of the security profile.
+func (m *Model) SetGlynx() { m.glynx = true }
