@@ -95,3 +95,34 @@ func TestDiagnosticShortFlagPreservesDashFilename(t *testing.T) {
 		t.Fatal(c, err)
 	}
 }
+
+func TestProcessHeapBudgets(t *testing.T) {
+	for _, tc := range []struct {
+		command string
+		want    uint64
+	}{{"ntbrowser", 256}, {"glynx", 512}} {
+		c, err := parseCommandArgs(tc.command, nil)
+		if err != nil || c.HeapBudgetMiB != tc.want {
+			t.Fatalf("%s default: %d, %v", tc.command, c.HeapBudgetMiB, err)
+		}
+		for _, value := range []string{"64", "768", "2048"} {
+			c, err := parseCommandArgs(tc.command, []string{"--heap-budget-mib=" + value})
+			if err != nil {
+				t.Fatal(err)
+			}
+			arg, err := encodeState(state{Config: c})
+			if err != nil {
+				t.Fatal(err)
+			}
+			decoded, ok, err := decodeState([]string{arg})
+			if err != nil || !ok || decoded.Config.HeapBudgetMiB != c.HeapBudgetMiB {
+				t.Fatalf("lost heap budget during reexec: %v", err)
+			}
+		}
+		for _, value := range []string{"0", "63", "2049", "-1", "18446744073709551615"} {
+			if _, err := parseCommandArgs(tc.command, []string{"--heap-budget-mib=" + value}); err == nil {
+				t.Fatalf("accepted budget %s", value)
+			}
+		}
+	}
+}

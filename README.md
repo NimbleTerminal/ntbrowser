@@ -391,8 +391,9 @@ Ctrl+C exits from every focus mode, including page search, address entry,
 forms, frames, and devtools. Press it again during shutdown to quit immediately
 if graphics cleanup is waiting.
 
-The heap guard defaults to 256 MiB of **process-wide Go heap**, including the
-renderer. It collects garbage and rechecks before disabling scripting, then
+The heap guard defaults to 512 MiB in glynx and 256 MiB in ntbrowser, measured
+as **process-wide Go heap**, including the renderer. Set `--heap-budget-mib=768`
+to override it (64–2048 MiB). It collects garbage and rechecks before disabling scripting, then
 reports the measured bytes and budget. This is not a per-script memory meter;
 the last rendered page remains available when scripting is disabled.
 

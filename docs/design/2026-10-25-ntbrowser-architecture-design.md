@@ -113,8 +113,10 @@ The heap-objects metric is process-wide and includes renderer allocations and
 uncollected garbage; it is not a per-page JavaScript measurement. After an entry
 exceeds `HeapBudget`, the implementation now performs one GC and samples again
 before disabling scripting. The entry watchdog is already disarmed, so collection
-cannot produce a script-time strike. The 256 MiB default and process-wide scope
-remain unchanged. A retained allocation bomb still disables its page; transient
+cannot produce a script-time strike. The library and ntbrowser defaults remain 256 MiB; glynx uses 512 MiB
+to accommodate browsing/rendering allocations. The host-only
+`--heap-budget-mib` flag accepts 64–2048 MiB, persists across confinement re-exec,
+and is recorded in diagnostics. Scope remains process-wide. A retained allocation bomb still disables its page; transient
 render/navigation garbage alone does not. Error messages report measured bytes
 after collection and the budget, which also appear in console diagnostics.
 Concurrent renderer allocations can still contribute to that sample: this is a

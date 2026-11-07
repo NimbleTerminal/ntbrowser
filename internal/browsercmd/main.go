@@ -43,14 +43,15 @@ import (
 // config is what the command line decides. Profile is the effective profile:
 // the chosen one with the gate flags applied, validated and then frozen.
 type config struct {
-	Diagnostics string
-	Profile     profile.Profile
-	Start       string
-	Width       int
-	Slice       time.Duration
-	Seed        uint64
-	ShowProfile bool
-	Chunked     bool
+	Diagnostics   string
+	Profile       profile.Profile
+	Start         string
+	Width         int
+	Slice         time.Duration
+	HeapBudgetMiB uint64
+	Seed          uint64
+	ShowProfile   bool
+	Chunked       bool
 }
 
 func parseArgs(args []string) (config, error) { return parseCommandArgs("ntbrowser", args) }
@@ -58,8 +59,10 @@ func parseArgs(args []string) (config, error) { return parseCommandArgs("ntbrows
 func parseCommandArgs(command string, args []string) (config, error) {
 	var c config
 	defaultProfile := "browse"
+	defaultHeapMiB := uint64(256)
 	if command == "glynx" {
 		defaultProfile = "glynx"
+		defaultHeapMiB = 512
 	}
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
 	fs.StringVarP(&c.Diagnostics, "diagnostics", "d", "", "write bounded JSONL diagnostics to a new owner-only file")
@@ -96,9 +99,13 @@ func parseCommandArgs(command string, args []string) (config, error) {
 	fs.BoolVar(&c.Chunked, "chunked", false, "read long pages in bounded semantic chunks (reduced CSS support)")
 	fs.IntVar(&c.Width, "width", 800, "document pixel width")
 	fs.DurationVar(&c.Slice, "slice", 50*time.Millisecond, "JS time slice per callback")
+	fs.Uint64Var(&c.HeapBudgetMiB, "heap-budget-mib", defaultHeapMiB, "process Go heap budget after GC in MiB (64..2048; includes rendering)")
 	fs.Uint64Var(&c.Seed, "seed", 0, "PRNG seed for Math.random, for reproducible runs (0 = time-based); the clock is never fixed, timers depend on it")
 	if err := fs.Parse(legacyLongFlags(fs, args)); err != nil {
 		return c, err
+	}
+	if c.HeapBudgetMiB < 64 || c.HeapBudgetMiB > 2048 {
+		return c, fmt.Errorf("--heap-budget-mib must be between 64 and 2048")
 	}
 	p, ok := profile.Builtin(*name)
 	if !ok {
@@ -358,12 +365,12 @@ func Run(command string) int {
 				fmt.Fprintln(os.Stderr, "diagnostics:", err)
 			}
 		}()
-		trace.Record("session", map[string]any{"profile": c.Profile, "strengths": strengths})
+		trace.Record("session", map[string]any{"profile": c.Profile, "strengths": strengths, "heap_budget_bytes": c.HeapBudgetMiB << 20})
 	}
 	// Process-wide soft heap cap: Goja has no per-runtime memory limit, so
 	// the GC is told to work harder past this point and dom/nthtml limits
 	// keep individual allocations bounded.
-	debug.SetMemoryLimit(512 << 20)
+	debug.SetMemoryLimit(int64(max(uint64(512), c.HeapBudgetMiB)) << 20)
 
 	if c.Profile.ReadsStartFile() {
 		// The only os.Open in the program; installed into app, never jsvm.
@@ -374,7 +381,7 @@ func Run(command string) int {
 	sink := sinkFunc(func(msg tea.Msg) { program.Send(msg) })
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	script := jsvm.Config{Slice: c.Slice}
+	script := jsvm.Config{Slice: c.Slice, HeapBudget: c.HeapBudgetMiB << 20}
 	if c.Seed != 0 {
 		script.Rand = seededRand(c.Seed)
 	}

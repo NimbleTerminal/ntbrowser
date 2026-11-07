@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Give glynx a 512 MiB process-heap budget while retaining ntbrowser's 256 MiB
+  default. Add `--heap-budget-mib` (64–2048) and record the effective budget in
+  diagnostics; the post-GC guard and all resource/authority gates remain active.
+
 - Handle Ctrl+C before all focused UI and page input, including page search.
   A second press during graphics shutdown quits immediately.
 
