@@ -37,6 +37,7 @@ import (
 	"nimbleterminal.dev/nthtml"
 	"nimbleterminal.dev/nthtml/document"
 
+	"nimbleterminal.dev/ntbrowser/devtools"
 	"nimbleterminal.dev/ntbrowser/diagnostics"
 	"nimbleterminal.dev/ntbrowser/dom"
 	"nimbleterminal.dev/ntbrowser/jsvm"
@@ -83,13 +84,14 @@ type (
 // Page is one navigation: tree + sandbox + policy. Replacing it discards the
 // whole JS heap, which is how cross-page isolation is achieved.
 type Page struct {
-	domPins         map[jsvm.DOMRef]bool
-	frameScroll     image.Point
-	scrollEvent     bool
-	frameID         uint64
-	frames          map[dom.NodeID]*childFrame
-	displayedFrames map[dom.NodeID]framePresentation
-	frameFocus      dom.NodeID
+	debugNavigation, debugRevision uint64
+	domPins                        map[jsvm.DOMRef]bool
+	frameScroll                    image.Point
+	scrollEvent                    bool
+	frameID                        uint64
+	frames                         map[dom.NodeID]*childFrame
+	displayedFrames                map[dom.NodeID]framePresentation
+	frameFocus                     dom.NodeID
 
 	scriptPermissions map[uint64]*scriptPermission
 
@@ -316,7 +318,14 @@ func (l *Loop) forward() {
 func (l *Loop) send(m tea.Msg) {
 	switch v := m.(type) {
 	case LogMsg:
-		l.cfg.Trace.Record("console", v)
+		var frame, revision uint64
+		if l.page != nil {
+			revision = l.page.debugRevision
+			if l.cfg.frameParent != 0 {
+				frame = l.page.frameID
+			}
+		}
+		l.cfg.Trace.Record("console", map[string]any{"Level": v.Level, "Line": v.Line, "frame": frame, "revision": revision})
 	case FrameMsg:
 		if v.Err != nil {
 			l.cfg.Trace.Record("render_error", v.Err.Error())
@@ -421,7 +430,7 @@ func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) ui
 		if l.cfg.Profile.Media == profile.MediaVideo {
 			tree.MarkVideos()
 		}
-		page := &Page{Tree: tree, Fetcher: fetcher, Base: base, firstFrame: true, budgetWarned: map[string]bool{}, refused: map[string]bool{}, firing: map[dom.NodeID]bool{}, resetting: map[dom.NodeID]bool{}}
+		page := &Page{debugNavigation: gen, debugRevision: devtools.NextRevision(), Tree: tree, Fetcher: fetcher, Base: base, firstFrame: true, budgetWarned: map[string]bool{}, refused: map[string]bool{}, firing: map[dom.NodeID]bool{}, resetting: map[dom.NodeID]bool{}}
 		page.ctx, page.cancel = context.WithCancel(l.ctx)
 		page.paintCtx, page.paintCancel = context.WithCancel(l.ctx)
 		cfg.DynamicScripts = l.cfg.Profile.ScriptsOn()

@@ -68,6 +68,7 @@ type shutdownReadyMsg struct{}
 const shutdownGrace = 150 * time.Millisecond
 
 type Model struct {
+	debug             debugPanel
 	glynx             bool
 	scriptPermissions []loop.ScriptPermissionMsg
 
@@ -302,6 +303,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.viewer.Update(msg) // graphics cleanup still flows
 		}
 		return m, nil
+	}
+	if handled, cmd := m.debugUpdate(msg); handled {
+		return m, cmd
 	}
 	if key, ok := msg.(tea.KeyPressMsg); ok && key.String() == "ctrl+l" {
 		return m, m.openAddress()
@@ -814,6 +818,9 @@ func (m *Model) View() tea.View {
 		if m.addressError != "" {
 			help = "\n" + ansi.Truncate(clean(m.addressError), max(1, m.cols), "…")
 		}
+	}
+	if m.debug.open {
+		body += "\n" + m.debugView()
 	}
 	v := tea.NewView(body + "\n" + status + help)
 	v.AltScreen = true

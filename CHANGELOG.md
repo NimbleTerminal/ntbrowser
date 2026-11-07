@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add opt-in read-only devtools (`--devtools`, F12) to both commands, with a
+  transport-independent versioned inspection API, owner-loop runtime/DOM/policy
+  snapshots, and bounded console/network events. Add `-d FILE` for diagnostics.
+  Remote listeners, code evaluation and breakpoints remain unavailable.
+
 - Add `glynx`, a browsing-focused executable sharing ntbrowser's engine and
   sandbox startup. Its profile enables public script/frame admission and
   memory-only session state without per-site command-line grants. Add Lynx-style

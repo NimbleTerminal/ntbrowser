@@ -9,7 +9,7 @@ env:
 vars:
   EXE: '{{if eq OS "windows"}}.exe{{end}}'
   RACE: '{{if eq OS "darwin"}}-race{{end}}' # needs cgo on Linux
-  WASM_PKGS: ./dom ./jsvm ./loop ./netpolicy ./subres ./profile ./content
+  WASM_PKGS: ./devtools ./dom ./jsvm ./loop ./netpolicy ./subres ./profile ./content
 
 tasks:
   default:

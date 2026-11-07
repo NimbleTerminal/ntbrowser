@@ -31,6 +31,7 @@ import (
 
 	"nimbleterminal.dev/ntbrowser/app"
 	"nimbleterminal.dev/ntbrowser/cookies"
+	"nimbleterminal.dev/ntbrowser/devtools"
 	"nimbleterminal.dev/ntbrowser/diagnostics"
 	"nimbleterminal.dev/ntbrowser/jsvm"
 	"nimbleterminal.dev/ntbrowser/loop"
@@ -61,7 +62,8 @@ func parseCommandArgs(command string, args []string) (config, error) {
 		defaultProfile = "glynx"
 	}
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
-	fs.StringVar(&c.Diagnostics, "diagnostics", "", "write bounded JSONL diagnostics to a new owner-only file")
+	fs.StringVarP(&c.Diagnostics, "diagnostics", "d", "", "write bounded JSONL diagnostics to a new owner-only file")
+	debugTools := fs.Bool("devtools", false, "enable host-only read-only devtools (F12); no remote listener")
 	name := fs.String("profile", defaultProfile, "built-in profile: locked, reader, browse, glynx")
 	file := fs.String("profile-file", "", "JSON profile file (overrides --profile)")
 	fs.BoolVar(&c.ShowProfile, "show-profile", false, "print the effective profile and exit")
@@ -112,6 +114,9 @@ func parseCommandArgs(command string, args []string) (config, error) {
 		}
 	}
 	chosen := p
+	if fs.Changed("devtools") {
+		p.DevTools = *debugTools
+	}
 	if *scriptSources != "" {
 		p.ScriptSources = profile.ScriptSources(*scriptSources)
 	}
@@ -330,9 +335,24 @@ func Run(command string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
+	var browserLoop *loop.Loop
+	var inspector *devtools.Session
+	var observer func(string, any)
+	if c.Profile.DevTools {
+		inspector = devtools.New(true, func(ctx context.Context, req devtools.Request) (devtools.Response, error) {
+			return browserLoop.Inspect(ctx, req)
+		})
+		defer inspector.Close()
+		observer = inspector.Observe
+	}
 	var trace *diagnostics.Recorder
-	if diagnostic != nil {
-		trace = diagnostics.New(diagnostic)
+	if diagnostic != nil || inspector != nil {
+		// A typed nil *os.File must not become a non-nil io.Writer.
+		var writer io.Writer
+		if diagnostic != nil {
+			writer = diagnostic
+		}
+		trace = diagnostics.NewObserved(writer, observer)
 		defer func() {
 			if err := trace.Close(); err != nil {
 				fmt.Fprintln(os.Stderr, "diagnostics:", err)
@@ -372,12 +392,14 @@ func Run(command string) int {
 	policy.Cookies = cookieStore
 	policy.Trace = trace
 	l := loop.New(ctx, loop.Config{Trace: trace, Chunked: c.Chunked, Profile: c.Profile, Width: c.Width, Script: script, Subresources: subresCfg, SubresourceTransport: app.SubresourceTransport(policy, subresCfg)}, sink)
+	browserLoop = l
 	go l.Run()
 
 	m := app.New(l, c.Profile, c.Start)
 	if command == "glynx" {
 		m.SetGlynx()
 	}
+	m.SetDevTools(inspector)
 	m.SetDiagnostics(trace)
 	m.SetCookies(cookieStore)
 	defer m.Cleanup()

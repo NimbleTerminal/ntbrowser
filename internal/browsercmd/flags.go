@@ -30,6 +30,12 @@ func legacyLongFlags(fs *pflag.FlagSet, args []string) []string {
 		name = strings.TrimPrefix(name, "-")
 		name, _, equals := strings.Cut(name, "=")
 		f := fs.Lookup(name)
+		if f == nil && len(name) == 1 && !strings.HasPrefix(arg, "--") {
+			if short := fs.ShorthandLookup(name); short != nil {
+				value = !equals && short.NoOptDefVal == ""
+				continue
+			}
+		}
 		if f == nil && arg == "-help" {
 			out[i] = "--help"
 		}

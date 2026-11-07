@@ -85,6 +85,7 @@ New packages: `profile` (data, validation, printing; no system imports) and `con
    | `script-prompts` | off/on | reader may admit one script request or grant the origin pair for this session; default off |
    | `private-network` | `off`, `on` | loopback and private addresses |
    | `scripts` | `off`, `inline`, `external` | page script |
+   | `devtools` | boolean, default false | host-only read-only inspection API and local panel; no remote listener or evaluation |
    | `diagnostics` | boolean, default false | host writes observations to one preopened private file; no page access |
    | `session-storage` | `off`, `on` | bounded per-origin memory store for one browser session; off by default |
    | `cookies` | `off`, `session` | bounded memory-only cookie store shared across navigation; off in locked/reader/browse |
@@ -607,3 +608,29 @@ child cookies/storage, VM limits, and host filesystem/process confinement remain
 unchanged. No persistence is added. --profile and --profile-file replace the
 application default rather than merging glynx permissions into a restricted
 profile. All gate flags still override the selected profile explicitly.
+
+### Read-only devtools (2026-11-07)
+
+The devtools gate is independent of diagnostics and closed in every built-in.
+It authorizes host inspection only: capabilities, bounded frame/runtime/policy
+snapshots, paginated DOM snapshots, and cursor-based recent event retrieval.
+It does not authorize evaluation, DOM edits, page controls, breakpoints, or
+remote connections. --devtools opens the local panel with F12; -d remains the
+short form for the separate --diagnostics file capture.
+
+The versioned devtools.Session API owns authorization, session identity, request
+limits, a bounded event ring and capability discovery. Loop inspection posts to
+the owner queue and returns copied data under the frame-tree owner lock; it never
+enters Goja. DOM requests require a session, frame and unique document revision.
+Pending navigation and detached/replaced frames invalidate inspection handles.
+No page binding exposes the session. A future remote adapter must authenticate
+before exposing this same API; a session ID is correlation, not a credential.
+
+At most eight requests may be outstanding, with two-second deadlines, 50 items
+per page, 256 events and 4096 bytes per event. Event polling reports overwritten
+history. DOM output omits form values, script/style/textarea text, arbitrary
+attributes, and URL credentials/query/fragment data. Network events omit headers,
+bodies and raw error strings that could contain credentials. Console messages
+and visible DOM text can still contain page data. No storage/cookie inspection
+or implicit getter evaluation is provided. Existing JSONL capture retains its
+separate opt-in full diagnostic semantics.

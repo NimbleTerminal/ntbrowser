@@ -32,9 +32,9 @@ func isTextKind(kind string) bool { return kind == "text" || kind == "password" 
 // panelRows is how many rows the editor panel takes from the viewer.
 func (m *Model) panelRows() int {
 	if m.mode == modeEdit && m.focus.Control.Kind == "textarea" {
-		return textareaRows
+		return textareaRows + m.debugRows()
 	}
-	return 0
+	return m.debugRows()
 }
 
 // label is the focused element's name for the status line (page text).

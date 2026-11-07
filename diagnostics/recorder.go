@@ -16,19 +16,31 @@ const MaxBytes = 32 << 20
 const MaxRecord = 4 << 20
 
 type Recorder struct {
-	mu      sync.Mutex
-	queue   chan []byte
-	done    chan struct{}
-	closed  bool
-	dropped uint64
-	seq     uint64
-	err     error
+	observer func(string, any)
+	mu       sync.Mutex
+	queue    chan []byte
+	done     chan struct{}
+	closed   bool
+	dropped  uint64
+	seq      uint64
+	err      error
 }
 
 // New takes a preopened writer. Call Close before closing the writer.
 func New(w io.Writer) *Recorder {
-	r := &Recorder{queue: make(chan []byte, 8), done: make(chan struct{})}
-	go r.write(w)
+	return NewObserved(w, nil)
+}
+
+// NewObserved fans host observations to an observer and an optional file writer.
+// The observer must be bounded, nonblocking, and must not call back into Recorder.
+func NewObserved(w io.Writer, observer func(string, any)) *Recorder {
+	r := &Recorder{observer: observer, queue: make(chan []byte, 8), done: make(chan struct{})}
+	if w == nil {
+		r.queue = nil
+		close(r.done)
+	} else {
+		go r.write(w)
+	}
 	return r
 }
 
@@ -41,6 +53,12 @@ func (r *Recorder) Record(kind string, data any) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.closed {
+		return
+	}
+	if r.observer != nil {
+		r.observer(kind, data)
+	}
+	if r.queue == nil {
 		return
 	}
 	r.seq++
@@ -96,7 +114,9 @@ func (r *Recorder) Close() error {
 	r.mu.Lock()
 	if !r.closed {
 		r.closed = true
-		close(r.queue)
+		if r.queue != nil {
+			close(r.queue)
+		}
 	}
 	r.mu.Unlock()
 	<-r.done

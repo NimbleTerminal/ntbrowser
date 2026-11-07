@@ -62,6 +62,47 @@ not supply missing browser APIs or guarantee that Google/reCAPTCHA accepts the
 browser. Persistent bookmarks, cookies, and downloads are not added by this
 initial separation.
 
+## Read-only devtools
+
+Both applications offer an opt-in inspector:
+
+```sh
+glynx --devtools https://www.google.com
+ntbrowser --devtools https://example.com
+glynx --devtools -d /tmp/glynx-debug-1.jsonl https://www.google.com
+```
+
+Press **F12** to open or close the panel. Tab switches between overview/permissions,
+elements, and console/network. Use ↑/↓ or Page Up/Down to scroll and `r` to refresh.
+In Elements, `1`–`9` opens a child, Backspace returns to the document root,
+`n` gets the next page, and `f` selects the next frame. In Events, `n` advances
+to the next batch. Esc closes the panel; Ctrl+C quits. Refresh the overview
+after navigation to acquire the new document's inspection handles.
+
+Devtools is off in every built-in profile, including glynx. Enable it with
+`--devtools` or `"devtools": true` in a profile file. It needs no diagnostic
+file. `-d FILE` is now shorthand for `--diagnostics FILE`; file capture still
+requires a new owner-only file and retains its existing full diagnostic scope.
+
+The panel uses the versioned `devtools.Session.Do(context, Request)` API.
+Capabilities are `snapshot`, `dom`, and `events`; the same copied request/response
+types can be JSON-encoded by a future authenticated IPC or remote adapter.
+No remote listener, IPC server, evaluation, editing, page controls, or breakpoint
+support is enabled in this first version. Session IDs identify a target; they
+are not authentication credentials.
+
+Inspection runs on the browser owner loop and never evaluates JS, getters or
+custom string conversions. DOM requests require the session, frame and unique
+document revision, and stale handles are rejected. Results are paginated and
+bounded; recent events use a 256-entry ring with loss reporting and two-second
+request deadlines. Network metadata excludes bodies/headers, credentials and
+URL query/fragment data. DOM inspection omits form values, arbitrary attributes,
+and script/style/textarea text. Console messages, DOM text and inline styles can
+still contain page data: inspection access is privileged host access.
+
+The live panel and JSONL recorder share observation hooks, while applying their
+own data policies. Cookies and storage contents are not exposed by devtools.
+
 ## Development dependencies
 
 Use Go 1.26.8 and run `task ci` for the full local and GitHub Actions gate:

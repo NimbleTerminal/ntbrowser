@@ -71,3 +71,27 @@ func TestGlynxStartAndReexec(t *testing.T) {
 		}
 	}
 }
+
+func TestDevToolsAndDiagnosticAlias(t *testing.T) {
+	for _, command := range []string{"ntbrowser", "glynx"} {
+		c, err := parseCommandArgs(command, nil)
+		if err != nil || c.Profile.DevTools {
+			t.Fatal("devtools enabled by default", c, err)
+		}
+		c, err = parseCommandArgs(command, []string{"--devtools", "-d", "capture.jsonl"})
+		if err != nil || !c.Profile.DevTools || !c.Profile.Diagnostics || c.Diagnostics != "capture.jsonl" {
+			t.Fatal(c, err)
+		}
+		c, err = parseCommandArgs(command, []string{"--devtools=false"})
+		if err != nil || c.Profile.DevTools {
+			t.Fatal(c, err)
+		}
+	}
+}
+
+func TestDiagnosticShortFlagPreservesDashFilename(t *testing.T) {
+	c, err := parseCommandArgs("glynx", []string{"-d", "-devtools"})
+	if err != nil || c.Diagnostics != "-devtools" || c.Profile.DevTools {
+		t.Fatal(c, err)
+	}
+}

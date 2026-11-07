@@ -111,6 +111,7 @@ type Profile struct {
 	ScriptNavigation         ScriptNavigation `json:"script-navigation,omitempty"`
 	ScriptNavigationLimit    int              `json:"script-navigation-limit,omitempty"`
 	Cookies                  Cookies          `json:"cookies,omitempty"`
+	DevTools                 bool             `json:"devtools,omitempty"`
 	Diagnostics              bool             `json:"diagnostics,omitempty"`
 	Name                     string           `json:"name,omitempty"`
 	Navigate                 Navigate         `json:"navigate,omitempty"`
@@ -373,6 +374,7 @@ func (p Profile) Table(s Strengths) string {
 		{"script-grants", fmt.Sprint(p.ScriptGrants), "source origin to destination origin; scripts only"},
 		{"private-network", onOff(p.PrivateNetwork), "loopback and private addresses"},
 		{"scripts", orOff(p.Scripts), "page script"},
+		{"devtools", onOff(p.DevTools), "host-only read-only inspection; no remote listener or evaluation"},
 		{"diagnostics", onOff(p.Diagnostics), "host-only diagnostic file; may contain page data"},
 		{"session-storage", orOff(p.SessionStorage), "origin-isolated memory-only session storage"},
 		{"session-storage-bytes", strconv.Itoa(p.StorageBytes()), "per-origin key/value bytes"},

@@ -299,7 +299,7 @@ func (f *Fetcher) Open(ctx context.Context, r Request) (result *OpenResponse, re
 				return f.p.Origin.String()
 			}
 			return ""
-		}(), "method": r.Method, "kind": r.Kind, "status": status, "content_type": contentType, "final_url": finalURL, "error": e, "duration_ms": time.Since(started).Milliseconds()})
+		}(), "method": r.Method, "kind": int(r.Kind), "resource": bodyResource(r.Kind), "status": status, "content_type": contentType, "final_url": finalURL, "error": e, "duration_ms": time.Since(started).Milliseconds()})
 	}()
 	select {
 	case f.sem <- struct{}{}:

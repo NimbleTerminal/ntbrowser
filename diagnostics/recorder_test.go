@@ -71,3 +71,29 @@ func TestWriteErrorReported(t *testing.T) {
 		t.Fatal("lost disk error")
 	}
 }
+
+func TestLiveObserverWithoutFile(t *testing.T) {
+	var kinds []string
+	r := NewObserved(nil, func(kind string, data any) { kinds = append(kinds, kind) })
+	r.Record("console", map[string]string{"Line": "hello"})
+	if err := r.Close(); err != nil {
+		t.Fatal(err)
+	}
+	r.Record("console", "after close")
+	if len(kinds) != 1 || kinds[0] != "console" {
+		t.Fatal(kinds)
+	}
+}
+
+func TestObserverAndFileReceiveSameObservation(t *testing.T) {
+	var file bytes.Buffer
+	seen := ""
+	r := NewObserved(&file, func(kind string, data any) { seen = kind })
+	r.Record("console", map[string]string{"Line": "hello"})
+	if err := r.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if seen != "console" || !strings.Contains(file.String(), `"Line":"hello"`) {
+		t.Fatal(seen, file.String())
+	}
+}
