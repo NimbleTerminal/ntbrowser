@@ -1,0 +1,26 @@
+<!doctype html>
+<!-- Copyright (c) 2026 Neomantra Corp. All rights reserved. -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only WITH LicenseRef-NimbleTerminal-Linking-Exception OR LicenseRef-Neomantra-Commercial -->
+<html><head><title>Message scheduling compatibility</title></head><body>
+<p id="result">waiting</p>
+<script>
+window.addEventListener('DOMContentLoaded', function () {
+  const channel = new MessageChannel();
+  const original = {text: 'compat-ready'};
+  const order = [];
+  channel.port1.onmessage = function (event) {
+    if (order.join() !== 'script,promise' || event.data.text !== 'compat-ready') {
+      throw Error('message ordering or clone mismatch');
+    }
+    document.getElementById('result').textContent = event.data.text;
+    channel.port1.close();
+    channel.port2.close();
+    console.log('PASS:messages');
+  };
+  channel.port2.postMessage(original);
+  original.text = 'mutated';
+  Promise.resolve().then(function () { order.push('promise'); });
+  order.push('script');
+}, {once: true});
+</script>
+</body></html>

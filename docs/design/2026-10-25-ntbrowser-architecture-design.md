@@ -1857,6 +1857,21 @@ session and drops image state. Rejected over-count URLs are not retained in the
 session cache, keeping that cache bounded under repeated script assignments.
 
 
+**Page-local message channels (2026-11-06).** `jsvm/messages.go` and
+`message_clone.go` implement MessageChannel/MessagePort with asynchronous FIFO
+host tasks, start/onmessage activation, disconnected-port semantics and private
+EventTarget dispatch. Supported graph copies preserve identity but never carry
+host capabilities. Unsupported transfers/types fail before enqueue. Config caps
+(default 128 ports, 256 messages, 4 MiB queue charge) and fixed clone limits
+(1 MiB, 4096 values, depth 64) bound retained data and Go-side traversal. Clone
+getters may re-enter JS; admission rechecks queue limits after copying. Private
+QueueTask/ClearTask host scheduling shares timer capacity but cannot be canceled
+by clearTimeout. Each message re-enters the watchdog and yields before the next.
+Entanglement is represented by private wrapper references; the host registry is
+weak, with pins only for started nonempty queues. Navigation/Close drops queued
+copies and tasks. No cross-page, worker, network, storage or activation authority
+is introduced. README documents the supported clone types and exclusions.
+
 **Text codecs (2026-11-06).** `jsvm/encoding.go` adds local UTF-8 encoding and
 UTF-8/UTF-16 decoding with streaming, fatal errors and BOM handling. No host gate
 is opened. Captured intrinsic buffer getters validate actual typed-array/DataView

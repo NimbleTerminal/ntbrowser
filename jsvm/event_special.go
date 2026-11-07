@@ -20,7 +20,7 @@ func (s *Sandbox) installSpecialEvents() {
 		{"KeyboardEvent", "UIEvent", map[string]any{"key": "", "code": "", "location": 0, "repeat": false, "isComposing": false, "ctrlKey": false, "shiftKey": false, "altKey": false, "metaKey": false, "charCode": 0, "keyCode": 0, "which": 0}},
 		{"FocusEvent", "UIEvent", map[string]any{"relatedTarget": nil}},
 		{"InputEvent", "UIEvent", map[string]any{"data": nil, "inputType": "", "isComposing": false}},
-		{"MessageEvent", "Event", map[string]any{"data": nil, "origin": "", "lastEventId": "", "source": nil}},
+		{"MessageEvent", "Event", map[string]any{"data": nil, "origin": "", "lastEventId": "", "source": nil, "ports": nil}},
 		{"ErrorEvent", "Event", map[string]any{"message": "", "filename": "", "lineno": 0, "colno": 0, "error": nil}},
 		{"ProgressEvent", "Event", map[string]any{"lengthComputable": false, "loaded": 0, "total": 0}},
 	}
@@ -71,6 +71,9 @@ func (s *Sandbox) initializeSpecialEvent(e, proto, options *goja.Object) {
 		v := value(options, key)
 		if goja.IsUndefined(v) {
 			v = s.vm.ToValue(def)
+		}
+		if key == "ports" && goja.IsNull(v) && s.emptyMessagePorts != nil {
+			v = s.emptyMessagePorts
 		}
 		switch def.(type) {
 		case string:

@@ -16,7 +16,7 @@ func (s *Sandbox) eventException(name, message string) *goja.Object {
 	_ = st.Set("kind", "DOMException")
 	_ = st.Set("name", name)
 	_ = st.Set("message", message)
-	codes := map[string]int{"InvalidStateError": 11, "NotSupportedError": 9, "AbortError": 20, "TimeoutError": 23}
+	codes := map[string]int{"InvalidStateError": 11, "NotSupportedError": 9, "AbortError": 20, "TimeoutError": 23, "DataCloneError": 25, "QuotaExceededError": 22}
 	_ = st.Set("code", codes[name])
 	s.putPrivate(e, st)
 	return e
@@ -222,6 +222,9 @@ func (s *Sandbox) bindEventHandlers(p *goja.Object) {
 			return value(record, "value")
 		}, func(t, v goja.Value) {
 			w := t.(*goja.Object)
+			if typ == "message" && flag(s.brand(t, "EventTarget"), "messagePort") {
+				s.startMessagePort(w)
+			}
 			bag := s.brand(t, "EventTarget").Get("handlers").(*goja.Object)
 			r, _ := bag.Get(typ).(*goja.Object)
 			_, callable := goja.AssertFunction(v)

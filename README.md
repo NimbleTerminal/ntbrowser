@@ -693,3 +693,36 @@ stream bytes) and conversion output in bytes. Oversized calls throw RangeError;
 `encodeInto` preflights the write so a limit failure leaves its destination
 unchanged. Private decoder state is bounded by the same cap and reclaimed with
 the decoder. The existing per-entry watchdog and heap limit still apply.
+
+### Message channels
+
+`new MessageChannel()` creates two page-local `MessagePort` EventTargets.
+`postMessage(data)` copies supported data synchronously and delivers a
+`MessageEvent` on a later host task. Ports begin paused: `start()` enables
+delivery, and assigning `onmessage` starts it automatically. `addEventListener`
+alone does not start a port. Delivery preserves FIFO order, yields between
+messages, and retains promise checkpoints and the normal watchdog. `close()`
+disconnects a port; accepted messages remain deliverable, while future posts
+through the disconnected channel are discarded after validation.
+
+Copies preserve cycles and shared references across plain objects, arrays,
+ArrayBuffers, typed arrays, DataViews, Dates, Maps and Sets. Primitive strings,
+numbers, booleans, null and undefined are supported. Functions, symbols, BigInts,
+DOM/host objects, proxies, weak collections, Promises, RegExps, Errors and custom
+class instances are not supported. Nonempty transfer lists are also unsupported,
+including ArrayBuffer and MessagePort transfers. Unsupported data throws
+DataCloneError before enqueue; data is never passed by reference as a fallback.
+There is no global structuredClone API, window.postMessage, worker transport,
+cross-page messaging or BroadcastChannel.
+
+`jsvm.Config` provides `MaxMessagePorts` (128 live endpoints), `MaxMessages`
+(256 queued messages), and `MaxMessageBytes` (4 MiB of queued clone charges).
+Each copy is additionally capped at 1 MiB, 4096 visited values and depth 64;
+charges include value/key overhead, and array length is capped at 4096.
+Limit failures throw QuotaExceededError. Started nonempty queues keep their
+receivers alive; otherwise entangled wrappers keep each other alive through
+private VM state and can be collected together. Page shutdown releases all
+ports, payloads and delivery tasks. One private host task drives the queue,
+shares the existing timer limit, and cannot be canceled by page timer IDs.
+No network, storage or reader-activation permissions are added. The supported
+behavior follows [HTML channel messaging](https://html.spec.whatwg.org/multipage/web-messaging.html#message-channels).

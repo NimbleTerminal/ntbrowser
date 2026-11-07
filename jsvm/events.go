@@ -256,6 +256,7 @@ func (s *Sandbox) removeEventListener(w *goja.Object, typ string, callback goja.
 }
 
 func (s *Sandbox) forgetCounts(id dom.NodeID) {
+	s.forgetMessagePort(id)
 	for typ, count := range s.listenCount[id] {
 		s.nListen -= count
 		s.typeCount[typ] -= count

@@ -44,9 +44,11 @@ type nopHost struct {
 func (h *nopHost) SetTimer(time.Duration, bool, goja.Callable, []goja.Value) (int, bool) {
 	return 1, true
 }
-func (h *nopHost) ClearTimer(int)                 {}
-func (h *nopHost) RequestFrame(goja.Callable) int { return 1 }
-func (h *nopHost) CancelFrame(int)                {}
+func (h *nopHost) QueueTask(goja.Callable) (int, bool) { return 1, true }
+func (h *nopHost) ClearTask(int)                       {}
+func (h *nopHost) ClearTimer(int)                      {}
+func (h *nopHost) RequestFrame(goja.Callable) int      { return 1 }
+func (h *nopHost) CancelFrame(int)                     {}
 func (h *nopHost) Fetch(_ FetchRequest, done func(FetchResponse, error)) error {
 	if h.fetchErr != nil {
 		h.pending = func() { done(FetchResponse{}, h.fetchErr) }

@@ -36,3 +36,6 @@ MIME refusal, and cancellation when navigating away. Run them with
 `encoding.html` exercises window DOMContentLoaded, UTF-8 encode/streamed decode,
 and CustomEvent delivery through the real loop with both closed and enabled
 optional permissions. It makes no network requests.
+
+`messages.html` checks MessageChannel's asynchronous delivery after promises,
+copy isolation, port closure and DOM painting, in both permission configurations.

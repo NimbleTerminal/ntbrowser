@@ -31,9 +31,12 @@ import (
 
 // Config bounds one page's scripting. Zero fields use the defaults below.
 type Config struct {
-	MaxCodecBytes  int                 // text codec input/output cap per call (default 2 MiB)
-	DynamicScripts bool                // host-authorized classic script insertion
-	LoadScript     func(ScriptRequest) // VM-thread admission; completion through CompleteScript
+	MaxMessagePorts int                 // live ports (default 128)
+	MaxMessages     int                 // queued messages per page (default 256)
+	MaxMessageBytes int                 // total queued clone charge (default 4 MiB)
+	MaxCodecBytes   int                 // text codec input/output cap per call (default 2 MiB)
+	DynamicScripts  bool                // host-authorized classic script insertion
+	LoadScript      func(ScriptRequest) // VM-thread admission; completion through CompleteScript
 
 	SessionStorage   *sessionstorage.Area          // bound to one origin by the host; nil is closed
 	Navigate         func(href, mode string) error // host-authorized navigation; nil is closed
@@ -56,6 +59,10 @@ type Config struct {
 // goroutine. Completion callbacks the host receives must be invoked on the VM
 // goroutine as well, never from a worker.
 type Host interface {
+	// QueueTask schedules one future task under the normal watchdog/timer cap.
+	// ClearTimer must not cancel these private task handles.
+	QueueTask(goja.Callable) (int, bool)
+	ClearTask(int)
 	SetTimer(delay time.Duration, repeat bool, fn goja.Callable, args []goja.Value) (id int, ok bool)
 	ClearTimer(id int)
 	RequestFrame(fn goja.Callable) int
@@ -80,21 +87,27 @@ type FetchResponse struct {
 }
 
 type Sandbox struct {
-	signalPins             map[dom.NodeID]*goja.Object
-	specialEventProtos     map[string]*goja.Object
-	specialEventDefaults   map[*goja.Object]map[string]any
-	domExceptionProto      *goja.Object
-	eventTargetProto       *goja.Object
-	eventProto             *goja.Object
-	customEventProto       *goja.Object
-	signalProto            *goja.Object
-	eventPrivate           *goja.Object
-	privateGet, privateSet goja.Callable
-	extraTargetNext        dom.NodeID
-	extraTargets           map[dom.NodeID]bool
-	abortTimers            map[dom.NodeID]int
-	eventDepth             int
-	eventErrorReporting    bool
+	messagePorts              map[dom.NodeID]*messagePort
+	portMessages              []portMessage
+	messageBytes, messageTask int
+	messageTaskPending        bool
+	cloneMessage              func(goja.Value) (goja.Value, int)
+	emptyMessagePorts         *goja.Object
+	signalPins                map[dom.NodeID]*goja.Object
+	specialEventProtos        map[string]*goja.Object
+	specialEventDefaults      map[*goja.Object]map[string]any
+	domExceptionProto         *goja.Object
+	eventTargetProto          *goja.Object
+	eventProto                *goja.Object
+	customEventProto          *goja.Object
+	signalProto               *goja.Object
+	eventPrivate              *goja.Object
+	privateGet, privateSet    goja.Callable
+	extraTargetNext           dom.NodeID
+	extraTargets              map[dom.NodeID]bool
+	abortTimers               map[dom.NodeID]int
+	eventDepth                int
+	eventErrorReporting       bool
 
 	collectionProto *goja.Object
 
@@ -202,6 +215,15 @@ func New(cfg Config, tree *dom.Tree, host Host) *Sandbox {
 	if cfg.MaxCodecBytes <= 0 {
 		cfg.MaxCodecBytes = defaultCodecLimit
 	}
+	if cfg.MaxMessagePorts <= 0 {
+		cfg.MaxMessagePorts = 128
+	}
+	if cfg.MaxMessages <= 0 {
+		cfg.MaxMessages = 256
+	}
+	if cfg.MaxMessageBytes <= 0 {
+		cfg.MaxMessageBytes = 4 << 20
+	}
 	if cfg.MaxTimers <= 0 {
 		cfg.MaxTimers = 256
 	}
@@ -232,6 +254,7 @@ func New(cfg Config, tree *dom.Tree, host Host) *Sandbox {
 	s.installStorage()
 	s.installPerformance()
 	s.installEncoding()
+	s.installMessages()
 	dom.Walk(tree.Root(), func(n *dom.Node) {
 		if n.Tag() == "img" {
 			s.imageChanged(n)
@@ -366,6 +389,15 @@ func (s *Sandbox) Disabled() bool { return s.disabled }
 // and Dispatch reports "not prevented". The dom.Tree is left to its owner.
 func (s *Sandbox) Close() {
 	s.disabled = true
+	if s.messageTaskPending {
+		s.host.ClearTask(s.messageTask)
+	}
+	s.messageTaskPending = false
+	s.messagePorts = nil
+	s.portMessages = nil
+	s.messageBytes = 0
+	s.cloneMessage = nil
+	s.emptyMessagePorts = nil
 	s.wd.disarm()
 	s.images = nil
 	s.scriptProto, s.scripts = nil, nil

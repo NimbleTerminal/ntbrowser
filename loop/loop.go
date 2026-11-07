@@ -1049,6 +1049,7 @@ func (l *Loop) runFrameCallbacks() {
 // ---- timers ----
 
 type timer struct {
+	internal bool
 	id       int
 	when     time.Time
 	interval time.Duration
@@ -1116,7 +1117,23 @@ func (h *host) SetTimer(delay time.Duration, repeat bool, fn goja.Callable, args
 
 func (h *host) ClearTimer(id int) {
 	l := (*Loop)(h)
-	if t := l.timers.find(id); t != nil {
+	if t := l.timers.find(id); t != nil && !t.internal {
+		heap.Remove(&l.timers, t.index)
+	}
+}
+
+// QueueTask uses the bounded timer scheduler without exposing its cancellation
+// handle to clearTimeout/clearInterval. Navigation clears both task classes.
+func (h *host) QueueTask(fn goja.Callable) (int, bool) {
+	id, ok := h.SetTimer(0, false, fn, nil)
+	if ok {
+		(*Loop)(h).timers.find(id).internal = true
+	}
+	return id, ok
+}
+func (h *host) ClearTask(id int) {
+	l := (*Loop)(h)
+	if t := l.timers.find(id); t != nil && t.internal {
 		heap.Remove(&l.timers, t.index)
 	}
 }
