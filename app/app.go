@@ -772,7 +772,7 @@ func (m *Model) View() tea.View {
 	}
 	// Everything on these two lines passed clean() when stored; truncation
 	// only measures width. No page text reaches here unfiltered.
-	status := ansi.Truncate(clean(m.status), max(1, m.cols), "…")
+	status := statusLine(m.status, m.cols)
 	if line, ok := m.formStatus(); ok && m.pendingNav == "" && len(m.scriptPermissions) == 0 {
 		status = line // the editor or chooser; a confirm prompt always wins (pendingNav)
 	}
@@ -816,7 +816,7 @@ func (m *Model) View() tea.View {
 	if m.addressOpen {
 		help = "\n Enter open · Esc cancel · Ctrl+U clear · Ctrl+C quit"
 		if m.addressError != "" {
-			help = "\n" + ansi.Truncate(clean(m.addressError), max(1, m.cols), "…")
+			help = "\n" + chromeLine(m.addressError, m.cols, errorLineStyle)
 		}
 	}
 	if m.debug.open {

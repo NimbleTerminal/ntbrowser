@@ -45,7 +45,7 @@ func TestViewNeverCarriesTerminalEscapes(t *testing.T) {
 			t.Fatalf("stored unsanitized: %q", probe)
 		}
 	}
-	if out := m.View().Content; hasTerminalControls(out) || !strings.Contains(out, "Owned") {
+	if out := m.View().Content; hasTerminalControls(withoutChromeStyles(out)) || !strings.Contains(out, "Owned") {
 		t.Fatalf("View carries controls or lost the title: %q", out)
 	}
 	m.current = mustURL(t, "https://example.test/")
@@ -242,4 +242,13 @@ func TestImageWarningDoesNotReplaceNavigationFailureOrPrompt(t *testing.T) {
 	if m.status != "[image warning] "+warning {
 		t.Fatalf("old failure survived new page: %q", m.status)
 	}
+}
+
+// withoutChromeStyles permits only our fixed host palette in rendered views;
+// arbitrary page escape sequences (including other SGR) must still fail.
+func withoutChromeStyles(s string) string {
+	for _, style := range []string{devtoolsHeaderStyle.String(), errorLineStyle.String(), warningLineStyle.String(), "\x1b[m"} {
+		s = strings.ReplaceAll(s, style, "")
+	}
+	return s
 }

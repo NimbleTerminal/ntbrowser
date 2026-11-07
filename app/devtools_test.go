@@ -36,13 +36,16 @@ func TestDevToolsPanelUsesGatedAPIAndSanitizes(t *testing.T) {
 		t.Fatal("panel did not reserve viewer space")
 	}
 	m.Update(m.debugRequest("snapshot")())
-	if hasTerminalControls(m.View().Content) {
+	if hasTerminalControls(withoutChromeStyles(m.View().Content)) {
 		t.Fatal("unsanitized policy")
 	}
 	_, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
 	m.Update(cmd())
-	if hasTerminalControls(m.View().Content) {
+	if hasTerminalControls(withoutChromeStyles(m.View().Content)) {
 		t.Fatal("unsanitized DOM")
+	}
+	if !strings.Contains(m.debugView(), devtoolsHeaderStyle.String()) {
+		t.Fatal("devtools header has no separation")
 	}
 	if calls != 2 || !strings.Contains(m.View().Content, "Devtools") {
 		t.Fatal(calls)

@@ -225,8 +225,12 @@ func (m *Model) debugView() string {
 		if idx < len(m.debug.lines) {
 			line = m.debug.lines[idx]
 		}
-		lines = append(lines, ansi.Truncate(strings.ReplaceAll(clean(line), "\n", " "), max(1, m.cols), "…"))
+		if strings.HasPrefix(line, "Inspection:") {
+			lines = append(lines, chromeLine(line, m.cols, errorLineStyle))
+		} else {
+			lines = append(lines, ansi.Truncate(strings.ReplaceAll(clean(line), "\n", " "), max(1, m.cols), "…"))
+		}
 	}
-	lines[0] = ansi.Truncate(lines[0], max(1, m.cols), "…")
+	lines[0] = chromeLine(lines[0], m.cols, devtoolsHeaderStyle)
 	return strings.Join(lines, "\n")
 }
