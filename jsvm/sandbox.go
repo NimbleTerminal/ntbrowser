@@ -108,6 +108,7 @@ type Sandbox struct {
 	extraTargets              map[dom.NodeID]bool
 	abortTimers               map[dom.NodeID]int
 	eventDepth                int
+	rejectionReporting        bool
 	eventErrorReporting       bool
 
 	collectionProto *goja.Object
@@ -281,7 +282,7 @@ func (s *Sandbox) harden() {
 	// Unhandled rejections surface in the terminal log instead of vanishing.
 	vm.SetPromiseRejectionTracker(func(p *goja.Promise, op goja.PromiseRejectionOperation) {
 		if op == goja.PromiseRejectionReject {
-			s.host.Log("error", "Unhandled promise rejection: "+safeString(p.Result()))
+			s.logPromiseRejection(p.Result())
 		}
 	})
 	// Capture pristine built-ins before any script can monkey-patch them.

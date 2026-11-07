@@ -23,7 +23,7 @@ func TestDiagnosticsObserveVMWithoutPageAuthority(t *testing.T) {
 		sink := make(chanSink, 256)
 		l := New(ctx, Config{Profile: p, Trace: trace, Width: 400}, sink)
 		go l.Run()
-		l.LoadPage(`<p id="p">before</p><script>document.getElementById("p").textContent="after";console.log("diagnostic="+typeof diagnostics);throw Error("diagnostic probe")</script>`, "https://example.test/", nil)
+		l.LoadPage(`<p id="p">before</p><script>document.getElementById("p").textContent="after";console.log("diagnostic="+typeof diagnostics);function rejectedProbe(){return Error("rejection probe")}Promise.reject(rejectedProbe());throw Error("diagnostic probe")</script>`, "https://example.test/", nil)
 		waitFor(t, sink, func(m tea.Msg) bool { _, ok := m.(FrameMsg); return ok })
 		cancel()
 		trace.Close()
@@ -34,7 +34,7 @@ func TestDiagnosticsObserveVMWithoutPageAuthority(t *testing.T) {
 			continue
 		}
 		s := b.String()
-		for _, want := range []string{`"kind":"document"`, `"kind":"snapshot"`, `"kind":"script_result"`, `diagnostic=undefined`, `diagnostic probe`, `after`} {
+		for _, want := range []string{`"kind":"document"`, `"kind":"snapshot"`, `"kind":"script_result"`, `diagnostic=undefined`, `diagnostic probe`, `Unhandled promise rejection: Error: rejection probe at rejectedProbe (https://example.test/#inline-0:1:`, `after`} {
 			if !strings.Contains(s, want) {
 				t.Fatalf("missing %s", want)
 			}

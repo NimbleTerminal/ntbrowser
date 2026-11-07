@@ -360,6 +360,13 @@ they are not an exact browser `outerHTML`. There is no arbitrary JS evaluation,
 selector RPC, or inspection of caught exceptions. Original HTML supplies inline
 script sources; external script bodies and other response bodies are not saved.
 
+Unhandled promise-rejection logs include up to 12 captured JavaScript frames
+(function, source URL, line, and column), within the existing 4 KiB log bound.
+Native Error values retain their creation stack; other rejection values use
+the rejection site when available. The logger does not read page-controlled
+`stack` properties. These details appear in `console` diagnostic records when
+`--diagnostics FILE` is enabled; the terminal may truncate the status line.
+
 Capture is capped at 32 MiB, with a final `limit` record. Records over 4 MiB or
 beyond the eight-record queue are dropped; subsequent records report the
 cumulative dropped count. The VM never waits on disk writes. Read only complete
