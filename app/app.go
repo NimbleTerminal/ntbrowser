@@ -304,6 +304,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+	if key, ok := msg.(tea.KeyPressMsg); ok && key.String() == "alt+c" {
+		return m, m.copyStatus()
+	}
 	if handled, cmd := m.debugUpdate(msg); handled {
 		return m, cmd
 	}
@@ -800,7 +803,11 @@ func (m *Model) View() tea.View {
 	if m.glynx {
 		name, keys = "glynx", "↑↓ focus · → open · ← back · f fwd · g address/search"
 	}
-	help := "\n " + name + " · " + ansi.Truncate(clean(m.title), 40, "…") + pos + " · profile " + clean(m.profile.Name) + enforced + " · " + keys + " · ^R reload · / search · q quit"
+	copyHint := ""
+	if m.status != "" && m.profile.Clipboard == profile.ClipboardCopy {
+		copyHint = " · Alt+C copy status"
+	}
+	help := "\n " + name + copyHint + " · " + ansi.Truncate(clean(m.title), 40, "…") + pos + " · profile " + clean(m.profile.Name) + enforced + " · " + keys + " · ^R reload · / search · q quit"
 	if h := m.helpLine(); h != "" {
 		help = "\n" + h
 	}

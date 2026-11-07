@@ -5687,3 +5687,15 @@ owner lock protects queuing; the target loop flushes at its own checkpoint befor
 rendering. Foreign style access retains all origin/revision checks. Observation
 through foreign wrappers is unsupported. Interrupted jobs are re-armed at the
 next checkpoint; callback exceptions do not suppress other observers.
+
+
+### Diagram-budget degradation (2026-11-07)
+
+When published nthtml v0.5.0 returns ErrLimit specifically for diagram count or
+aggregate diagram pixels, retry the same parsed document with DisableDiagrams.
+This retains SVG labels/Mermaid source, CSS and admitted image assets. The same
+worker context, deadline and all other limits apply; no budget is increased.
+Retain this mode for the page to avoid repeating failed raster work on resize
+or subsequent updates, and reset it on navigation. Chunk indexes are rebuilt
+when the diagram mode changes. Warn explicitly; unrelated limit errors retain
+their normal failure behavior.

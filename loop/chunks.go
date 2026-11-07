@@ -35,13 +35,14 @@ type chunkRequest struct {
 // chunkRender is exclusively owned by the serial render worker. The VM only
 // transfers its pointer between workers; it never reads the engine or layouts.
 type chunkRender struct {
-	source *mappedChunks
-	cache  *nttypeset.Chunked
-	width  int
-	doc    *document.Document
-	index  int
-	place  string
-	recent []int
+	diagramsDisabled bool
+	source           *mappedChunks
+	cache            *nttypeset.Chunked
+	width            int
+	doc              *document.Document
+	index            int
+	place            string
+	recent           []int
 }
 
 type mappedChunks struct {
@@ -101,7 +102,7 @@ func newChunkRender(ctx context.Context, doc *document.Document, opts document.O
 	if err != nil {
 		return nil, err
 	}
-	return &chunkRender{source: source, cache: cache, width: opts.Width, doc: doc}, nil
+	return &chunkRender{diagramsDisabled: opts.DisableDiagrams, source: source, cache: cache, width: opts.Width, doc: doc}, nil
 }
 
 func chunkRasterLimits(lim document.Limits) (pixels, height int) {

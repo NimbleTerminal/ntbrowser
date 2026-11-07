@@ -84,6 +84,7 @@ type (
 // Page is one navigation: tree + sandbox + policy. Replacing it discards the
 // whole JS heap, which is how cross-page isolation is achieved.
 type Page struct {
+	diagramsDisabled               bool
 	debugNavigation, debugRevision uint64
 	domPins                        map[jsvm.DOMRef]bool
 	frameScroll                    image.Point
@@ -835,8 +836,11 @@ func (l *Loop) startRender() {
 		l.dropPage(l.page)
 	}
 	page := l.page
-	opts := document.Options{ViewportHeight: l.cfg.FrameHeight, NoImage: !l.cfg.Chunked, Width: l.cfg.Width, Limits: l.cfg.RenderLimit, Fonts: l.cfg.Fonts, FallbackFaces: fallbackFaces}
+	opts := document.Options{DisableDiagrams: page.diagramsDisabled, ViewportHeight: l.cfg.FrameHeight, NoImage: !l.cfg.Chunked, Width: l.cfg.Width, Limits: l.cfg.RenderLimit, Fonts: l.cfg.Fonts, FallbackFaces: fallbackFaces}
 	var loaderWarnings []string
+	if page.diagramsDisabled {
+		loaderWarnings = append(loaderWarnings, diagramFallbackWarning)
+	}
 	var injected []string // hrefs whose sheet is in this snapshot
 	if page.subres != nil {
 		// Discover before the gate so a <link> a script added is in the
@@ -901,21 +905,32 @@ func (l *Loop) startRender() {
 					backgrounds = append(backgrounds, src.Src)
 				}
 			}
-			if useChunks {
-				if chunkState == nil || rebuildChunks || chunkState.width != opts.Width {
-					old := chunkState
-					chunkState, err = newChunkRender(ctx, doc, opts)
-					if err == nil && old != nil && chunkReq.index == old.index && chunkReq.anchor == "" && old.place != "" {
-						if start, end, ok := chunkState.source.ChunkRange(old.place); ok && (chunkReq.index < start || chunkReq.index >= end) {
-							chunkReq.index = start
+			renderDocument := func() {
+				if useChunks {
+					if chunkState == nil || rebuildChunks || chunkState.width != opts.Width || chunkState.diagramsDisabled != opts.DisableDiagrams {
+						old := chunkState
+						chunkState, err = newChunkRender(ctx, doc, opts)
+						if err == nil && old != nil && chunkReq.index == old.index && chunkReq.anchor == "" && old.place != "" {
+							if start, end, ok := chunkState.source.ChunkRange(old.place); ok && (chunkReq.index < start || chunkReq.index >= end) {
+								chunkReq.index = start
+							}
 						}
 					}
+					if err == nil {
+						res, chunkInfo, err = chunkState.render(ctx, chunkReq, opts)
+					}
+				} else {
+					res, err = doc.Render(ctx, opts)
 				}
-				if err == nil {
-					res, chunkInfo, err = chunkState.render(ctx, chunkReq, opts)
-				}
-			} else {
-				res, err = doc.Render(ctx, opts)
+			}
+			renderDocument()
+			if !opts.DisableDiagrams && diagramBudgetExceeded(err) && ctx.Err() == nil {
+				// Keep the same document, CSS, images, deadline and budgets.
+				// nthtml's supported label/source fallback avoids rasterizing
+				// diagrams; it does not grant a larger resource allowance.
+				opts.DisableDiagrams = true
+				renderDocument()
+				loaderWarnings = append(loaderWarnings, diagramFallbackWarning)
 			}
 			if !useChunks && errors.Is(err, document.ErrLimit) && (opts.Images != nil || opts.BackgroundImages != nil) {
 				// Images are the only thing the host added: drop them and
@@ -967,6 +982,9 @@ func (l *Loop) startRender() {
 			l.renderInFlight = false
 			if l.page != page || navigation != l.navGen.Load() {
 				return // frame for a page we navigated away from
+			}
+			if opts.DisableDiagrams {
+				page.diagramsDisabled = true
 			}
 			if opts.Width != l.cfg.Width {
 				l.currentFrame.Store(0)

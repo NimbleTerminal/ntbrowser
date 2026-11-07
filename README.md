@@ -62,6 +62,11 @@ not supply missing browser APIs or guarantee that Google/reCAPTCHA accepts the
 browser. Persistent bookmarks, cookies, and downloads are not added by this
 initial separation.
 
+Status and error messages can be copied with **Alt+C** in either application.
+This copies the full message, including text clipped off-screen, using the
+existing `clipboard=copy` permission and the terminal's OSC 52 support. It does
+not copy editor contents or change the current message.
+
 ## Read-only devtools
 
 Both applications offer an opt-in inspector:
@@ -124,6 +129,15 @@ and passes the profile's file budget to the decoder. The worker also applies
 ntvideo's default source-dimension limits. The opt-in real playback check is
 `NTVIDEO_TEST_FILE=/absolute/path/clip.mp4 task test`; it requires libmpv and OS
 confinement and checks file-limit rejection, recovery, and repeated playback.
+
+## Pages with many SVG icons
+
+If nthtml's aggregate diagram count or pixel budget is reached, the browser
+retries using SVG labels and Mermaid source text. CSS, ordinary images and
+navigation remain available. This fallback stays active for the current page
+and resets on navigation; a warning identifies the reduced diagram rendering.
+The original render deadline and resource limits still apply. Other resource
+limit failures are not silently ignored.
 
 ## Chunked reading
 

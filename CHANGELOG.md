@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Keep SVG-heavy pages readable when nthtml reaches its diagram budget by
+  falling back to labels/source under the existing render limits. Add Alt+C
+  to copy the complete status/error message through the clipboard gate.
+
 - Add opt-in read-only devtools (`--devtools`, F12) to both commands, with a
   transport-independent versioned inspection API, owner-loop runtime/DOM/policy
   snapshots, and bounded console/network events. Add `-d FILE` for diagnostics.
