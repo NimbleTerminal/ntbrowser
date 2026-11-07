@@ -747,3 +747,16 @@ but grants no reader activation, navigation, network or storage authority.
 Both APIs share the channel task queue, clone restrictions and quotas described
 above. Nonempty transfer lists remain unsupported. Navigation/page shutdown
 cancels queued deliveries instead of forwarding them into the new document.
+
+### Response-size failures
+
+`netpolicy: response too large` means a response crossed its byte cap, not that
+JavaScript called a missing API. Page/text navigation is capped at 1 MiB;
+generic fetchers default to 2 MiB, and resource policies may set smaller limits.
+The cap applies to the decoded HTTP response (after gzip decompression).
+Errors identify the resource, limit, observed lower bound and final URL path;
+query strings and fragments are omitted from the displayed URL. Diagnostic
+capture records navigation body failures as `navigation_error`, and fetcher
+failures as `network_error`. A server's declared Content-Length is not treated
+as proof of the decoded response size. These diagnostics do not raise the caps;
+page/DOM/render and script budgets remain separate constraints.

@@ -107,6 +107,11 @@ func load(ctx context.Context, stop context.CancelFunc, f *netpolicy.Fetcher, u 
 		defer timer.Stop()
 		page, err := readCapped(body, 1<<20)
 		if err != nil {
+			var limitErr *netpolicy.BodyLimitError
+			if errors.As(err, &limitErr) {
+				limitErr.Resource = "page"
+				limitErr.URL = o.URL
+			}
 			msg.err = err
 			return msg
 		}
@@ -178,7 +183,7 @@ func readCapped(r io.Reader, limit int64) ([]byte, error) {
 		return nil, err
 	}
 	if int64(len(body)) > limit {
-		return nil, netpolicy.ErrTooLarge
+		return nil, &netpolicy.BodyLimitError{Limit: limit, Observed: int64(len(body)), AtLeast: true}
 	}
 	return body, nil
 }

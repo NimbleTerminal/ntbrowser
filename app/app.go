@@ -304,6 +304,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil // cancelled by the reader
 		}
 		if v.err != nil {
+			m.policy.Trace.Record("navigation_error", map[string]any{"url": v.finalURL, "error": v.err.Error()})
 			m.documentSeq = m.navSeq
 			m.status = clean("load failed: " + v.err.Error()) // errors echo page-controlled input
 			return m, nil

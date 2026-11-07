@@ -321,7 +321,7 @@ func (f *Fetcher) Open(ctx context.Context, r Request) (result *OpenResponse, re
 	}
 	if int64(len(r.Body)) > f.p.MaxBody {
 		release()
-		return nil, ErrTooLarge
+		return nil, &BodyLimitError{Resource: bodyResource(r.Kind), URL: u.String(), Limit: f.p.MaxBody, Observed: int64(len(r.Body)), Request: true}
 	}
 	// The timeout covers reaching the headers, and for everything but a
 	// navigation the body too: a navigation's caller owns a possibly long read.
@@ -398,7 +398,7 @@ func (f *Fetcher) Do(ctx context.Context, r Request) (result Response, resultErr
 		return Response{}, err
 	}
 	if int64(len(body)) > f.p.MaxBody {
-		return Response{}, ErrTooLarge
+		return Response{}, &BodyLimitError{Resource: bodyResource(r.Kind), URL: o.URL, Limit: f.p.MaxBody, Observed: int64(len(body)), AtLeast: true}
 	}
 	return Response{Status: o.Status, StatusText: http.StatusText(o.Status), URL: o.URL, Headers: o.Headers, Body: string(body)}, nil
 }
