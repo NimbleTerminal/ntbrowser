@@ -20,14 +20,21 @@ import (
 	"golang.org/x/net/html/atom"
 )
 
+// MaxExternalStyleBytes caps optional host-only stylesheet storage.
+const MaxExternalStyleBytes = 4 << 20
+
 // Limits bound what scripts can grow the tree into. Zero fields use defaults.
 // They are deliberately at or below nthtml's document.DefaultLimits so a
 // serialized tree can never exceed the renderer's own budget: Nodes and Depth
-// stay under nthtml's, and TotalBytes bounds the *serialized* size (escaped
+// stay under nthtml's, and TotalBytes bounds the script-mutable serialized size (escaped
 // text, tags, attributes and minted ids), so a tree inside these limits never
-// makes document.Render fail with ErrLimit. The per-node TextBytes cap alone
+// makes document.Render fail with ErrLimit. An optional ExternalStyleBytes
+// allowance adds host-loaded CSS; the host must raise the renderer byte cap by
+// the same bounded amount. The per-node TextBytes cap alone
 // would not do that (8000 × 64 KiB is far over nthtml's 1 MiB input cap).
 type Limits struct {
+	ExternalStyleBytes int // optional separate host stylesheet allowance; zero shares TotalBytes
+
 	Nodes      int // total live nodes (default 8000; nthtml caps parsing at 10000)
 	Depth      int // nesting depth (default 48; nthtml caps at 64)
 	TextBytes  int // bytes per text node or attribute value (default 64 KiB)
@@ -144,8 +151,9 @@ type Tree struct {
 	Scripts []Script
 	// styles holds loaded external stylesheets keyed by the raw <link href>
 	// (see styles.go); the serializer writes each as a <style> twin.
-	styles map[string]*injectedStyle
-	ids    map[string]bool // Serialize's id-uniqueness table, nil outside it
+	styleBytes int
+	styles     map[string]*injectedStyle
+	ids        map[string]bool // Serialize's id-uniqueness table, nil outside it
 }
 
 type Script struct {
@@ -157,6 +165,7 @@ type Script struct {
 
 func limits(l Limits) Limits {
 	d := DefaultLimits
+	d.ExternalStyleBytes = max(0, min(l.ExternalStyleBytes, MaxExternalStyleBytes))
 	if l.Nodes > 0 && l.Nodes < d.Nodes {
 		d.Nodes = l.Nodes
 	}
@@ -307,7 +316,7 @@ func (t *Tree) newNode(k Kind, tag string) *Node {
 
 // charge reserves delta serialized bytes or fails with ErrLimit.
 func (t *Tree) charge(delta int) error {
-	if delta > 0 && t.bytes+delta > t.limits.TotalBytes {
+	if delta > 0 && t.contentBytes()+delta > t.limits.TotalBytes {
 		return fmt.Errorf("%w: serialized size over %d bytes", ErrLimit, t.limits.TotalBytes)
 	}
 	t.bytes += delta
@@ -930,4 +939,12 @@ func (t *Tree) Listeners(typ string) []*Node {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].id < out[j].id })
 	return out
+}
+
+// contentBytes excludes host-only sheets only when a separate allowance exists.
+func (t *Tree) contentBytes() int {
+	if t.limits.ExternalStyleBytes > 0 {
+		return t.bytes - t.styleBytes
+	}
+	return t.bytes
 }

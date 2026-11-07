@@ -126,3 +126,33 @@ func TestProcessHeapBudgets(t *testing.T) {
 		}
 	}
 }
+
+func TestStylesheetBudgets(t *testing.T) {
+	for _, command := range []string{"glynx", "ntbrowser"} {
+		c, err := parseCommandArgs(command, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if command == "glynx" {
+			if c.CSSRules != 16384 || c.StylesheetBytes != 1<<20 || c.StylesheetTotalBytes != 4<<20 || c.Stylesheets != 64 {
+				t.Fatal(c)
+			}
+		} else if c.CSSRules != 4096 || c.StylesheetBytes != 256<<10 || c.StylesheetTotalBytes != 0 || c.Stylesheets != 16 {
+			t.Fatal(c)
+		}
+		c, err = parseCommandArgs(command, []string{"--stylesheet-bytes=524288", "--stylesheet-total-bytes=2097152", "--stylesheets=32", "--css-rules=8192"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		arg, _ := encodeState(state{Config: c})
+		got, ok, err := decodeState([]string{arg})
+		if err != nil || !ok || !reflect.DeepEqual(c, got.Config) {
+			t.Fatal("reexec lost budgets", err)
+		}
+	}
+	for _, arg := range []string{"--css-rules=0", "--css-rules=16385", "--stylesheet-bytes=0", "--stylesheet-bytes=1048577", "--stylesheet-total-bytes=-1", "--stylesheet-total-bytes=4194305", "--stylesheets=0", "--stylesheets=65"} {
+		if _, err := parseArgs([]string{arg}); err == nil {
+			t.Fatalf("accepted %s", arg)
+		}
+	}
+}

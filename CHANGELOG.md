@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Give glynx bounded host-only stylesheet storage (4 MiB), up to 64 sheets and
+  1 MiB per sheet plus 16,384 rules, configurable with stylesheet flags. Keep script-mutable DOM
+  limits and ntbrowser defaults unchanged; match the renderer byte ceiling to
+  the combined allowance and retain network/selector gates.
+
 - Give glynx a 512 MiB process-heap budget while retaining ntbrowser's 256 MiB
   default. Add `--heap-budget-mib` (64–2048) and record the effective budget in
   diagnostics; the post-GC guard and all resource/authority gates remain active.

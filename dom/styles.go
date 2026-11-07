@@ -3,14 +3,18 @@
 
 package dom
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // Injected stylesheets (subresources design, decisions 5 and 20). The loader
 // fetches a <link rel=stylesheet> and hands the text to SetStyle; the
 // serializer then writes a <style> twin right after the first qualifying
 // <link> for that href, so the cascade order between external and inline
 // sheets is preserved. The DOM has no node for the twin: scripts cannot see
-// or edit it. Every byte the twin will emit is charged to TotalBytes.
+// or edit it. Every byte the twin will emit is charged to TotalBytes by default, or to the
+// explicitly configured host-only ExternalStyleBytes allowance.
 
 type injectedStyle struct {
 	css      string // already sanitized
@@ -161,6 +165,7 @@ func (t *Tree) SetStyle(href, css string) error {
 	if css == "" {
 		if st, ok := t.styles[href]; ok {
 			t.bytes -= twinCost(st)
+			t.styleBytes -= twinCost(st)
 			delete(t.styles, href)
 			t.dirty = true
 		}
@@ -176,7 +181,7 @@ func (t *Tree) SetStyle(href, css string) error {
 		}
 		old = twinCost(st)
 	}
-	if err := t.charge(twinCost(next) - old); err != nil {
+	if err := t.chargeStyle(twinCost(next) - old); err != nil {
 		return err
 	}
 	t.styles[href] = next
@@ -188,6 +193,7 @@ func (t *Tree) SetStyle(href, css string) error {
 func (t *Tree) ClearStyles() {
 	for href, st := range t.styles {
 		t.bytes -= twinCost(st)
+		t.styleBytes -= twinCost(st)
 		delete(t.styles, href)
 	}
 	t.dirty = true
@@ -213,7 +219,7 @@ func (t *Tree) styleMediaDelta(n *Node) {
 		if want == st.wrapCost {
 			continue
 		}
-		if err := t.charge(want - st.wrapCost); err != nil {
+		if err := t.chargeStyle(want - st.wrapCost); err != nil {
 			continue // over budget: the twin stays accounted as before and is skipped if it would not fit
 		}
 		st.wrapCost = want
@@ -264,6 +270,20 @@ func (t *Tree) releaseOrphanStyles(seen map[string]bool) {
 			continue // present but not emitted (unusable media): keep it charged
 		}
 		t.bytes -= twinCost(st)
+		t.styleBytes -= twinCost(st)
 		delete(t.styles, href)
 	}
+}
+
+func (t *Tree) chargeStyle(delta int) error {
+	if t.limits.ExternalStyleBytes > 0 {
+		if delta > 0 && t.styleBytes+delta > t.limits.ExternalStyleBytes {
+			return fmt.Errorf("%w: external stylesheet size over %d bytes", ErrLimit, t.limits.ExternalStyleBytes)
+		}
+		t.bytes += delta
+	} else if err := t.charge(delta); err != nil {
+		return err
+	}
+	t.styleBytes += delta
+	return nil
 }

@@ -237,8 +237,21 @@ func New(ctx context.Context, cfg Config, sink Sink) *Loop {
 	if cfg.Outbox <= 0 {
 		cfg.Outbox = 1024
 	}
-	if cfg.RenderLimit.Rules <= 0 || cfg.RenderLimit.Rules > 4096 {
-		cfg.RenderLimit.Rules = 4096 // nthtml's ceiling (it refuses larger values): every sheet in the measured sample fits (spec decision 6)
+	if cfg.RenderLimit.Rules <= 0 || cfg.RenderLimit.Rules > document.MaxLimits.Rules {
+		cfg.RenderLimit.Rules = 4096 // conservative host default; explicit higher values remain bounded by nthtml
+	}
+	// Host-only styles have their own allowance; script-mutable DOM ceilings
+	// stay unchanged. The serialized CSS twin must also fit nthtml's input cap.
+	cfg.DOMLimits.ExternalStyleBytes = max(0, min(cfg.DOMLimits.ExternalStyleBytes, dom.MaxExternalStyleBytes))
+	if cfg.DOMLimits.ExternalStyleBytes > 0 {
+		content := dom.DefaultLimits.TotalBytes
+		if cfg.DOMLimits.TotalBytes > 0 {
+			content = min(content, cfg.DOMLimits.TotalBytes)
+		}
+		if cfg.RenderLimit.Bytes == 0 {
+			cfg.RenderLimit.Bytes = content + cfg.DOMLimits.ExternalStyleBytes
+		}
+		cfg.DOMLimits.ExternalStyleBytes = min(cfg.DOMLimits.ExternalStyleBytes, max(0, min(cfg.RenderLimit.Bytes, document.MaxLimits.Bytes)-content))
 	}
 	cfg.Subresources = cfg.Subresources.WithDefaults()
 	l := &Loop{ctx: ctx, cfg: cfg, sink: sink, inbox: make(chan func(), cfg.Inbox), outbox: make(chan tea.Msg, cfg.Outbox), timerT: stoppedTimer(), frameTimer: stoppedTimer()}

@@ -62,7 +62,7 @@ func (t *Tree) SetInnerHTML(n *Node, source string) error {
 	if err := staged.ingest(staged.root, root, 0); err != nil {
 		return err
 	}
-	if t.live+staged.live > t.limits.Nodes || t.bytes+staged.bytes > t.limits.TotalBytes {
+	if t.live+staged.live > t.limits.Nodes || t.contentBytes()+staged.bytes > t.limits.TotalBytes {
 		return fmt.Errorf("%w: fragment exceeds live DOM budget", ErrLimit)
 	}
 	for _, c := range staged.root.children {

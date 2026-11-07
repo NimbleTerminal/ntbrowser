@@ -33,25 +33,29 @@ import (
 	"nimbleterminal.dev/ntbrowser/cookies"
 	"nimbleterminal.dev/ntbrowser/devtools"
 	"nimbleterminal.dev/ntbrowser/diagnostics"
+	"nimbleterminal.dev/ntbrowser/dom"
 	"nimbleterminal.dev/ntbrowser/jsvm"
 	"nimbleterminal.dev/ntbrowser/loop"
 	"nimbleterminal.dev/ntbrowser/profile"
 	"nimbleterminal.dev/ntbrowser/sandbox"
 	"nimbleterminal.dev/ntbrowser/subres"
+	"nimbleterminal.dev/nthtml/document"
 )
 
 // config is what the command line decides. Profile is the effective profile:
 // the chosen one with the gate flags applied, validated and then frozen.
 type config struct {
-	Diagnostics   string
-	Profile       profile.Profile
-	Start         string
-	Width         int
-	Slice         time.Duration
-	HeapBudgetMiB uint64
-	Seed          uint64
-	ShowProfile   bool
-	Chunked       bool
+	Diagnostics                                        string
+	Profile                                            profile.Profile
+	Start                                              string
+	Width                                              int
+	Slice                                              time.Duration
+	HeapBudgetMiB                                      uint64
+	StylesheetBytes, StylesheetTotalBytes, Stylesheets int
+	CSSRules                                           int
+	Seed                                               uint64
+	ShowProfile                                        bool
+	Chunked                                            bool
 }
 
 func parseArgs(args []string) (config, error) { return parseCommandArgs("ntbrowser", args) }
@@ -60,9 +64,13 @@ func parseCommandArgs(command string, args []string) (config, error) {
 	var c config
 	defaultProfile := "browse"
 	defaultHeapMiB := uint64(256)
+	sheetBytes, sheetTotal, sheetCount := 256<<10, 0, 16
+	cssRules := 4096
 	if command == "glynx" {
 		defaultProfile = "glynx"
 		defaultHeapMiB = 512
+		sheetBytes, sheetTotal, sheetCount = 1<<20, 4<<20, 64
+		cssRules = 16384
 	}
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
 	fs.StringVarP(&c.Diagnostics, "diagnostics", "d", "", "write bounded JSONL diagnostics to a new owner-only file")
@@ -100,12 +108,22 @@ func parseCommandArgs(command string, args []string) (config, error) {
 	fs.IntVar(&c.Width, "width", 800, "document pixel width")
 	fs.DurationVar(&c.Slice, "slice", 50*time.Millisecond, "JS time slice per callback")
 	fs.Uint64Var(&c.HeapBudgetMiB, "heap-budget-mib", defaultHeapMiB, "process Go heap budget after GC in MiB (64..2048; includes rendering)")
+	fs.IntVar(&c.CSSRules, "css-rules", cssRules, "maximum CSS rules (256..16384; matching-work budget still applies)")
+	fs.IntVar(&c.StylesheetBytes, "stylesheet-bytes", sheetBytes, "maximum bytes per stylesheet (1024..1048576)")
+	fs.IntVar(&c.StylesheetTotalBytes, "stylesheet-total-bytes", sheetTotal, "separate host stylesheet allowance (0 shares DOM budget; max 4194304)")
+	fs.IntVar(&c.Stylesheets, "stylesheets", sheetCount, "maximum stylesheets per page including imports (1..64)")
 	fs.Uint64Var(&c.Seed, "seed", 0, "PRNG seed for Math.random, for reproducible runs (0 = time-based); the clock is never fixed, timers depend on it")
 	if err := fs.Parse(legacyLongFlags(fs, args)); err != nil {
 		return c, err
 	}
 	if c.HeapBudgetMiB < 64 || c.HeapBudgetMiB > 2048 {
 		return c, fmt.Errorf("--heap-budget-mib must be between 64 and 2048")
+	}
+	if c.CSSRules < 256 || c.CSSRules > document.MaxLimits.Rules {
+		return c, fmt.Errorf("--css-rules must be between 256 and %d", document.MaxLimits.Rules)
+	}
+	if c.StylesheetBytes < 1024 || c.StylesheetBytes > 1<<20 || c.StylesheetTotalBytes < 0 || c.StylesheetTotalBytes > dom.MaxExternalStyleBytes || c.Stylesheets < 1 || c.Stylesheets > 64 {
+		return c, fmt.Errorf("invalid stylesheet budget: bytes 1024..1048576, total 0..4194304, count 1..64")
 	}
 	p, ok := profile.Builtin(*name)
 	if !ok {
@@ -365,7 +383,7 @@ func Run(command string) int {
 				fmt.Fprintln(os.Stderr, "diagnostics:", err)
 			}
 		}()
-		trace.Record("session", map[string]any{"profile": c.Profile, "strengths": strengths, "heap_budget_bytes": c.HeapBudgetMiB << 20})
+		trace.Record("session", map[string]any{"profile": c.Profile, "strengths": strengths, "heap_budget_bytes": c.HeapBudgetMiB << 20, "stylesheet_bytes": c.StylesheetBytes, "stylesheet_total_bytes": c.StylesheetTotalBytes, "stylesheets": c.Stylesheets, "css_rules": c.CSSRules})
 	}
 	// Process-wide soft heap cap: Goja has no per-runtime memory limit, so
 	// the GC is told to work harder past this point and dom/nthtml limits
@@ -390,7 +408,7 @@ func Run(command string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
-	subresCfg := subres.Config{Mode: mode}
+	subresCfg := subres.Config{Mode: mode, MaxSheetBytes: c.StylesheetBytes, MaxStylesheets: c.Stylesheets}
 	var cookieStore *cookies.Store
 	if c.Profile.Cookies == profile.CookiesSession {
 		cookieStore = cookies.New()
@@ -398,7 +416,7 @@ func Run(command string) int {
 	policy := app.PolicyFor(c.Profile)
 	policy.Cookies = cookieStore
 	policy.Trace = trace
-	l := loop.New(ctx, loop.Config{Trace: trace, Chunked: c.Chunked, Profile: c.Profile, Width: c.Width, Script: script, Subresources: subresCfg, SubresourceTransport: app.SubresourceTransport(policy, subresCfg)}, sink)
+	l := loop.New(ctx, loop.Config{RenderLimit: document.Limits{Rules: c.CSSRules}, DOMLimits: dom.Limits{ExternalStyleBytes: c.StylesheetTotalBytes}, Trace: trace, Chunked: c.Chunked, Profile: c.Profile, Width: c.Width, Script: script, Subresources: subresCfg, SubresourceTransport: app.SubresourceTransport(policy, subresCfg)}, sink)
 	browserLoop = l
 	go l.Run()
 

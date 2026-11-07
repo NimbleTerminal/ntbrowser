@@ -242,3 +242,43 @@ func TestSerializeWithinBytesAfterStyles(t *testing.T) {
 		}
 	}
 }
+
+func TestSeparateHostStyleAllowance(t *testing.T) {
+	tr := mustParse(t, `<link id="sheet" rel="stylesheet" href="a.css"><div id="target"></div>`, Limits{TotalBytes: 1024, ExternalStyleBytes: 4096})
+	before := tr.Bytes()
+	css := "/*" + strings.Repeat("x", 2048) + "*/div{color:red}"
+	if err := tr.SetStyle("a.css", css); err != nil {
+		t.Fatal(err)
+	}
+	if tr.Bytes() <= 1024 || tr.contentBytes() != before {
+		t.Fatal("styles not separately charged")
+	}
+	if _, err := tr.NewText(strings.Repeat("x", 1024)); !errors.Is(err, ErrLimit) {
+		t.Fatalf("script allocation escaped DOM cap: %v", err)
+	}
+	if err := tr.SetInnerHTML(tr.ByID("target"), "<b>ok</b>"); err != nil {
+		t.Fatal(err)
+	}
+	if err := tr.SetInnerHTML(tr.ByID("target"), strings.Repeat("x", 1024)); !errors.Is(err, ErrLimit) {
+		t.Fatalf("innerHTML escaped DOM cap: %v", err)
+	}
+	charged := tr.Bytes()
+	if err := tr.SetStyle("a.css", strings.Repeat("x", 4096)); !errors.Is(err, ErrLimit) || tr.Bytes() != charged {
+		t.Fatalf("style overflow changed accounting: %v", err)
+	}
+	if len(tr.Serialize()) > tr.Bytes() {
+		t.Fatal("serialized bytes exceed accounting")
+	}
+	tr.ClearStyles()
+	if tr.styleBytes != 0 || tr.Bytes() != tr.contentBytes() {
+		t.Fatal("clear did not credit host bytes")
+	}
+	if err := tr.SetStyle("a.css", css); err != nil {
+		t.Fatal(err)
+	}
+	tr.RemoveAttr(tr.ByID("sheet"), "href")
+	tr.Serialize()
+	if tr.styleBytes != 0 {
+		t.Fatal("orphan stylesheet retains charge")
+	}
+}

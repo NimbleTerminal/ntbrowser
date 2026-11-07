@@ -107,6 +107,24 @@ Packages (module `nimbleterminal.dev/ntbrowser`):
 22. **Memory ceilings are real ceilings.** `dom.Limits.TotalBytes` (default 1 MiB = nthtml `DefaultLimits.Bytes`) bounds the *serialized* size: every node is charged an upper bound of what the serializer emits for it (escaped text, tag, attributes, a reserve for a minted id), so a tree inside `dom.Limits` can never make `document.Render` fail with `ErrLimit` and wedge painting (`dom.TestSerializedSizeNeverExceedsAccountedBytes`). When a page trips the heap or strike budget, the loop *drops its runtime*: `Sandbox.Close` nils the Goja runtime and every wrapper map, the page's requests are cancelled through its own context, timers and frames are cleared, and the GC runs once; the tree and last frame stay so links still open (`loop.TestDisabledPageIsDropped`, `jsvm.TestCloseDropsRuntime`). `debug.SetMemoryLimit` remains a soft GC target that one 50 ms slice can overshoot; it is the last layer, not a cap.
 23. **Page loads are ordered by generation, not by goroutine luck.** `LoadPage` takes a generation synchronously on the caller, posts through `tryPost` and falls back to a goroutine only on a full inbox; the task no-ops unless its generation is still the latest, so a slow earlier load can never replace a newer page (`loop.TestLatestLoadPageWins` runs 50 rounds with a one-slot inbox). The UI's `current` URL and the VM's page therefore agree, which `fetch()` same-origin depends on.
 
+### Separate host stylesheet allowance (2026-11-07)
+
+The default DOM accounting contract remains unchanged. Hosts may opt into
+`dom.Limits.ExternalStyleBytes`, capped at 4 MiB, for loaded stylesheet twins
+that scripts cannot directly edit. `Tree.Bytes()` still bounds the complete
+serialization; script mutations and innerHTML are checked against content bytes
+excluding this separately charged CSS. Replacement, media-wrapper updates,
+removal and orphan cleanup preserve both counters. The loop adds the allowance
+to nthtml's input-byte ceiling; an explicitly lower renderer cap constrains it.
+
+Glynx defaults to 64 sheets, 1 MiB per stylesheet and 4 MiB of host stylesheet
+storage, and 16,384 CSS rules. ntbrowser retains 16 sheets, 256 KiB per sheet,
+4,096 rules and shared 1 MiB DOM
+accounting. The host flags `--stylesheets`, `--stylesheet-bytes` and
+`--stylesheet-total-bytes` and `--css-rules` configure these bounded settings, survive re-exec and
+are included in diagnostics. They confer no new network origins or script
+permissions. Image and selector-work limits remain independent.
+
 ### Heap watchdog clarification (2026-11-07)
 
 The heap-objects metric is process-wide and includes renderer allocations and
