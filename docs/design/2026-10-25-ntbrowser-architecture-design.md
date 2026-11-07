@@ -118,7 +118,7 @@ removal and orphan cleanup preserve both counters. The loop adds the allowance
 to nthtml's input-byte ceiling; an explicitly lower renderer cap constrains it.
 
 Glynx defaults to 64 sheets, 1 MiB per stylesheet and 4 MiB of host stylesheet
-storage, and 16,384 CSS rules. ntbrowser retains 16 sheets, 256 KiB per sheet,
+storage, and 32,768 CSS rules. ntbrowser retains 16 sheets, 256 KiB per sheet,
 4,096 rules and shared 1 MiB DOM
 accounting. The host flags `--stylesheets`, `--stylesheet-bytes` and
 `--stylesheet-total-bytes` and `--css-rules` configure these bounded settings, survive re-exec and

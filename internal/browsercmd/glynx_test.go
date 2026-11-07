@@ -134,7 +134,7 @@ func TestStylesheetBudgets(t *testing.T) {
 			t.Fatal(err)
 		}
 		if command == "glynx" {
-			if c.CSSRules != 16384 || c.StylesheetBytes != 1<<20 || c.StylesheetTotalBytes != 4<<20 || c.Stylesheets != 64 {
+			if c.CSSRules != 32768 || c.StylesheetBytes != 1<<20 || c.StylesheetTotalBytes != 4<<20 || c.Stylesheets != 64 {
 				t.Fatal(c)
 			}
 		} else if c.CSSRules != 4096 || c.StylesheetBytes != 256<<10 || c.StylesheetTotalBytes != 0 || c.Stylesheets != 16 {
@@ -150,7 +150,7 @@ func TestStylesheetBudgets(t *testing.T) {
 			t.Fatal("reexec lost budgets", err)
 		}
 	}
-	for _, arg := range []string{"--css-rules=0", "--css-rules=16385", "--stylesheet-bytes=0", "--stylesheet-bytes=1048577", "--stylesheet-total-bytes=-1", "--stylesheet-total-bytes=4194305", "--stylesheets=0", "--stylesheets=65"} {
+	for _, arg := range []string{"--css-rules=0", "--css-rules=32769", "--stylesheet-bytes=0", "--stylesheet-bytes=1048577", "--stylesheet-total-bytes=-1", "--stylesheet-total-bytes=4194305", "--stylesheets=0", "--stylesheets=65"} {
 		if _, err := parseArgs([]string{arg}); err == nil {
 			t.Fatalf("accepted %s", arg)
 		}

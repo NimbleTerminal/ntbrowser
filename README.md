@@ -392,7 +392,7 @@ forms, frames, and devtools. Press it again during shutdown to quit immediately
 if graphics cleanup is waiting.
 
 Glynx allows up to 64 stylesheets, 1 MiB each, with a separate 4 MiB host-only
-CSS allowance, and 16,384 CSS rules. Tune these using `--stylesheets`, `--stylesheet-bytes`, and
+CSS allowance, and 32,768 CSS rules. Tune these using `--stylesheets`, `--stylesheet-bytes`, and
 `--stylesheet-total-bytes` (zero shares the DOM allowance), and `--css-rules`. ntbrowser retains
 its 16-sheet / 256 KiB / 4,096-rule defaults. Script-mutable DOM limits remain unchanged.
 CSS rule-count and matching limits still apply. ES modules/import maps are not

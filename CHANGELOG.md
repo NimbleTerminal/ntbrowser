@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Admit up to 32,768 CSS rules in glynx now that the local nthtml renderer
+  evaluates cascade-layer blocks. Keep ntbrowser's 4,096-rule default and
+  existing selector-work, stylesheet-byte and script-mutable DOM limits.
+
 - Give glynx bounded host-only stylesheet storage (4 MiB), up to 64 sheets and
   1 MiB per sheet plus 16,384 rules, configurable with stylesheet flags. Keep script-mutable DOM
   limits and ntbrowser defaults unchanged; match the renderer byte ceiling to

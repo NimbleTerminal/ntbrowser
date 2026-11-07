@@ -70,7 +70,7 @@ func parseCommandArgs(command string, args []string) (config, error) {
 		defaultProfile = "glynx"
 		defaultHeapMiB = 512
 		sheetBytes, sheetTotal, sheetCount = 1<<20, 4<<20, 64
-		cssRules = 16384
+		cssRules = 32768
 	}
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
 	fs.StringVarP(&c.Diagnostics, "diagnostics", "d", "", "write bounded JSONL diagnostics to a new owner-only file")
@@ -108,7 +108,7 @@ func parseCommandArgs(command string, args []string) (config, error) {
 	fs.IntVar(&c.Width, "width", 800, "document pixel width")
 	fs.DurationVar(&c.Slice, "slice", 50*time.Millisecond, "JS time slice per callback")
 	fs.Uint64Var(&c.HeapBudgetMiB, "heap-budget-mib", defaultHeapMiB, "process Go heap budget after GC in MiB (64..2048; includes rendering)")
-	fs.IntVar(&c.CSSRules, "css-rules", cssRules, "maximum CSS rules (256..16384; matching-work budget still applies)")
+	fs.IntVar(&c.CSSRules, "css-rules", cssRules, "maximum CSS rules (256..32768; matching-work budget still applies)")
 	fs.IntVar(&c.StylesheetBytes, "stylesheet-bytes", sheetBytes, "maximum bytes per stylesheet (1024..1048576)")
 	fs.IntVar(&c.StylesheetTotalBytes, "stylesheet-total-bytes", sheetTotal, "separate host stylesheet allowance (0 shares DOM budget; max 4194304)")
 	fs.IntVar(&c.Stylesheets, "stylesheets", sheetCount, "maximum stylesheets per page including imports (1..64)")
