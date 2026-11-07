@@ -800,3 +800,22 @@ without a scheme uses HTTPS. **Ctrl+U** clears text before the cursor and
 The address prompt captures input locally; typed text is not sent to the page.
 Navigation still obeys the profile's navigation, host, and network restrictions.
 Local files must be selected on the command line at startup, before lockdown.
+
+### Document readiness
+
+`document.readyState` is host-owned: `loading` while the current serial parser
+script sequence runs, then `interactive` before `DOMContentLoaded`, and
+`complete` after the initial render discovers resources and supported image,
+stylesheet, and dynamic-script loads settle. Failed/denied resources settle too;
+timers and fetch requests do not delay completion. Each transition dispatches
+`readystatechange` on document. Completion dispatches a non-bubbling window
+`load` event with the legacy document target, once per page. Later scripts can
+check readiness instead of waiting for an event that has already happened.
+This follows ntbrowser's existing serial script scheduling, not full browser
+parser/async/defer scheduling. Script-disabled profiles dispatch no lifecycle
+callbacks. Node `ownerDocument` points to the current document, whose
+`defaultView` points to the single window; document itself has no owner.
+
+These lifecycle bindings do not implement HTML template parsing via
+`innerHTML`, iframe browsing contexts, or POST form submission. Loading
+reCAPTCHA's scripts successfully therefore does not imply a usable challenge.

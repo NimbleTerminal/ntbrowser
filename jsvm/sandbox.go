@@ -115,6 +115,7 @@ type Sandbox struct {
 
 	collectionProto *goja.Object
 
+	documentReady     string
 	performanceOrigin float64
 	performanceNow    func() float64
 	vm                *goja.Runtime

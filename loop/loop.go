@@ -89,6 +89,8 @@ type Page struct {
 	Fetcher          *netpolicy.Fetcher
 	Base             string
 	loaded           bool
+	loadComplete     bool
+	dynamicPending   int
 	// ctx bounds every request this page starts; cancel fires when the page
 	// is replaced or killed, so no completion outlives its runtime.
 	ctx         context.Context
@@ -473,7 +475,8 @@ func (l *Loop) runScripts(page *Page, i int) {
 	}
 	if !page.loaded {
 		page.loaded = true
-		_, err := page.Sandbox.Dispatch(jsvm.Event{Type: "DOMContentLoaded"})
+		l.report(page.Sandbox.SetDocumentReady("interactive"))
+		_, err := page.Sandbox.Dispatch(jsvm.Event{Type: "DOMContentLoaded", NonCancelable: true})
 		l.report(err)
 	}
 }
@@ -703,6 +706,7 @@ func (l *Loop) afterTask() {
 		}
 	}
 	l.updateImages()
+	l.completeDocument()
 	if l.page.Sandbox.Disabled() && !l.page.killed {
 		l.dropPage(l.page)
 	}

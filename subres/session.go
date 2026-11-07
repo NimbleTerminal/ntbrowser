@@ -460,3 +460,7 @@ func (s *Session) ImageStatus(src string) (width, height int, done bool) {
 	b := e.img.Bounds()
 	return b.Dx(), b.Dy(), true
 }
+
+// Pending reports outstanding resource work on the session owner goroutine.
+// Failed or policy-denied resources settle just like successfully loaded ones.
+func (s *Session) Pending() bool { return !s.closed && (s.inflight > 0 || len(s.queue) > 0) }

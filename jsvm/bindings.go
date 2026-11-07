@@ -234,6 +234,7 @@ func (s *Sandbox) buildElementProto() *goja.Object {
 		}
 		return vm.ToValue(1)
 	}, nil)
+	s.accessor(p, "ownerDocument", func(t goja.Value) goja.Value { s.node(t); return s.docObj }, nil)
 	s.accessor(p, "isConnected", func(t goja.Value) goja.Value { return vm.ToValue(s.tree.Attached(s.node(t))) }, nil)
 	s.accessor(p, "id", func(t goja.Value) goja.Value { v, _ := s.node(t).Attr("id"); return vm.ToValue(v) },
 		func(t, v goja.Value) { s.must(s.tree.SetAttr(s.node(t), "id", v.String())) })
@@ -482,6 +483,10 @@ func (s *Sandbox) documentObject() *goja.Object {
 	vm := s.vm
 	d := vm.NewObject()
 	s.docObj = d
+	defineFrozen(d, "nodeType", vm.ToValue(9))
+	defineFrozen(d, "ownerDocument", goja.Null())
+	s.documentReady = "loading"
+	s.accessor(d, "readyState", func(goja.Value) goja.Value { return vm.ToValue(s.documentReady) }, nil)
 	_ = d.SetPrototype(s.eventTargetProto)
 	s.method(d, "createEvent", func(c goja.FunctionCall) goja.Value {
 		if len(c.Arguments) == 0 {

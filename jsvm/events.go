@@ -354,6 +354,9 @@ func (s *Sandbox) dispatchEvent(target, event *goja.Object) (bool, error) {
 	_ = state.Set("path", s.vm.NewArray(vals...))
 	_ = state.Set("dispatching", true)
 	_ = state.Set("target", target)
+	if flag(state, "documentLoad") {
+		_ = state.Set("target", s.docObj)
+	}
 	defer func() {
 		_ = state.Set("dispatching", false)
 		_ = state.Set("currentTarget", goja.Null())

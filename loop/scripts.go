@@ -17,6 +17,7 @@ type dynamicScript struct {
 }
 
 func (l *Loop) loadDynamicScript(page *Page, generation uint64, request jsvm.ScriptRequest) {
+	page.dynamicPending++
 	job := &dynamicScript{request: request, name: request.URL}
 	if !request.Async {
 		page.dynamicOrdered = append(page.dynamicOrdered, job)
@@ -45,6 +46,7 @@ func (l *Loop) loadDynamicScript(page *Page, generation uint64, request jsvm.Scr
 			}
 			l.cfg.Trace.Record("dynamic_script", map[string]any{"url": j.name, "result": result, "async": j.request.Async})
 			page.Sandbox.CompleteScript(j.request.ID, j.name, j.body, j.err)
+			page.dynamicPending--
 			j.body = ""
 		}
 		if request.Async {

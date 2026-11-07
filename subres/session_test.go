@@ -624,3 +624,24 @@ func TestImageStatusDoesNotRetainOverBudgetKeys(t *testing.T) {
 		t.Fatalf("unbounded rejected requests: entries=%d requests=%d", len(s.images), ft.total())
 	}
 }
+
+func TestPendingIncludesQueuedAndFailedResources(t *testing.T) {
+	ft := newFake(func(context.Context, netpolicy.Request) (netpolicy.Response, error) {
+		return netpolicy.Response{}, errors.New("unavailable")
+	})
+	cfg := testCfg()
+	cfg.MaxInFlight = 1
+	cfg.Mode = ModeAny
+	s, r := newTestSession(t, cfg, ft)
+	if s.Pending() {
+		t.Fatal("empty session pending")
+	}
+	s.Discover([]string{"/a.css", "/b.css"}, []string{"/a.png"}, nil)
+	if !s.Pending() {
+		t.Fatal("queued loads not pending")
+	}
+	r.settle(t, func() bool { return !s.Pending() })
+	if ft.total() != 3 {
+		t.Fatal("loads not settled", ft.total())
+	}
+}
