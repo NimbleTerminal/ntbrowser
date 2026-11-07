@@ -387,6 +387,12 @@ make Google Search compatible.
 
 JavaScript runs in a pure-Go interpreter with no `os`, `net` or environment access, a per-entry time slice, a heap budget, and a bounded DOM; the only network path is a `fetch()` confined to the page's origin plus `-allow`, dialled through an address-vetting transport. Page text reaches the terminal only through a control-stripping boundary.
 
+The heap guard defaults to 256 MiB of **process-wide Go heap**, including the
+renderer. It collects garbage and rechecks before disabling scripting, then
+reports the measured bytes and budget. This is not a per-script memory meter;
+the last rendered page remains available when scripting is disabled.
+
+
 | Threat | Control | Enforced in |
 | --- | --- | --- |
 | Script reads/writes files | no `os` import; source maps disabled at the `Parse` call (not just on the runtime); `file:` rejected by `Allowed` and `ResolveURL` | `jsvm` (three tests), `netpolicy` |

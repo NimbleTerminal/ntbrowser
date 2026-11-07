@@ -5,6 +5,7 @@ package jsvm
 
 import (
 	"runtime"
+	"runtime/debug"
 	"runtime/metrics"
 	"strings"
 	"testing"
@@ -37,7 +38,42 @@ func TestHeapBudgetDisablesPage(t *testing.T) {
 	if err := s.Eval("after.js", `1`); err != ErrDisabled {
 		t.Fatalf("Eval after heap disable: %v", err)
 	}
-	if !strings.Contains(strings.Join(host.lines, "\n"), "heap budget exceeded") {
+	if line := strings.Join(host.lines, "\n"); !strings.Contains(line, "heap budget exceeded") || !strings.Contains(line, "process heap") || !strings.Contains(line, "after GC; budget") {
 		t.Fatalf("no log line: %v", host.lines)
 	}
+}
+
+// Rendering and navigation can leave large unreachable Go allocations between
+// collections. Crossing the sampled threshold must not kill a healthy runtime.
+func TestHeapBudgetCollectsGarbageBeforeDisabling(t *testing.T) {
+	tree, _ := dom.Parse(strings.NewReader("<body></body>"), dom.Limits{})
+	host := &nopHost{}
+	s := New(Config{}, tree, host)
+	t.Cleanup(func() { s.Close(); runtime.GC() })
+	runtime.GC()
+	s.cfg.HeapBudget = processHeapBytes() + (16 << 20)
+	old := debug.SetGCPercent(-1)
+	defer debug.SetGCPercent(old)
+	allocateDiscardedHeap()
+	if got := processHeapBytes(); got <= s.cfg.HeapBudget {
+		t.Fatalf("test did not cross threshold: %d <= %d", got, s.cfg.HeapBudget)
+	}
+	if err := s.Eval("healthy.js", `globalThis.answer=42`); err != nil {
+		t.Fatal(err)
+	}
+	if s.Disabled() {
+		t.Fatalf("garbage killed healthy page: %v", host.lines)
+	}
+	if err := s.Eval("still-alive.js", `if(answer!==42) throw new Error("lost runtime")`); err != nil {
+		t.Fatal(err)
+	}
+}
+
+//go:noinline
+func allocateDiscardedHeap() {
+	b := make([]byte, 48<<20)
+	for i := 0; i < len(b); i += 4096 {
+		b[i] = 1
+	}
+	runtime.KeepAlive(b)
 }

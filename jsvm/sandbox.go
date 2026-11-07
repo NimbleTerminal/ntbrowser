@@ -16,6 +16,7 @@ package jsvm
 import (
 	"errors"
 	"fmt"
+	"runtime"
 	"runtime/metrics"
 	"strings"
 	"sync"
@@ -58,7 +59,7 @@ type Config struct {
 	MaxCallStack     int                           // default 512 frames
 	MaxTimers        int                           // live timers (default 256)
 	MaxListeners     int                           // total event listeners (default 1024)
-	HeapBudget       uint64                        // process heap bytes after which this page is disabled (default 256 MiB)
+	HeapBudget       uint64                        // process heap bytes after GC above which this page is disabled (default 256 MiB)
 	ClockResolution  time.Duration                 // minimum clock resolution (default 10ms), shared by Date, performance and rAF
 	Clock            func() time.Time
 	Rand             func() float64
@@ -696,18 +697,31 @@ func (s *Sandbox) ToValue(v any) goja.Value {
 
 // checkHeap is the memory dimension of the watchdog. Goja cannot cap its own
 // heap, and a script can allocate hundreds of MB inside one 50 ms slice
-// without ever tripping Interrupt. After every entry the live heap is read
-// (runtime/metrics; cheap, no stop-the-world) and a page over budget is
-// disabled; the loop then drops the page so the GC can reclaim it. This
+// without ever tripping Interrupt. After every entry heap objects are sampled.
+// This process-wide metric includes renderer allocations and garbage awaiting
+// collection, not just the page's JavaScript. If over budget, collect once and
+// resample before disabling the page. Run has already disarmed the watchdog,
+// so collection is not billed as script execution. The loop then drops the
+// runtime so the GC can reclaim it. This
 // degrades the page instead of letting debug.SetMemoryLimit thrash or the
 // process die, but a single pathological slice can still overshoot.
-var heapSample = []metrics.Sample{{Name: "/memory/classes/heap/objects:bytes"}}
+func processHeapBytes() uint64 {
+	sample := []metrics.Sample{{Name: "/memory/classes/heap/objects:bytes"}}
+	metrics.Read(sample)
+	if sample[0].Value.Kind() == metrics.KindUint64 {
+		return sample[0].Value.Uint64()
+	}
+	return 0
+}
 
 func (s *Sandbox) checkHeap() {
-	metrics.Read(heapSample)
-	if heapSample[0].Value.Kind() == metrics.KindUint64 && heapSample[0].Value.Uint64() > s.cfg.HeapBudget {
+	if processHeapBytes() <= s.cfg.HeapBudget {
+		return
+	}
+	runtime.GC()
+	if used := processHeapBytes(); used > s.cfg.HeapBudget {
 		s.disabled = true
-		s.host.Log("error", "scripting disabled: heap budget exceeded")
+		s.host.Log("error", fmt.Sprintf("scripting disabled: heap budget exceeded (process heap %d bytes after GC; budget %d bytes)", used, s.cfg.HeapBudget))
 	}
 }
 

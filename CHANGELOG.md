@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Confirm heap pressure after garbage collection before disabling scripting,
+  avoiding shutdown caused only by transient renderer/navigation allocations.
+  Preserve the 256 MiB default and report process-wide bytes and budget.
+
 - Keep SVG-heavy pages readable when nthtml reaches its diagram budget by
   falling back to labels/source under the existing render limits. Add Alt+C
   to copy the complete status/error message through the clipboard gate.

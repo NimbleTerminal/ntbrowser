@@ -107,6 +107,20 @@ Packages (module `nimbleterminal.dev/ntbrowser`):
 22. **Memory ceilings are real ceilings.** `dom.Limits.TotalBytes` (default 1 MiB = nthtml `DefaultLimits.Bytes`) bounds the *serialized* size: every node is charged an upper bound of what the serializer emits for it (escaped text, tag, attributes, a reserve for a minted id), so a tree inside `dom.Limits` can never make `document.Render` fail with `ErrLimit` and wedge painting (`dom.TestSerializedSizeNeverExceedsAccountedBytes`). When a page trips the heap or strike budget, the loop *drops its runtime*: `Sandbox.Close` nils the Goja runtime and every wrapper map, the page's requests are cancelled through its own context, timers and frames are cleared, and the GC runs once; the tree and last frame stay so links still open (`loop.TestDisabledPageIsDropped`, `jsvm.TestCloseDropsRuntime`). `debug.SetMemoryLimit` remains a soft GC target that one 50 ms slice can overshoot; it is the last layer, not a cap.
 23. **Page loads are ordered by generation, not by goroutine luck.** `LoadPage` takes a generation synchronously on the caller, posts through `tryPost` and falls back to a goroutine only on a full inbox; the task no-ops unless its generation is still the latest, so a slow earlier load can never replace a newer page (`loop.TestLatestLoadPageWins` runs 50 rounds with a one-slot inbox). The UI's `current` URL and the VM's page therefore agree, which `fetch()` same-origin depends on.
 
+### Heap watchdog clarification (2026-11-07)
+
+The heap-objects metric is process-wide and includes renderer allocations and
+uncollected garbage; it is not a per-page JavaScript measurement. After an entry
+exceeds `HeapBudget`, the implementation now performs one GC and samples again
+before disabling scripting. The entry watchdog is already disarmed, so collection
+cannot produce a script-time strike. The 256 MiB default and process-wide scope
+remain unchanged. A retained allocation bomb still disables its page; transient
+render/navigation garbage alone does not. Error messages report measured bytes
+after collection and the budget, which also appear in console diagnostics.
+Concurrent renderer allocations can still contribute to that sample: this is a
+process-pressure guard, not allocation attribution or a hard memory cap. The Go
+code snapshots below predate this clarification.
+
 ## 6. Deliverable 1 — the sandbox (`jsvm/sandbox.go`)
 
 What each hardening step defends against:
