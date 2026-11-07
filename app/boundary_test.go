@@ -206,3 +206,40 @@ func TestScriptErrorSurvivesFirstFrameAndResize(t *testing.T) {
 		t.Fatalf("error survived navigation: %q", m.status)
 	}
 }
+
+func TestImageWarningDoesNotReplaceNavigationFailureOrPrompt(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400}, dropSink{})
+	go l.Run()
+	m := New(l, testProfile(nil, false, NavFree), "")
+	m.Update(tea.WindowSizeMsg{Width: 120, Height: 24})
+	res := renderTall(t, `<p>still readable</p>`)
+	warning := `image "/gen_204": content type "text/html" is not a decodable image`
+	frame := func(gen uint64) {
+		m.Update(cssFrame(t, m, loop.FrameMsg{Gen: gen, Result: res, Warnings: []string{warning}}))
+	}
+	frame(1)
+	if m.status != "[image warning] "+warning {
+		t.Fatalf("unlabelled warning: %q", m.status)
+	}
+	m.Update(pageLoadedMsg{seq: m.navSeq, err: errors.New("response too large")})
+	want := m.status
+	frame(2)
+	if m.status != want {
+		t.Fatalf("image masked page failure: %q", m.status)
+	}
+	m.pendingNav = "https://example.test/next"
+	m.status = "Open https://example.test/next? Enter to open · Esc to stay"
+	want = m.status
+	frame(3)
+	if m.status != want {
+		t.Fatalf("image masked confirmation: %q", m.status)
+	}
+	m.pendingNav = ""
+	m.Update(pageLoadedMsg{html: "<p>next</p>", base: mustURL(t, "https://example.test/next"), seq: m.navSeq, hist: pushNew})
+	frame(4)
+	if m.status != "[image warning] "+warning {
+		t.Fatalf("old failure survived new page: %q", m.status)
+	}
+}

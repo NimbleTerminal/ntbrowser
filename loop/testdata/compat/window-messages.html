@@ -5,6 +5,10 @@
 <p id="result">waiting</p>
 <script>
 window.addEventListener('DOMContentLoaded', function () {
+  if (top !== self || parent !== self || frames !== self || document.defaultView !== self ||
+      frames.length !== 0 || opener !== null || frameElement !== null || closed !== false) {
+    throw Error('single-window relationships');
+  }
   let promiseDone = false;
   window.addEventListener('message', function (event) {
     if (!promiseDone || event.origin !== 'https://compat.test' || event.source !== window || event.data !== 'ready') {
@@ -14,7 +18,7 @@ window.addEventListener('DOMContentLoaded', function () {
     console.log('PASS:window-messages');
   }, {once: true});
   postMessage('wrong origin', 'https://other.test');
-  postMessage('ready', {targetOrigin: 'https://compat.test'});
+  top.parent.frames.postMessage('ready', {targetOrigin: 'https://compat.test'});
   Promise.resolve().then(function () { promiseDone = true; });
 }, {once: true});
 </script>

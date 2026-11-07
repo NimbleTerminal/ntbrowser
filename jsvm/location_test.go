@@ -32,6 +32,7 @@ func TestLocationRequestsAndUnforgeability(t *testing.T) {
 		{`location.assign("../next")`, "assign:https://example.test/next"},
 		{`location.replace("?q=hello world")`, "replace:https://example.test/a?q=hello%20world"},
 		{`location.reload()`, "reload:https://example.test/a?x=1#old"},
+		{`top.parent.frames.location.replace("/next")`, "replace:https://example.test/next"},
 		{`location.pathname="/two"`, "assign:https://example.test/two?x=1#old"},
 		{`location.hash="new"`, "assign:https://example.test/a?x=1#new"},
 		{`document.location="/doc"`, "assign:https://example.test/doc"},

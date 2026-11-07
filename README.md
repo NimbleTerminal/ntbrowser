@@ -760,3 +760,20 @@ capture records navigation body failures as `navigation_error`, and fetcher
 failures as `network_error`. A server's declared Content-Length is not treated
 as proof of the decoded response size. These diagnostics do not raise the caps;
 page/DOM/render and script budgets remain separate constraints.
+
+### Single-window relationships
+
+`window.top`, `window.parent`, `window.frames`, and `document.defaultView`
+refer to the current page's global object. `window.length` is zero;
+`window.opener` and `window.frameElement` are null; `window.closed` is false.
+The replaceable `parent`, `frames`, `length`, and `opener` properties may be
+shadowed by page code; assigning them creates no host relationships. There are
+no child browsing contexts, popups, or cross-window references; inserting an iframe does not create one. Navigation through an
+alias still requires the existing script-navigation and navigation gates,
+and `postMessage` through an alias uses the same bounded page-local queue.
+See the [HTML Window interface](https://html.spec.whatwg.org/multipage/nav-history-apis.html#the-window-object).
+
+The status line labels an individual failed image as `[image warning]` and
+other rendering/resource warnings as `[page warning]`. These warnings do not
+replace a load failure, script error, policy-blocked navigation, or pending
+navigation confirmation. Full resource errors remain in diagnostic captures.

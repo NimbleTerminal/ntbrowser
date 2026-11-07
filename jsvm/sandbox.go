@@ -306,8 +306,20 @@ func (s *Sandbox) installGlobals() {
 	s.bindEventHandlers(global)
 	defineFrozen(global, "window", global)
 	defineFrozen(global, "self", global)
+	// One top-level realm. Replaceable aliases are configurable so ordinary
+	// global lexical declarations (for example, let frames = 0) remain valid.
+	defineFrozen(global, "top", global)
+	for _, name := range []string{"parent", "frames"} {
+		_ = global.DefineDataProperty(name, global, goja.FLAG_TRUE, goja.FLAG_TRUE, goja.FLAG_TRUE)
+	}
+	_ = global.DefineDataProperty("length", vm.ToValue(0), goja.FLAG_TRUE, goja.FLAG_TRUE, goja.FLAG_TRUE)
+	_ = global.DefineDataProperty("opener", goja.Null(), goja.FLAG_TRUE, goja.FLAG_TRUE, goja.FLAG_TRUE)
+	_ = global.DefineAccessorProperty("frameElement", vm.ToValue(func(goja.FunctionCall) goja.Value { return goja.Null() }), nil, goja.FLAG_TRUE, goja.FLAG_TRUE)
+	_ = global.DefineAccessorProperty("closed", vm.ToValue(func(goja.FunctionCall) goja.Value { return vm.ToValue(false) }), nil, goja.FLAG_TRUE, goja.FLAG_TRUE)
 	defineFrozen(global, "console", s.consoleObject())
-	defineFrozen(global, "document", s.documentObject())
+	doc := s.documentObject()
+	defineFrozen(doc, "defaultView", global)
+	defineFrozen(global, "document", doc)
 	defineFrozen(global, "fetch", vm.ToValue(s.fetch))
 	s.installLocation()
 	navigator := vm.NewObject()

@@ -112,7 +112,7 @@ func TestSkippedSVGElementsStayOutOfStatus(t *testing.T) {
 		t.Fatalf("skip note replaced the status: %q", m.status)
 	}
 	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 2, Result: res, Warnings: []string{"stylesheet \"x.css\": denied"}}))
-	if m.status != `stylesheet "x.css": denied` {
+	if m.status != `[page warning] stylesheet "x.css": denied` {
 		t.Fatalf("status %q", m.status)
 	}
 }

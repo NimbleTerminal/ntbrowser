@@ -384,11 +384,14 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		warnings := append(statusWarnings(v.Result.Warnings), v.Warnings...) // nthtml's, then the loader's
 		switch {
-		case strings.HasPrefix(m.status, "[error] "):
-			// A successful reflow does not resolve a script failure. Keep its
-			// diagnostic, including when scripts finish before the first frame.
+		case strings.HasPrefix(m.status, "[error] ") || strings.HasPrefix(m.status, "load failed:") || strings.HasPrefix(m.status, "blocked:") || m.pendingNav != "":
+			// Reflow and resource warnings do not resolve a page/script failure
+			// or answer a pending navigation confirmation.
 		case len(warnings) > 0:
-			m.status = clean(strings.Join(warnings, "; ")) // warnings replace the status; a log line survives the next frame
+			m.status = clean("[page warning] " + strings.Join(warnings, "; "))
+			if len(warnings) == 1 && strings.HasPrefix(warnings[0], "image ") {
+				m.status = clean("[image warning] " + warnings[0])
+			}
 		case strings.HasPrefix(m.status, "render:") || strings.HasPrefix(m.status, "paint:"):
 			m.status = ""
 		case m.resetView && !strings.HasPrefix(m.status, "focus: "):
