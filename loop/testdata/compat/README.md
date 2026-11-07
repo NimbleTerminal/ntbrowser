@@ -39,3 +39,6 @@ optional permissions. It makes no network requests.
 
 `messages.html` checks MessageChannel's asynchronous delivery after promises,
 copy isolation, port closure and DOM painting, in both permission configurations.
+
+`window-messages.html` checks posted-message origin filtering, sender identity,
+promise ordering and rendered completion with optional permissions off and on.

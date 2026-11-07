@@ -14,9 +14,10 @@ type messagePort struct {
 	pin      *goja.Object
 }
 type portMessage struct {
-	target dom.NodeID
-	data   goja.Value
-	bytes  int
+	window, deliver bool
+	target          dom.NodeID
+	data            goja.Value
+	bytes           int
 }
 
 func (s *Sandbox) port(v goja.Value) *messagePort {
@@ -98,7 +99,7 @@ func (s *Sandbox) installMessages() {
 			s.ensureMessageTask()
 			dst.pin = wrapper
 		}
-		s.portMessages = append(s.portMessages, portMessage{target, cloned, size})
+		s.portMessages = append(s.portMessages, portMessage{target: target, data: cloned, bytes: size})
 		s.messageBytes += size
 		return goja.Undefined()
 	})
@@ -193,7 +194,7 @@ func (s *Sandbox) ensureMessageTask() {
 		s.messageTaskPending = false
 		index := -1
 		for i, m := range s.portMessages {
-			if p := s.messagePorts[m.target]; p != nil && p.started {
+			if s.messageReady(m) {
 				index = i
 				break
 			}
@@ -207,29 +208,38 @@ func (s *Sandbox) ensureMessageTask() {
 		s.portMessages = s.portMessages[:len(s.portMessages)-1]
 		s.messageBytes -= m.bytes
 		p := s.messagePorts[m.target]
-		w := p.pin
-		p.pin = nil
+		var w *goja.Object
+		if m.window {
+			w = s.vm.GlobalObject()
+		} else if p != nil {
+			w = p.pin
+			p.pin = nil
+		}
 		// Queue one task per message, preserving promise checkpoints and yielding
 		// to the host between messages. A callback cannot extend this delivery batch.
 		for _, queued := range s.portMessages {
-			if target := s.messagePorts[queued.target]; target != nil && target.started {
+			if s.messageReady(queued) {
 				s.ensureMessageTask()
 				break
 			}
 		}
 		for _, queued := range s.portMessages {
-			if queued.target == p.id {
+			if p != nil && queued.target == p.id {
 				p.pin = w
 				break
 			}
 		}
-		if w == nil {
+		if w == nil || m.window && !m.deliver {
 			return goja.Undefined(), nil
 		}
 		e := s.newEvent("message", false, false, false, s.specialEventProtos["MessageEvent"])
 		s.initializeSpecialEvent(e, s.specialEventProtos["MessageEvent"], nil)
 		st := s.private(e)
 		_ = st.Set("data", m.data)
+		if m.window {
+			_ = st.Set("origin", s.messageOrigin)
+			_ = st.Set("source", s.vm.GlobalObject())
+		}
 		_ = st.Set("ports", s.emptyMessagePorts)
 		_ = st.Set("trusted", true)
 		_, err := s.dispatchEvent(w, e)
@@ -240,4 +250,12 @@ func (s *Sandbox) ensureMessageTask() {
 	}
 	s.messageTask = id
 	s.messageTaskPending = true
+}
+
+func (s *Sandbox) messageReady(m portMessage) bool {
+	if m.window {
+		return true
+	}
+	p := s.messagePorts[m.target]
+	return p != nil && p.started
 }

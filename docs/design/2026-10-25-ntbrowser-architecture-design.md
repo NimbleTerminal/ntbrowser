@@ -1872,6 +1872,19 @@ weak, with pins only for started nonempty queues. Navigation/Close drops queued
 copies and tasks. No cross-page, worker, network, storage or activation authority
 is introduced. README documents the supported clone types and exclusions.
 
+**Window self-messaging (2026-11-06).** `jsvm/window_messages.go` adds
+postMessage overloads for a target-origin string or options dictionary. The
+only receiver is the current global. Sender origin is captured from the actual
+document URL at installation; page Location/domain/payload properties cannot
+alter it. `/` keeps same-realm origin identity (including opaque documents), `*`
+permits self-delivery, and absolute targets compare WHATWG origins; distinct
+opaque URLs never match merely because both serialize as null. Mismatches still
+clone and queue before being discarded. Window and port messages share all
+queue/clone limits and private task scheduling. MessageEvent.source is the
+current global; navigation closes the old realm and its pending tasks. No
+cross-page routing or extra host authority is introduced. Target-origin parsing
+is capped at 2048 UTF-16 code units / 8192 UTF-8 bytes.
+
 **Text codecs (2026-11-06).** `jsvm/encoding.go` adds local UTF-8 encoding and
 UTF-8/UTF-16 decoding with streaming, fatal errors and BOM handling. No host gate
 is opened. Captured intrinsic buffer getters validate actual typed-array/DataView

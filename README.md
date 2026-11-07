@@ -712,7 +712,7 @@ DOM/host objects, proxies, weak collections, Promises, RegExps, Errors and custo
 class instances are not supported. Nonempty transfer lists are also unsupported,
 including ArrayBuffer and MessagePort transfers. Unsupported data throws
 DataCloneError before enqueue; data is never passed by reference as a fallback.
-There is no global structuredClone API, window.postMessage, worker transport,
+There is no global structuredClone API, worker transport,
 cross-page messaging or BroadcastChannel.
 
 `jsvm.Config` provides `MaxMessagePorts` (128 live endpoints), `MaxMessages`
@@ -726,3 +726,24 @@ ports, payloads and delivery tasks. One private host task drives the queue,
 shares the existing timer limit, and cannot be canceled by page timer IDs.
 No network, storage or reader-activation permissions are added. The supported
 behavior follows [HTML channel messaging](https://html.spec.whatwg.org/multipage/web-messaging.html#message-channels).
+
+### Window messaging
+
+`window.postMessage` (also `self.postMessage` or unqualified `postMessage`)
+supports `(data, targetOrigin, transfer)` and `(data, {targetOrigin, transfer})`.
+Omitted targetOrigin defaults to `/` (the current document origin); `*` permits
+the current receiver regardless of origin. Other targets must be absolute URLs,
+parsed with the WHATWG URL implementation and matched by origin, including
+scheme and effective port. Invalid targets throw SyntaxError. Nonmatching
+origins are silently discarded on their queued delivery task, after cloning.
+Target strings are capped at 2048 UTF-16 code units / 8192 UTF-8 bytes.
+
+Only the current window exists as a receiver: no iframe, popup, worker or
+cross-page routing is added. Opaque document origins serialize as `null`; `/`
+and `*` work locally, while explicit opaque URLs cannot match another opaque
+origin. Delivered MessageEvents have `source === window`, the document's
+captured origin, cloned data and empty frozen ports. Native delivery is trusted
+but grants no reader activation, navigation, network or storage authority.
+Both APIs share the channel task queue, clone restrictions and quotas described
+above. Nonempty transfer lists remain unsupported. Navigation/page shutdown
+cancels queued deliveries instead of forwarding them into the new document.

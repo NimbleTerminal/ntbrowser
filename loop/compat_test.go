@@ -89,6 +89,7 @@ func TestCompatibilityFixtures(t *testing.T) {
 			}
 			load("encoding", "https://compat.test/encoding.html", "encoding", false, true)
 			load("messages", "https://compat.test/messages.html", "messages", false, true)
+			load("window-messages", "https://compat.test/window-messages.html", "window-messages", false, true)
 			if !enabled {
 				load("closed", "https://compat.test/", "closed", false, false)
 				return

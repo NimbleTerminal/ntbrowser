@@ -1,0 +1,21 @@
+<!doctype html>
+<!-- Copyright (c) 2026 Neomantra Corp. All rights reserved. -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only WITH LicenseRef-NimbleTerminal-Linking-Exception OR LicenseRef-Neomantra-Commercial -->
+<html><head><title>Window messaging compatibility</title></head><body>
+<p id="result">waiting</p>
+<script>
+window.addEventListener('DOMContentLoaded', function () {
+  let promiseDone = false;
+  window.addEventListener('message', function (event) {
+    if (!promiseDone || event.origin !== 'https://compat.test' || event.source !== window || event.data !== 'ready') {
+      throw Error('window messaging boundary');
+    }
+    document.getElementById('result').textContent = 'compat-ready';
+    console.log('PASS:window-messages');
+  }, {once: true});
+  postMessage('wrong origin', 'https://other.test');
+  postMessage('ready', {targetOrigin: 'https://compat.test'});
+  Promise.resolve().then(function () { promiseDone = true; });
+}, {once: true});
+</script>
+</body></html>

@@ -87,6 +87,7 @@ type FetchResponse struct {
 }
 
 type Sandbox struct {
+	messageOrigin             string
 	messagePorts              map[dom.NodeID]*messagePort
 	portMessages              []portMessage
 	messageBytes, messageTask int
@@ -255,6 +256,7 @@ func New(cfg Config, tree *dom.Tree, host Host) *Sandbox {
 	s.installPerformance()
 	s.installEncoding()
 	s.installMessages()
+	s.installWindowMessages()
 	dom.Walk(tree.Root(), func(n *dom.Node) {
 		if n.Tag() == "img" {
 			s.imageChanged(n)
