@@ -3307,7 +3307,7 @@ FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
 ```
 
-## nimbleterminal.dev/nthtml v0.5.0
+## nimbleterminal.dev/nthtml (local)
 
 ```
 MIT License

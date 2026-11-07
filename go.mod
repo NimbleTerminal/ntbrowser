@@ -57,3 +57,6 @@ replace charm.land/bubbletea/v2 => github.com/neomantra/bubbletea/v2 v2.0.0-2026
 
 // Vector rendering fork used by nttypeset and ntsvg (same as nthtml).
 replace github.com/srwiley/rasterx => github.com/neomantra/rasterx v0.1.0
+
+// Temporary local CSS iteration; remove when adopting the next nthtml release.
+replace nimbleterminal.dev/nthtml => /private/tmp/nthtml-colored-rows
