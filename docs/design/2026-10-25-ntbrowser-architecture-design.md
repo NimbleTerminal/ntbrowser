@@ -29,7 +29,7 @@ implemented CSS viewport contract.
 
 **Non-goals (v1)**
 
-- Full web compatibility. The target is *arbitrary small pages* (Evan's answer to Q3), so DOM node lifetime, focus and element clicks follow browser semantics, but only the DOM/Fetch subset listed in §7b exists. No `innerHTML`, forms, CSS object model, `XMLHttpRequest`, `WebSocket`, `localStorage`, workers, or modules in v1.
+- Full web compatibility. The target is *arbitrary small pages* (Evan's answer to Q3), so DOM node lifetime, focus and element clicks follow browser semantics, but only the DOM/Fetch subset listed in §7b exists. The original v1 excluded `innerHTML`, forms, CSS object model, `XMLHttpRequest`, `WebSocket`, `localStorage`, workers, or modules. Later extensions below supersede these exclusions; bounded innerHTML is decision 6 and isolated frames are described in §7b.
 - Running on `js/wasm` (compile-only; decision 14).
 - Persistent cookies, imported credentials, and third-party cookies. Requests are anonymous by default; the opt-in `cookies=session` extension in the profiles design adds bounded memory-only cookie state.
 
@@ -1872,6 +1872,16 @@ weak, with pins only for started nonempty queues. Navigation/Close drops queued
 copies and tasks. No cross-page, worker, network, storage or activation authority
 is introduced. README documents the supported clone types and exclusions.
 
+**Isolated scripted frames (2026-11-07).** The opt-in frames gate creates a
+separate Loop, DOM, and VM per child, with shared network concurrency and a
+revision-checked message broker. Even same-origin DOMs remain isolated.
+Rendering embeds bounded child rasters and routes input only to the displayed
+realm revision and frame generation. Unsupported sandbox tokens, cross-window
+DOM, and navigation confirmation modes fail closed. See the isolated-frame
+extension of the profiles design and README for the exact supported subset,
+budgets, origin grants, and rendering limitations. This does not promise full
+browser iframe or reCAPTCHA compatibility.
+
 **Window self-messaging (2026-11-06).** `jsvm/window_messages.go` adds
 postMessage overloads for a target-origin string or options dictionary. The
 only receiver is the current global. Sender origin is captured from the actual
@@ -2140,8 +2150,8 @@ func (s *Sandbox) buildElementProto() *goja.Object {
 		func(t, v goja.Value) { s.must(s.tree.SetAttr(s.node(t), "class", v.String())) })
 	s.accessor(p, "textContent", func(t goja.Value) goja.Value { return vm.ToValue(dom.TextContent(s.node(t))) }, s.setText)
 	s.accessor(p, "innerText", func(t goja.Value) goja.Value { return vm.ToValue(dom.TextContent(s.node(t))) }, s.setText)
-	// innerHTML is deliberately absent: the setter would require parsing
-	// untrusted markup inside the VM slice. Pages build nodes instead.
+	// Historical sketch: bounded innerHTML was added in decision 6; see
+	// dom/markup.go and jsvm/markup.go for atomic fragment parsing.
 	s.accessor(p, "parentElement", func(t goja.Value) goja.Value {
 		p := s.node(t).Parent()
 		if p == nil || p == s.tree.Root() {
@@ -3993,7 +4003,7 @@ Also noted, not requested: `Options.NoImage`/`Result.Paint` would let the loop l
 - Taskfile, CI (native + `GOOS=js` compile of `dom`/`jsvm`/`loop`), `AGENTS.md`, `THIRD_PARTY_NOTICES` in the sibling-project style; `go.mod` requires `nimbleterminal.dev/nthtml v0.1.0`.
 - Fuzz targets: `dom.Parse`+`Serialize` round-trip vs `document.Parse`; `netpolicy.Resolve`.
 - Golden-file tests for the serializer, and a `-replay` flag that fixes clock and PRNG seeds.
-- Optional `innerHTML` behind a flag, parsed by `dom.Parse` with the same limits, if real pages need it.
+- Bounded `innerHTML` is implemented by the decision 6 extension (no new host-authority gate).
 - A heap-watchdog test with a small `HeapBudget`.
 - `app` is tested headlessly for frames, scroll restore and history only; drive key handling with `teatest` or a scripted `tea.Program`: navigation modes, the confirm prompt, search-box key isolation, Back/Forward keys.
 - A tiny acceptance corpus under `examples/` (a counter with `setInterval`, a fetch-driven list, a rAF ticker, a link-interception page) so "done" is observable; the loop test's page is the seed.

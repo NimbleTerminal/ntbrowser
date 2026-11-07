@@ -55,6 +55,8 @@ func bodyResource(k Kind) string {
 		return "image"
 	case KindNavigate:
 		return "page"
+	case KindFrame:
+		return "iframe"
 	case KindScript:
 		return "script"
 	default:

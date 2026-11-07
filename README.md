@@ -186,6 +186,8 @@ supported.
 | `--media off\|image\|animation\|video` | The most a top-level response may be shown as. Images inside a page are `--subresources`. `video` also opens `native-code` and `files=temp` |
 | `--max-media-bytes n` | Download cap for media (64 MiB) |
 | `--width px` | Initial document width; the terminal's pixel geometry takes over once known |
+| `--frames MODE` | Isolated iframe documents (default off) |
+| `--allow-frame SOURCE=DEST` | Repeatable frame origin pair, used with `--frames=allowlist` |
 | `--frame-ms n` | Minimum frame interval in ms (default 33, range 1–1000) |
 | `--frame-callbacks n` | Pending animation callbacks (default 256, range 1–1024) |
 | `--frame-budget-ms n` | Shared callback budget per frame in ms (default 8, range 1–50) |
@@ -450,7 +452,7 @@ Navigation results and denials appear in diagnostic captures.
 Assign appends history on success; replace and reload reuse the current entry.
 Same-document fragments update the URL and reveal the target without a fetch.
 As elsewhere in ntbrowser, Back/Forward refetch the selected history entry.
-This is not a complete navigation platform: no frames/cross-window Location,
+This is not a complete navigation platform: no cross-window Location,
 History API, hashchange/popstate/beforeunload events, or ancestorOrigins list.
 The location URL remains the committed document URL while a load or confirmation
 is pending. Destination-policy refusals are reported asynchronously by the host.
@@ -776,12 +778,13 @@ page/DOM/render and script budgets remain separate constraints.
 
 ### Single-window relationships
 
-`window.top`, `window.parent`, `window.frames`, and `document.defaultView`
+With frames disabled, `window.top`, `window.parent`, `window.frames`, and `document.defaultView`
 refer to the current page's global object. `window.length` is zero;
 `window.opener` and `window.frameElement` are null; `window.closed` is false.
 The replaceable `parent`, `frames`, `length`, and `opener` properties may be
-shadowed by page code; assigning them creates no host relationships. There are
-no child browsing contexts, popups, or cross-window references; inserting an iframe does not create one. Navigation through an
+shadowed by page code; assigning them creates no host relationships. With frames disabled (the default), inserting an iframe creates no child
+browsing context. With frames enabled, the isolated relationships below apply.
+Popups remain unsupported. Navigation through an
 alias still requires the existing script-navigation and navigation gates,
 and `postMessage` through an alias uses the same bounded page-local queue.
 See the [HTML Window interface](https://html.spec.whatwg.org/multipage/nav-history-apis.html#the-window-object).
@@ -834,3 +837,50 @@ getter includes inert scripts but excludes renderer-injected IDs and styles.
 Images and stylesheets still require subresource permission. This is local DOM
 parsing, not permission to execute generated code or load iframe documents.
 Fragment parsing is bounded but not preemptible inside x/net/html.
+
+
+### Isolated scripted iframes
+
+Enable same-origin child pages with `--frames=origin`. To admit additional
+destinations, use `--frames=allowlist --allow-frame=https://parent.example=https://child.example`.
+These grants authorize frame documents only; external child scripts still
+require `--scripts=external` and their own source/destination script grants.
+All built-in profiles leave frames off.
+
+Each attached iframe gets an independent DOM, JavaScript runtime, and bounded
+raster viewport. `srcdoc` takes precedence over `src`; an empty source creates
+an empty document. Children expose `parent` and `top`; parents expose
+`contentWindow`, indexed `frames`, and `length`. Messages report the sender's
+origin and a stable `event.source` proxy; `targetOrigin` is checked before
+delivery. This first cross-realm wire format accepts JSON-compatible data.
+Cycles, undefined, non-finite numbers, special collection/buffer types, and
+transfers are rejected. Page-local messaging retains its existing clone support.
+
+This mode deliberately isolates even same-origin frame DOMs:
+`contentDocument` is null and proxy document/location/storage access throws
+`SecurityError`. Child cookies and session storage are disabled. Sandbox
+supports `allow-scripts` and `allow-same-origin`; other tokens fail closed.
+Opaque sandbox children report origin `null`, cannot use fetch, and cannot
+create descendants. Embedding restrictions are enforced conservatively:
+X-Frame-Options and supported frame-ancestors checks apply; CSP sandbox,
+combined policies, and restricted nested embeds are rejected.
+
+Limits: four live children, two levels, 64 document loads per root page,
+256 KiB fetched HTML (64 KiB srcdoc), 2,000 child DOM nodes, and 1024×768 pixels
+per child viewport. The frame tree shares the network in-flight semaphore and
+a 64-message/4 MiB queue. Each message is at most 1 MiB. Removal and replacement
+cancel children and discard stale messages, paints, and input.
+
+Child pixels are embedded as renderer-only images; class and inline style are
+preserved, but iframe tag selectors and normal scrolling inside frames are not
+implemented. Pointer clicks and focused keyboard events route to the displayed
+child generation. Native form editing, link/form navigation, cross-window DOM,
+and MessagePort transfers remain unsupported. Same-origin child Location
+navigation requires both `--script-navigation=origin` and `--nav=free`;
+other navigation modes fail closed. Srcdoc currently uses its parent's URL
+for resolution and Location reporting rather than exposing about:srcdoc.
+
+This enables isolated scripted embeds; it does not establish reCAPTCHA
+compatibility. See the [HTML iframe specification](https://html.spec.whatwg.org/multipage/iframe-embed-object.html#the-iframe-element)
+and [cross-document messaging](https://html.spec.whatwg.org/multipage/web-messaging.html#crossDocumentMessages)
+for the broader browser interfaces.

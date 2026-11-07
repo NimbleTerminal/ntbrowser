@@ -245,3 +245,18 @@ func TestScopedScriptGrantFlags(t *testing.T) {
 		t.Fatal(c.Profile)
 	}
 }
+
+func TestFrameFlags(t *testing.T) {
+	c, err := parseArgs([]string{"--frames=allowlist", "--allow-frame=https://parent.test=https://child.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Profile.Frames != profile.FramesAllowlist || len(c.Profile.FrameOrigins("https://parent.test")) != 1 || len(c.Profile.ScriptGrants) != 0 {
+		t.Fatalf("%+v", c.Profile)
+	}
+	for _, args := range [][]string{{"--frames=any"}, {"--allow-frame=child.test"}} {
+		if _, err := parseArgs(args); err == nil {
+			t.Fatalf("accepted %v", args)
+		}
+	}
+}

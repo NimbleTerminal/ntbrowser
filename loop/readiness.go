@@ -10,6 +10,11 @@ func (l *Loop) completeDocument() {
 	if p == nil || p.killed || p.Sandbox.Disabled() || !p.loaded || p.loadComplete || p.firstFrame || p.dynamicPending > 0 {
 		return
 	}
+	for _, f := range p.frames {
+		if f.pending {
+			return
+		}
+	}
 	if p.subres != nil {
 		p.subres.Discover(p.Tree.LinkedStyles(), p.Tree.ImageSources(), p.backgrounds)
 		if p.subres.Pending() {
@@ -17,6 +22,9 @@ func (l *Loop) completeDocument() {
 		}
 	}
 	p.loadComplete = true
-	l.report(p.Sandbox.SetDocumentReady("complete"))
-	l.report(p.Sandbox.DispatchDocumentLoad())
+	if l.cfg.Profile.ScriptsOn() {
+		l.report(p.Sandbox.SetDocumentReady("complete"))
+		l.report(p.Sandbox.DispatchDocumentLoad())
+	}
+	l.send(documentLoadedMsg{})
 }

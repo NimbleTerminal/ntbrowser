@@ -15,8 +15,12 @@ func asciiSpace(r rune) bool { return r == ' ' || r == '\t' || r == '\n' || r ==
 // The token list retains its owner wrapper: keeping only a.relList alive
 // must also keep a detached anchor alive. All reads reflect the live DOM.
 func (s *Sandbox) anchorRelList(owner *goja.Object) goja.Value {
+	return s.attributeTokens(owner, "rel")
+}
+
+func (s *Sandbox) attributeTokens(owner *goja.Object, attr string) goja.Value {
 	vm := s.vm
-	raw := func() string { v, _ := s.anchorNode(owner).Attr("rel"); return v }
+	raw := func() string { v, _ := s.node(owner).Attr(attr); return v }
 	tokens := func() []string {
 		var out []string
 		seen := map[string]bool{}
@@ -28,7 +32,7 @@ func (s *Sandbox) anchorRelList(owner *goja.Object) goja.Value {
 		}
 		return out
 	}
-	write := func(v string) { s.must(s.tree.SetAttr(s.anchorNode(owner), "rel", v)) }
+	write := func(v string) { s.must(s.tree.SetAttr(s.node(owner), attr, v)) }
 	check := func(v goja.Value) string {
 		token := v.String()
 		name := ""
@@ -38,7 +42,7 @@ func (s *Sandbox) anchorRelList(owner *goja.Object) goja.Value {
 			name = "InvalidCharacterError"
 		}
 		if name != "" {
-			e := vm.NewTypeError("invalid rel token")
+			e := vm.NewTypeError("invalid attribute token")
 			_ = e.Set("name", name)
 			panic(e)
 		}
@@ -116,7 +120,10 @@ func (s *Sandbox) anchorRelList(owner *goja.Object) goja.Value {
 		return vm.ToValue(true)
 	})
 	// No browsing-context/opener or per-link referrer processing is exposed.
-	s.method(proto, "supports", func(c goja.FunctionCall) goja.Value { _ = c.Argument(0).String(); return vm.ToValue(false) })
+	s.method(proto, "supports", func(c goja.FunctionCall) goja.Value {
+		token := c.Argument(0).String()
+		return vm.ToValue(attr == "sandbox" && (token == "allow-scripts" || token == "allow-same-origin"))
+	})
 	var list goja.Value
 	s.method(proto, "forEach", func(c goja.FunctionCall) goja.Value {
 		fn, ok := goja.AssertFunction(c.Argument(0))

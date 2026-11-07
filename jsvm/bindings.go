@@ -55,6 +55,9 @@ func (s *Sandbox) wrap(n *dom.Node) goja.Value {
 	if n.Tag() == "img" {
 		_ = w.SetPrototype(s.imageProto)
 	}
+	if n.Tag() == "iframe" {
+		_ = w.SetPrototype(s.iframeProto)
+	}
 	if n.Tag() == "script" {
 		_ = w.SetPrototype(s.scriptProto)
 	}

@@ -19,6 +19,9 @@ func (s *Sandbox) installWindowMessages() {
 	if u := s.locationURL(); u != nil {
 		s.messageOrigin = anchorOrigin(u)
 	}
+	if s.cfg.FrameOpaque {
+		s.messageOrigin = "null"
+	}
 	s.method(global, "postMessage", func(c goja.FunctionCall) goja.Value {
 		if !goja.IsUndefined(c.This) && !goja.IsNull(c.This) && c.This != global {
 			panic(vm.NewTypeError("not a Window"))

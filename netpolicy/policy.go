@@ -67,6 +67,7 @@ const (
 	KindImage                // an image: png, jpeg, gif, webp or svg+xml, 2xx only
 	KindNavigate             // top-level navigation: any content type; the caller classifies (content.Classify)
 	KindScript               // classic JavaScript, strict MIME and 2xx status
+	KindFrame                // embedded HTML document, strict MIME and 2xx status
 )
 
 type Request struct {
@@ -93,7 +94,7 @@ var (
 )
 
 var requestHeaderAllow = map[string]bool{"accept": true, "accept-language": true, "content-type": true}
-var responseHeaderAllow = []string{"Content-Type", "Content-Length", "Last-Modified", "Etag", "Cache-Control"}
+var responseHeaderAllow = []string{"Content-Type", "Content-Length", "Last-Modified", "Etag", "Cache-Control", "X-Frame-Options", "Content-Security-Policy"}
 
 type Fetcher struct {
 	p      Policy
@@ -373,7 +374,7 @@ func (f *Fetcher) Open(ctx context.Context, r Request) (result *OpenResponse, re
 	}
 	out := &OpenResponse{Status: resp.StatusCode, URL: resp.Request.URL.String(), ContentType: resp.Header.Get("Content-Type"), Length: resp.ContentLength, Headers: map[string]string{}, Body: &openBody{ReadCloser: resp.Body, done: done}}
 	for _, h := range responseHeaderAllow {
-		if v := resp.Header.Get(h); v != "" {
+		if v := strings.Join(resp.Header.Values(h), ", "); v != "" {
 			out.Headers[strings.ToLower(h)] = v
 		}
 	}
@@ -411,6 +412,8 @@ func acceptFor(k Kind) string {
 		return "text/css"
 	case KindImage:
 		return "image/png, image/jpeg, image/gif, image/webp, image/svg+xml"
+	case KindFrame:
+		return "text/html"
 	case KindNavigate:
 		return "text/html, text/*;q=0.9, */*;q=0.8"
 	}
@@ -431,6 +434,12 @@ func acceptableFor(k Kind, path, ct string) error {
 			}
 		}
 		return fmt.Errorf("%w: content type %q is not JavaScript", ErrDenied, ct)
+	case KindFrame:
+		mt, _, err := mime.ParseMediaType(ct)
+		if err == nil && mt == "text/html" {
+			return nil
+		}
+		return fmt.Errorf("%w: iframe requires text/html", ErrDenied)
 	case KindStyle:
 		mt, _, err := mime.ParseMediaType(ct)
 		if err != nil {

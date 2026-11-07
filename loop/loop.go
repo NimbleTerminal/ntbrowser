@@ -51,6 +51,7 @@ type Sink interface{ Send(tea.Msg) }
 // Messages the loop sends to the Bubble Tea model.
 type (
 	FrameMsg struct {
+		FrameImage image.Image
 		Painted    *nthtml.PaintedResult // CSS layout and initial band, installed atomically
 		Navigation uint64
 		Gen        uint64 // monotonically increasing; stale frames are dropped by the host
@@ -78,6 +79,11 @@ type (
 // Page is one navigation: tree + sandbox + policy. Replacing it discards the
 // whole JS heap, which is how cross-page isolation is achieved.
 type Page struct {
+	frameID         uint64
+	frames          map[dom.NodeID]*childFrame
+	displayedFrames map[dom.NodeID]framePresentation
+	frameFocus      dom.NodeID
+
 	scriptPermissions map[uint64]*scriptPermission
 
 	dynamicOrdered []*dynamicScript
@@ -137,6 +143,13 @@ type Page struct {
 }
 
 type Config struct {
+	DOMLimits                      dom.Limits
+	FrameHeight                    int // nonzero only for embedded child raster viewports
+	frameHub                       *frameHub
+	frameID, frameParent, frameTop uint64
+	frameDepth                     int
+	frameOpaque                    bool
+
 	Trace       *diagnostics.Recorder
 	Chunked     bool          // opt-in semantic chunk renderer; CSS renderer remains the default
 	Width       int           // document pixel width handed to nthtml (default 800)
@@ -229,6 +242,11 @@ func New(ctx context.Context, cfg Config, sink Sink) *Loop {
 
 // Run is the VM goroutine. It is the only goroutine that may touch l.page.
 func (l *Loop) Run() {
+	defer func() {
+		if l.page != nil {
+			l.dropPage(l.page)
+		}
+	}()
 	defer l.storage.Clear()
 	defer func() {
 		l.scriptSessions = nil
@@ -364,7 +382,7 @@ func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) ui
 		l.frames = nil
 		l.activeFrames = nil
 		l.cfg.Trace.Record("document", map[string]any{"url": base, "navigation": gen, "html": html})
-		tree, err := dom.Parse(strings.NewReader(html), dom.Limits{})
+		tree, err := dom.Parse(strings.NewReader(html), l.cfg.DOMLimits)
 		if err != nil {
 			l.page = nil
 			l.send(LogMsg{"error", "parse: " + err.Error()})
@@ -400,10 +418,12 @@ func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) ui
 				return nil
 			}
 		}
+		l.setupFrameRealm(page, &cfg)
 		page.Sandbox = jsvm.New(cfg, tree, (*host)(l))
 		page.Sandbox.SetFormHooks(l.formHooks(page))
 		l.page = page
 		l.startSubresources(page)
+		l.reconcileFrames()
 		l.send(TitleMsg{tree.Title()})
 		l.runScripts(page, 0)
 		l.scheduleFrame()
@@ -427,6 +447,7 @@ func (l *Loop) dropPage(page *Page) {
 		return
 	}
 	page.killed = true
+	l.closeFrames(page)
 	for _, request := range page.scriptPermissions {
 		request.timer.Stop()
 	}
@@ -451,6 +472,7 @@ func (l *Loop) dropPage(page *Page) {
 func (l *Loop) runScripts(page *Page, i int) {
 	if !l.cfg.Profile.ScriptsOn() {
 		l.cfg.Trace.Record("scripts_skipped", "scripts gate off")
+		page.loaded = true
 		return // the scripts gate: not even DOMContentLoaded
 	}
 	for ; i < len(page.Tree.Scripts); i++ {
@@ -498,7 +520,16 @@ func (l *Loop) Input(key tea.KeyPressMsg) { l.InputAt(0, key) }
 // InputAt rejects keys queued against a superseded DOM/frame.
 func (l *Loop) InputAt(gen uint64, key tea.KeyPressMsg) {
 	l.tryPost(func() {
-		if l.page == nil || gen != 0 && (!l.FrameCurrent(gen) || l.page.Tree.Dirty()) || !l.page.Sandbox.HasListeners("keydown") {
+		if l.page == nil || gen != 0 && (!l.FrameCurrent(gen) || l.page.Tree.Dirty()) {
+			return
+		}
+		if l.page.frameFocus != 0 {
+			if shown, ok := l.page.displayedFrames[l.page.frameFocus]; ok && shown.frame.child != nil && shown.frame.revision == shown.revision {
+				shown.frame.child.InputAt(shown.generation, key)
+			}
+			return
+		}
+		if !l.page.Sandbox.HasListeners("keydown") {
 			return
 		}
 		_, err := l.page.Sandbox.Dispatch(jsvm.Event{Type: "keydown", Key: domKeyName(key)})
@@ -579,6 +610,10 @@ func (l *Loop) ClickAtFrame(gen uint64, area image.Rectangle) {
 		if l.page == nil || gen != 0 && (!l.FrameCurrent(gen) || l.page.frameGen != gen || l.page.Tree.Dirty()) {
 			return
 		}
+		if l.clickFrame(area) {
+			return
+		}
+		l.page.frameFocus = 0
 		var best *document.Box
 		for i := range l.page.boxes {
 			b := &l.page.boxes[i]
@@ -705,6 +740,7 @@ func (l *Loop) afterTask() {
 			fn()
 		}
 	}
+	l.reconcileFrames()
 	l.updateImages()
 	l.completeDocument()
 	if l.page.Sandbox.Disabled() && !l.page.killed {
@@ -772,6 +808,7 @@ func (l *Loop) startRender() {
 		opts.Images = page.subres.Images()                     // fresh copies: nothing the
 		opts.BackgroundImages = page.subres.BackgroundImages() // worker reads is written again
 	}
+	frameHTML, frameImages := l.frameImages(page, &opts)
 	rebuildChunks := page.Tree.Dirty()
 	if rebuildChunks {
 		l.currentFrame.Store(0)
@@ -780,7 +817,7 @@ func (l *Loop) startRender() {
 	useChunks := l.cfg.Chunked
 	var html string
 	if !useChunks || chunkState == nil || rebuildChunks {
-		html = page.Tree.Serialize() // immutable snapshot after injection
+		html = page.Tree.SerializeFrames(frameHTML) // immutable snapshot after injection
 	}
 	page.Tree.ClearDirty()
 	l.pendingFrame = len(l.frames) > 0
@@ -846,7 +883,11 @@ func (l *Loop) startRender() {
 				loaderWarnings = append(loaderWarnings, "page too large with images; rendered without them")
 			}
 		}
-		if !useChunks && err == nil && res != nil {
+		var embeddedImage image.Image
+		if l.cfg.FrameHeight > 0 && err == nil && res != nil {
+			embeddedImage, err = res.Paint(ctx, image.Rect(0, 0, opts.Width, l.cfg.FrameHeight), 1)
+		}
+		if l.cfg.FrameHeight == 0 && !useChunks && err == nil && res != nil {
 			var painter *document.Painter
 			var plan nthtml.PaintPlan
 			painter, err = res.NewPainter(ctx)
@@ -914,6 +955,7 @@ func (l *Loop) startRender() {
 			}
 			if res != nil && err == nil {
 				page.boxes, page.result = res.Boxes, res
+				page.displayedFrames = frameImages
 				l.autofocus(page)
 			}
 			if page.subres != nil {
@@ -933,7 +975,7 @@ func (l *Loop) startRender() {
 				}
 				page.firstFrame = false
 			}
-			l.send(FrameMsg{Painted: painted, Navigation: navigation, Gen: gen, Result: res, Err: err, Warnings: loaderWarnings, Chunk: chunkInfo})
+			l.send(FrameMsg{FrameImage: embeddedImage, Painted: painted, Navigation: navigation, Gen: gen, Result: res, Err: err, Warnings: loaderWarnings, Chunk: chunkInfo})
 		})
 	}
 }

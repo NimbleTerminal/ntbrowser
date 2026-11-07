@@ -14,6 +14,8 @@ type messagePort struct {
 	pin      *goja.Object
 }
 type portMessage struct {
+	source          *goja.Object
+	origin          string
 	window, deliver bool
 	target          dom.NodeID
 	data            goja.Value
@@ -239,6 +241,10 @@ func (s *Sandbox) ensureMessageTask() {
 		if m.window {
 			_ = st.Set("origin", s.messageOrigin)
 			_ = st.Set("source", s.vm.GlobalObject())
+			if m.source != nil {
+				_ = st.Set("source", m.source)
+				_ = st.Set("origin", m.origin)
+			}
 		}
 		_ = st.Set("ports", s.emptyMessagePorts)
 		_ = st.Set("trusted", true)

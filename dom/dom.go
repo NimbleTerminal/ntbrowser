@@ -42,8 +42,14 @@ var DefaultLimits = Limits{Nodes: 8000, Depth: 48, TextBytes: 64 << 10, Attrs: 3
 // for a minted ` id="nt-h-N"` (≤ 20 bytes for ids under 10^8).
 const elementOverhead = 5 + 20 // '<' + '>' + '</' + '>' + minted id reserve
 
-func textCost(s string) int           { return len(html.EscapeString(s)) }
-func elementCost(tag string) int      { return 2*len(tag) + elementOverhead }
+func textCost(s string) int { return len(html.EscapeString(s)) }
+func elementCost(tag string) int {
+	extra := 0
+	if tag == "iframe" {
+		extra = 128
+	}
+	return 2*len(tag) + elementOverhead + extra
+}
 func attrCost(name, value string) int { return len(name) + 4 + textCost(value) } // ' name="value"'
 
 func nodeCost(n *Node) int {
@@ -118,6 +124,7 @@ func (n *Node) HasListener(typ string) bool {
 // Tree is single-owner: only the VM goroutine mutates it. Serialize produces
 // an immutable snapshot string that may be rendered on another goroutine.
 type Tree struct {
+	frames map[NodeID]FrameImage
 	limits Limits
 	root   *Node // synthetic "document" node
 	nodes  map[NodeID]*Node
@@ -718,6 +725,10 @@ func (t *Tree) write(b *strings.Builder, n *Node, seen map[string]bool, inSVG bo
 		b.WriteString(html.EscapeString(n.text))
 		return
 	case Element:
+		if f, ok := t.frames[n.id]; ok && n.tag == "iframe" {
+			t.writeFrame(b, n, f)
+			return
+		}
 		if n.tag == "noscript" || n.tag == "script" {
 			return // scripting is on: <noscript> content is never shown (decision 18)
 		}

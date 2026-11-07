@@ -31,6 +31,12 @@ import (
 
 // Config bounds one page's scripting. Zero fields use the defaults below.
 type Config struct {
+	FrameSelf, FrameParent, FrameTop uint64
+	FrameOpaque                      bool
+	EnsureFrame                      func(FrameSpec) (uint64, error)
+	FrameAlive                       func(uint64) bool
+	PostFrame                        func(FramePost) error
+
 	MaxMessagePorts int                 // live ports (default 128)
 	MaxMessages     int                 // queued messages per page (default 256)
 	MaxMessageBytes int                 // total queued clone charge (default 4 MiB)
@@ -87,6 +93,9 @@ type FetchResponse struct {
 }
 
 type Sandbox struct {
+	iframeProto               *goja.Object
+	frameWindows              map[uint64]*goja.Object
+	frameChildCount           int
 	messageOrigin             string
 	messagePorts              map[dom.NodeID]*messagePort
 	portMessages              []portMessage
@@ -254,6 +263,7 @@ func New(cfg Config, tree *dom.Tree, host Host) *Sandbox {
 	s.installAnchors()
 	s.installImages()
 	s.installScripts()
+	s.installFrames()
 	s.installCollections()
 	s.installGlobals()
 	s.installStorage()
@@ -306,11 +316,16 @@ func (s *Sandbox) installGlobals() {
 	s.bindEventHandlers(global)
 	defineFrozen(global, "window", global)
 	defineFrozen(global, "self", global)
-	// One top-level realm. Replaceable aliases are configurable so ordinary
+	// Realm-local aliases and isolated parent/top proxies. Replaceable aliases
+	// are configurable so ordinary
 	// global lexical declarations (for example, let frames = 0) remain valid.
-	defineFrozen(global, "top", global)
+	defineFrozen(global, "top", s.frameWindow(s.cfg.FrameTop))
 	for _, name := range []string{"parent", "frames"} {
-		_ = global.DefineDataProperty(name, global, goja.FLAG_TRUE, goja.FLAG_TRUE, goja.FLAG_TRUE)
+		v := global
+		if name == "parent" {
+			v = s.frameWindow(s.cfg.FrameParent)
+		}
+		_ = global.DefineDataProperty(name, v, goja.FLAG_TRUE, goja.FLAG_TRUE, goja.FLAG_TRUE)
 	}
 	_ = global.DefineDataProperty("length", vm.ToValue(0), goja.FLAG_TRUE, goja.FLAG_TRUE, goja.FLAG_TRUE)
 	_ = global.DefineDataProperty("opener", goja.Null(), goja.FLAG_TRUE, goja.FLAG_TRUE, goja.FLAG_TRUE)
@@ -422,6 +437,8 @@ func (s *Sandbox) Close() {
 	s.portMessages = nil
 	s.messageBytes = 0
 	s.cloneMessage = nil
+	s.frameWindows = nil
+	s.iframeProto = nil
 	s.emptyMessagePorts = nil
 	s.wd.disarm()
 	s.images = nil

@@ -59,6 +59,8 @@ func parseArgs(args []string) (config, error) {
 	name := fs.String("profile", "browse", "built-in profile: locked, reader, browse")
 	file := fs.String("profile-file", "", "JSON profile file (overrides --profile)")
 	fs.BoolVar(&c.ShowProfile, "show-profile", false, "print the effective profile and exit")
+	frames := fs.String("frames", "", "isolated iframes: off, origin, allowlist (default off)")
+	frameGrants := fs.StringArray("allow-frame", nil, "frame grant SOURCE_ORIGIN=DESTINATION_ORIGIN (repeatable)")
 	scriptGrants := fs.StringArray("allow-script", nil, "script grant SOURCE_ORIGIN=DESTINATION_ORIGIN (repeatable)")
 	scriptPrompts := fs.Bool("script-prompts", false, "ask before admitting an ungranted cross-origin script")
 	allow := fs.String("allow", "", "comma-separated fetch/navigation allowlist hosts (leading dot = subdomains; scripts use --allow-script)")
@@ -121,6 +123,16 @@ func parseArgs(args []string) (config, error) {
 	}
 	if *external {
 		p.Scripts = profile.ScriptsExternal
+	}
+	if *frames != "" {
+		p.Frames = profile.Frames(*frames)
+	}
+	for _, raw := range *frameGrants {
+		g, err := profile.ParseScriptGrant(raw)
+		if err != nil {
+			return c, err
+		}
+		p.FrameGrants = append(p.FrameGrants, g)
 	}
 	if *scripts != "" {
 		p.Scripts = profile.Scripts(*scripts)

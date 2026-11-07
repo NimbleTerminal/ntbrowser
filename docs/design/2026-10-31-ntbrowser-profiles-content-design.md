@@ -75,6 +75,8 @@ New packages: `profile` (data, validation, printing; no system imports) and `con
    | `script-navigation-limit` | 0/default 8 or 1–100 | document request count and automatic chain budget |
    | `navigate` | `off`, `allowlist`, `confirm`, `free` | top-level navigation. `off`: only the start URL given at launch is fetched, and nothing after it |
    | `subresources` | `off`, `origin`, `any` | stylesheets and images, including detached script-created `Image` requests |
+   | `frames` | `off`, `origin`, `allowlist` | isolated child document realms; off in all built-ins |
+   | `frame-grants` | source/destination origin pairs | frame document admission only; independent of fetch/scripts/navigation |
    | `fetch` | `off`, `origin`, `allowlist` | `fetch()` from page script |
    | `hosts` | list | fetch/navigation allowlist hosts; does not authorize scripts |
    | `script-grants` | source/destination origin pairs | cross-origin script admission only |
@@ -517,3 +519,33 @@ Alt-modified approval keys, and requires both origins to fit visibly. Denials
 record source origin, requested URL, purpose and reason. No profile-writing or
 new filesystem capability is introduced; persistent grants require explicit
 profile edits outside the sandboxed browser.
+
+## Isolated frame extension (2026-11-07)
+
+Frames are opt-in independent document realms, including same-origin embeds:
+parent/child DOM objects never cross a realm boundary. Frame references expose
+only bounded postMessage and window identity; direct document access is denied.
+Frame navigation requires the frame source/destination policy, and script
+navigation additionally requires script-navigation=origin and navigate=free;
+confirmation/allowlist modes are not approximated by automatic approval. No
+child can navigate the top-level page. Frame loads retain SSRF, redirect,
+MIME, mixed-content and response-size checks. Cookies and storage are disabled
+in child realms in this first isolated mode; no disk or process authority is
+added. Document/frame removal cancels descendants and stale messages/paints.
+Hard ceilings bound frame count, nesting, raster area, document bytes, and
+message queues across the frame tree. Unsupported sandbox capabilities,
+transfers and cross-realm DOM access fail closed.
+
+
+The initial wire format is JSON-compatible values only, bounded by the existing
+clone budgets and a tree-wide queue of 64 messages/4 MiB. Four child documents
+and two nesting levels may be live; 64 total loads bound churn per root page.
+Children have at most 2,000 nodes, 256 KiB document bytes, and 1024×768 raster
+pixels. Srcdoc has a 64 KiB cap. Source/destination frame grants are capped at
+128 entries and do not grant script or fetch access. Same-origin is implicitly
+admitted in origin and allowlist modes. Opaque children cannot fetch or embed
+descendants. Sandbox tokens other than allow-scripts/allow-same-origin fail
+closed. Child input is generation-checked, but native child form editing and
+link/form navigation are not implemented. Renderer substitution preserves
+class/inline style, not iframe tag selectors. Srcdoc uses the parent URL for
+resolution and Location reporting in this subset.
