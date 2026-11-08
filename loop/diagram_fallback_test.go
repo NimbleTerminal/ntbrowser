@@ -25,6 +25,7 @@ func TestDiagramBudgetClassification(t *testing.T) {
 		t.Fatal("unrelated error accepted")
 	}
 }
+
 // diagramPage holds count full-size SVGs (a viewBox without a declared size
 // is a diagram, not an icon, so each one spends the renderer's diagram count).
 func diagramPage(count int) string {

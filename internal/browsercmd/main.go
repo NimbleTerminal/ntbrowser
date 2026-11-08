@@ -46,6 +46,8 @@ import (
 // the chosen one with the gate flags applied, validated and then frozen.
 type config struct {
 	Diagnostics                                        string
+	LocalStorageFile                                   string // resolved path of the local-storage=file store
+	Safe                                               bool   // --safe: nothing new reaches the disk this run
 	Profile                                            profile.Profile
 	Start                                              string
 	Width                                              int
@@ -100,6 +102,9 @@ func parseCommandArgs(command string, args []string) (config, error) {
 	storageMode := fs.String("session-storage", "", "sessionStorage: off, on (default from profile; memory only)")
 	storageBytes := fs.Int("session-storage-bytes", 0, "per-origin storage byte quota (default 1 MiB; max 8 MiB)")
 	storageTotal := fs.Int("session-storage-total-bytes", 0, "session storage byte quota (default 8 MiB; max 64 MiB)")
+	localMode := fs.String("local-storage", "", "localStorage: off, memory, file (default from profile; same quotas as session storage)")
+	fs.StringVar(&c.LocalStorageFile, "local-storage-file", "", "owner-only file for local-storage=file (default $XDG_DATA_HOME/<command>/local-storage.dat)")
+	fs.BoolVar(&c.Safe, "safe", false, "keep nothing on disk this run: a file-backed localStorage becomes memory-only")
 	frameMS := fs.Int("frame-ms", 0, "minimum frame interval in ms (default 33; max 1000)")
 	frameCallbacks := fs.Int("frame-callbacks", 0, "pending animation callbacks (default 256; max 1024)")
 	frameBudget := fs.Int("frame-budget-ms", 0, "shared animation callback budget in ms (default 8; max 50)")
@@ -200,6 +205,12 @@ func parseCommandArgs(command string, args []string) (config, error) {
 	if fs.Changed("session-storage-total-bytes") {
 		p.SessionStorageTotalBytes = *storageTotal
 	}
+	if *localMode != "" {
+		p.LocalStorage = profile.LocalStorage(*localMode)
+	}
+	if c.Safe && p.LocalStorage == profile.LocalStorageFile {
+		p.LocalStorage = profile.LocalStorageMemory
+	}
 	if fs.Changed("frame-ms") {
 		p.FrameMillis = *frameMS
 	}
@@ -257,6 +268,13 @@ func parseCommandArgs(command string, args []string) (config, error) {
 		p.Name += "+flags" // the name must not outlive what it promised
 	}
 	c.Profile = p
+	if p.LocalStorage == profile.LocalStorageFile && c.LocalStorageFile == "" {
+		path, err := defaultLocalStorePath(command)
+		if err != nil {
+			return c, fmt.Errorf("local-storage=file needs --local-storage-file: %v", err)
+		}
+		c.LocalStorageFile = path
+	}
 	if c.ShowProfile {
 		return c, nil
 	}
@@ -281,6 +299,7 @@ func parseCommandArgs(command string, args []string) (config, error) {
 // across as data: a profile is read once, never again inside the sandbox.
 type state struct {
 	DiagnosticFD int
+	StorageFD    int // local-storage=file descriptor, opened before lockdown
 	Config       config
 	TempDir      string
 	HelperFD     int
@@ -365,6 +384,14 @@ func Run(command string) int {
 	if diagnostic != nil {
 		defer diagnostic.Close()
 	}
+	storeFile, err := localStoreFile(&st, sandboxed)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 1
+	}
+	if storeFile != nil {
+		defer storeFile.Close()
+	}
 	strengths, err := lockDown(st, sandboxed)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
@@ -426,7 +453,8 @@ func Run(command string) int {
 	policy := app.PolicyFor(c.Profile)
 	policy.Cookies = cookieStore
 	policy.Trace = trace
-	l := loop.New(ctx, loop.Config{RenderLimit: document.Limits{Rules: c.CSSRules}, DOMLimits: dom.Limits{ExternalStyleBytes: c.StylesheetTotalBytes}, Trace: trace, Chunked: c.Chunked, Profile: c.Profile, Width: c.Width, Script: script, Subresources: subresCfg, SubresourceTransport: app.SubresourceTransport(policy, subresCfg)}, sink)
+	localStore, localSink := openLocalStore(c.Profile, storeFile)
+	l := loop.New(ctx, loop.Config{RenderLimit: document.Limits{Rules: c.CSSRules}, DOMLimits: dom.Limits{ExternalStyleBytes: c.StylesheetTotalBytes}, Trace: trace, Chunked: c.Chunked, Profile: c.Profile, Width: c.Width, Script: script, Subresources: subresCfg, SubresourceTransport: app.SubresourceTransport(policy, subresCfg), LocalStorage: localStore, LocalStorageSink: localSink}, sink)
 	browserLoop = l
 	go l.Run()
 
@@ -544,7 +572,7 @@ func lockDown(st state, sandboxed bool) (profile.Strengths, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := sandbox.Reexec(c.Profile, start, st.TempDir, []string{arg}, c.Diagnostics); err != nil {
+		if err := sandbox.Reexec(c.Profile, start, st.TempDir, []string{arg}, c.Diagnostics, c.LocalStorageFile); err != nil {
 			return nil, err
 		}
 	}

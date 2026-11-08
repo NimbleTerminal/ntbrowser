@@ -107,22 +107,33 @@ func (s *Sandbox) installStorage() {
 	defineFrozen(p, "constructor", ctor)
 	defineFrozen(vm.GlobalObject(), "Storage", ctor)
 	_ = p.DefineDataPropertySymbol(goja.SymToStringTag, vm.ToValue("Storage"), goja.FLAG_FALSE, goja.FLAG_FALSE, goja.FLAG_FALSE)
-	var object *goja.Object
-	var data *storageObject
-	if s.cfg.SessionStorage != nil {
-		data = &storageObject{s: s, area: s.cfg.SessionStorage, proto: p}
-		object = vm.NewDynamicObject(data)
+	// One Storage prototype serves both areas; each global is its own object
+	// over its own origin-bound area, or absent (SecurityError) when closed.
+	objects := map[*goja.Object]*storageObject{}
+	bind := func(area *sessionstorage.Area) *goja.Object {
+		if area == nil {
+			return nil
+		}
+		data := &storageObject{s: s, area: area, proto: p}
+		object := vm.NewDynamicObject(data)
 		_ = object.SetPrototype(p)
+		objects[object] = data
+		return object
 	}
-	check := func(v goja.Value) {
-		if object == nil || v != object {
+	session := bind(s.cfg.SessionStorage)
+	local := bind(s.cfg.LocalStorage)
+	check := func(v goja.Value) *storageObject {
+		o, _ := v.(*goja.Object)
+		data := objects[o]
+		if o == nil || data == nil {
 			panic(vm.NewTypeError("not a Storage object"))
 		}
+		return data
 	}
-	s.accessor(p, "length", func(v goja.Value) goja.Value { check(v); return vm.ToValue(data.area.Len()) }, nil)
+	s.accessor(p, "length", func(v goja.Value) goja.Value { return vm.ToValue(check(v).area.Len()) }, nil)
 	for _, name := range []string{"getItem", "setItem", "removeItem", "clear", "key"} {
 		s.method(p, name, func(c goja.FunctionCall) goja.Value {
-			check(c.This)
+			data := check(c.This)
 			need := 1
 			if name == "clear" {
 				need = 0
@@ -158,9 +169,15 @@ func (s *Sandbox) installStorage() {
 		})
 	}
 	s.accessor(vm.GlobalObject(), "sessionStorage", func(goja.Value) goja.Value {
-		if object == nil {
+		if session == nil {
 			s.storageError("SecurityError", "session storage is disabled or this document has no supported origin")
 		}
-		return object
+		return session
+	}, nil)
+	s.accessor(vm.GlobalObject(), "localStorage", func(goja.Value) goja.Value {
+		if local == nil {
+			s.storageError("SecurityError", "local storage is disabled or this document has no supported origin")
+		}
+		return local
 	}, nil)
 }

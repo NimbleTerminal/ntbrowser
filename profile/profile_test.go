@@ -245,3 +245,28 @@ func TestSessionStorageGateAndQuotas(t *testing.T) {
 		t.Fatal(p, err)
 	}
 }
+
+// TestLocalStorageGate: local-storage is off in every built-in except glynx,
+// which keeps a file-backed store; memory and file are the only open values.
+func TestLocalStorageGate(t *testing.T) {
+	for _, name := range []string{"locked", "reader", "browse"} {
+		p, _ := Builtin(name)
+		if p.LocalStorage != "" {
+			t.Fatalf("%s opens local storage", name)
+		}
+	}
+	g, _ := Builtin("glynx")
+	if g.LocalStorage != LocalStorageFile {
+		t.Fatalf("glynx local storage %q", g.LocalStorage)
+	}
+	if _, err := Parse([]byte(`{"local-storage":"disk"}`)); err == nil {
+		t.Fatal("unknown local-storage value accepted")
+	}
+	p, err := Parse([]byte(`{"local-storage":"memory"}`))
+	if err != nil || p.LocalStorage != LocalStorageMemory {
+		t.Fatal(p, err)
+	}
+	if !strings.Contains(g.Table(Strengths{}), "local-storage") {
+		t.Fatal("table omits local-storage")
+	}
+}

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add `window.localStorage` behind a new `local-storage` gate (`off`,
+  `memory`, `file`) with the session storage quotas. Glynx defaults to `file`:
+  one owner-only store under `$XDG_DATA_HOME/glynx/` (or the platform data
+  directory), opened before lockdown like the diagnostics file and granted as
+  a single literal path on macOS, loaded at start and rewritten in place from
+  coalesced snapshots. `--safe` keeps a file-backed store in memory for the
+  run, `--local-storage-file` picks the file, and ntbrowser stays off. Child
+  frames keep storage disabled. Gloss's docs site, which threw on
+  `localStorage`, now runs its theme script.
+
 - Let glynx load page images of up to 8 MiB each (README demo GIFs exceeded
   the 1 MiB cap on every GitHub visit), through a new `--image-bytes` budget
   (1024..16 MiB; ntbrowser keeps 1 MiB). netpolicy gains a separate image body

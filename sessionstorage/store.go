@@ -28,7 +28,9 @@ type bucket struct {
 }
 type Session struct {
 	origins                  map[string]*bucket
+	order                    []string // nonempty origins in first-write order, for stable snapshots
 	total, limit, totalLimit int
+	changed                  func()
 }
 type Area struct {
 	session *Session
@@ -96,6 +98,7 @@ func (a *Area) Set(key, value string) error {
 	if b == nil {
 		b = &bucket{values: map[string]string{}}
 		s.origins[a.origin] = b
+		s.order = append(s.order, a.origin)
 	}
 	if !exists {
 		b.keys = append(b.keys, key)
@@ -103,7 +106,18 @@ func (a *Area) Set(key, value string) error {
 	b.values[key] = value
 	b.bytes += delta
 	s.total += delta
+	s.notify()
 	return nil
+}
+
+// forget drops an emptied origin from the order list.
+func (s *Session) forget(origin string) {
+	for i, o := range s.order {
+		if o == origin {
+			s.order = append(s.order[:i], s.order[i+1:]...)
+			return
+		}
+	}
 }
 func (a *Area) Remove(key string) {
 	s := a.session
@@ -129,18 +143,23 @@ func (a *Area) Remove(key string) {
 	}
 	if len(b.keys) == 0 {
 		delete(s.origins, a.origin)
+		s.forget(a.origin)
 	}
+	s.notify()
 }
 func (a *Area) Clear() {
 	s := a.session
 	if b := s.origins[a.origin]; b != nil {
 		s.total -= b.bytes
 		delete(s.origins, a.origin)
+		s.forget(a.origin)
+		s.notify()
 	}
 }
 func (s *Session) Clear() {
 	if s != nil {
 		s.origins = map[string]*bucket{}
+		s.order = nil
 		s.total = 0
 	}
 }

@@ -50,6 +50,7 @@ type Config struct {
 	LoadScript      func(ScriptRequest) // VM-thread admission; completion through CompleteScript
 
 	SessionStorage   *sessionstorage.Area          // bound to one origin by the host; nil is closed
+	LocalStorage     *sessionstorage.Area          // the host's local store for this origin; nil is closed
 	Navigate         func(href, mode string) error // host-authorized navigation; nil is closed
 	CookieRead       func() string                 // host-only capability, bound to the current document URL
 	CookieWrite      func(string)                  // nil makes document.cookie writes inert
@@ -547,6 +548,7 @@ func (s *Sandbox) Close() {
 	s.anchorProto = nil
 	s.performanceNow = nil
 	s.cfg.SessionStorage = nil
+	s.cfg.LocalStorage = nil
 	s.vm = nil
 	s.wd.vm = nil
 	s.elemProto, s.docObj, s.promiseCtor, s.jsonParse = nil, nil, nil, nil

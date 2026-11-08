@@ -179,13 +179,26 @@ type Config struct {
 	// base (nil, or Subresources.Mode == subres.ModeOff, loads nothing).
 	Subresources         subres.Config
 	SubresourceTransport func(base string) subres.Transport
+	// LocalStorage is the host's localStorage store, already loaded, bound
+	// per document origin like session storage (nil: the gate is closed).
+	// LocalStorageSink receives a snapshot after changes, coalesced to one
+	// write per second, and once more when the loop stops; nil keeps the
+	// store in memory for the run.
+	LocalStorage     *sessionstorage.Session
+	LocalStorageSink func([]byte) error
 }
+
+// localFlushDelay coalesces localStorage writes before the sink runs.
+var localFlushDelay = time.Second
 
 type Loop struct {
 	scriptSessions     map[profile.ScriptGrant]bool
 	scriptPermissionID uint64
 
 	storage         *sessionstorage.Session
+	localDirty      bool // localStorage changed since the last sink write
+	localPending    bool // a coalescing flush is scheduled
+	localFailed     bool // the sink failed once; later failures stay quiet
 	frameNavigation atomic.Uint64
 	locationCommit  atomic.Uint64
 	resizeWidth     atomic.Int64
@@ -259,6 +272,9 @@ func New(ctx context.Context, cfg Config, sink Sink) *Loop {
 	if cfg.Profile.SessionStorage == profile.SessionStorageOn {
 		l.storage = sessionstorage.New(cfg.Profile.StorageBytes(), cfg.Profile.StorageTotalBytes())
 	}
+	if cfg.LocalStorage != nil && cfg.LocalStorageSink != nil {
+		cfg.LocalStorage.OnChange(l.localChanged) // runs on this goroutine: writes come from the VM
+	}
 	l.resizeWake = make(chan struct{}, 1)
 	l.renderJobs = make(chan func(*paintWorker), 1)
 	l.paintWake = make(chan struct{}, 1)
@@ -281,6 +297,7 @@ func (l *Loop) Run() {
 			l.dropPage(l.page)
 		}
 		l.storage.Clear()
+		l.flushLocal() // the last changes reach the file before the process ends
 	}()
 	for {
 		var task func()
@@ -433,6 +450,7 @@ func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) ui
 		cfg := l.cfg.Script
 		cfg.Location = base
 		cfg.SessionStorage = l.storage.Open(base)
+		cfg.LocalStorage = l.cfg.LocalStorage.Open(base)
 		cfg.CookieRead, cfg.CookieWrite = nil, nil
 		if l.cfg.Profile.Cookies == profile.CookiesSession {
 			cfg.CookieRead = func() string { return fetcher.DocumentCookie(base) }
@@ -543,6 +561,35 @@ func (l *Loop) runScripts(page *Page, i int) {
 		l.report(page.Sandbox.SetDocumentReady("interactive"))
 		_, err := page.Sandbox.Dispatch(jsvm.Event{Type: "DOMContentLoaded", NonCancelable: true})
 		l.report(err)
+	}
+}
+
+// localChanged schedules one coalesced snapshot write after a burst of
+// localStorage changes. It runs on the loop goroutine.
+func (l *Loop) localChanged() {
+	l.localDirty = true
+	if l.localPending {
+		return
+	}
+	l.localPending = true
+	time.AfterFunc(localFlushDelay, func() {
+		if !l.tryPost(l.flushLocal) {
+			return // the loop is stopping; Run's deferred flush writes the snapshot
+		}
+	})
+}
+
+// flushLocal hands the store snapshot to the host sink when it changed. A
+// failing sink is reported once; the store keeps working in memory.
+func (l *Loop) flushLocal() {
+	l.localPending = false
+	if !l.localDirty || l.cfg.LocalStorage == nil || l.cfg.LocalStorageSink == nil {
+		return
+	}
+	l.localDirty = false
+	if err := l.cfg.LocalStorageSink(l.cfg.LocalStorage.Snapshot()); err != nil && !l.localFailed {
+		l.localFailed = true
+		l.send(LogMsg{"warn", "local storage not saved: " + err.Error()})
 	}
 }
 

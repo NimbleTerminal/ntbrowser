@@ -263,6 +263,8 @@ func (l *Loop) ensureChildFrame(page *Page, spec jsvm.FrameSpec) (uint64, error)
 			}
 			cfg.Profile.Cookies = profile.CookiesOff
 			cfg.Profile.SessionStorage = profile.SessionStorageOff
+			cfg.Profile.LocalStorage = profile.LocalStorageOff
+			cfg.LocalStorage, cfg.LocalStorageSink = nil, nil // child storage stays disabled
 			cfg.Profile.ScriptPrompts = false
 			if !scripts {
 				cfg.Profile.Scripts = profile.ScriptsOff

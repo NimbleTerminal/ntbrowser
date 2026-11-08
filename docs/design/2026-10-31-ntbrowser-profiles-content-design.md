@@ -447,6 +447,33 @@ StorageEvents, frames/opener cloning and localStorage are outside this scope.
 No contents are emitted through diagnostics by the host. Source:
 [HTML Web Storage](https://html.spec.whatwg.org/multipage/webstorage.html).
 
+### Local storage extension (2026-11-08)
+
+`local-storage` is a separate gate with three positions. `off` (every built-in
+but glynx) leaves `localStorage` absent: access raises SecurityError exactly
+like closed session storage. `memory` binds a second `sessionstorage.Session`
+with the session quotas, discarded at exit. `file` (glynx's default) persists
+that store in one file. Evan asked for glynx to keep a local store by default
+with an escape hatch; `--safe` is that hatch and demotes `file` to `memory`.
+
+The file is the second host-owned file after diagnostics and follows the same
+rules: the host opens it before lockdown (`O_RDWR|O_CREATE|O_NOFOLLOW`, 0600,
+parent 0700, regular file required), clears close-on-exec for the macOS
+re-exec, resolves the path and grants exactly that literal for
+`file-write-data`; the sandboxed process receives the descriptor through
+`state.StorageFD` and never opens a path. The format is a header line with
+the payload length followed by a JSON snapshot whose keys and values are
+base64 of the raw UTF-16LE strings; rewrites happen in place from offset 0,
+so no truncation is needed and stale bytes are ignored. `Restore` re-applies
+every entry through `Set`, so quotas, the 64-origin and 1024-key caps and the
+origin parser hold for loaded data too; oversize, unversioned or malformed
+files start the store empty.
+
+Writes stay on the loop goroutine: the store's change hook marks the loop
+dirty and a one-second timer posts one `Snapshot` to the host sink; `Run`'s
+exit flushes once more. A failing sink is reported once at `warn`. Child
+frames get neither store. Contents never enter diagnostics.
+
 ### Dynamic classic-script extension (2026-11-06)
 
 DOM insertion adds no network authority: external dynamic scripts require the

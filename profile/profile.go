@@ -29,6 +29,7 @@ type (
 	DynamicCode      string
 	Cookies          string
 	SessionStorage   string
+	LocalStorage     string
 	Files            string
 	Media            string
 	Clipboard        string
@@ -56,6 +57,10 @@ const (
 
 	SessionStorageOff SessionStorage = "off"
 	SessionStorageOn  SessionStorage = "on"
+
+	LocalStorageOff    LocalStorage = "off"
+	LocalStorageMemory LocalStorage = "memory" // localStorage exists for the run, then is discarded
+	LocalStorageFile   LocalStorage = "file"   // one owner-only file the host opens before lockdown
 
 	CookiesOff     Cookies = "off"
 	CookiesSession Cookies = "session"
@@ -105,6 +110,7 @@ type Profile struct {
 	SessionStorage           SessionStorage   `json:"session-storage,omitempty"`
 	SessionStorageBytes      int              `json:"session-storage-bytes,omitempty"`
 	SessionStorageTotalBytes int              `json:"session-storage-total-bytes,omitempty"`
+	LocalStorage             LocalStorage     `json:"local-storage,omitempty"`
 	FrameMillis              int              `json:"frame-ms,omitempty"`
 	FrameCallbacks           int              `json:"frame-callbacks,omitempty"`
 	FrameBudgetMillis        int              `json:"frame-budget-ms,omitempty"`
@@ -141,6 +147,7 @@ func Builtin(name string) (Profile, bool) {
 		p.DynamicCode = DynamicOn
 		p.Cookies = CookiesSession
 		p.SessionStorage = SessionStorageOn
+		p.LocalStorage = LocalStorageFile
 		p.Frames = FramesAny
 		p.FrameDOM = "same-origin"
 		p.Fetch = FetchOrigin
@@ -234,6 +241,7 @@ func (p Profile) check() error {
 		oneOf("script-sources", p.ScriptSources, ScriptSourcesGrants, ScriptSourcesAny),
 		oneOf("scripts", p.Scripts, ScriptsOff, ScriptsInline, ScriptsExternal),
 		oneOf("session-storage", p.SessionStorage, SessionStorageOff, SessionStorageOn),
+		oneOf("local-storage", p.LocalStorage, LocalStorageOff, LocalStorageMemory, LocalStorageFile),
 		oneOf("cookies", p.Cookies, CookiesOff, CookiesSession),
 		oneOf("frames", p.Frames, FramesOff, FramesOrigin, FramesAllowlist, FramesAny),
 		oneOf("frame-dom", p.FrameDOM, "off", "same-origin"),
@@ -379,6 +387,7 @@ func (p Profile) Table(s Strengths) string {
 		{"session-storage", orOff(p.SessionStorage), "origin-isolated memory-only session storage"},
 		{"session-storage-bytes", strconv.Itoa(p.StorageBytes()), "per-origin key/value bytes"},
 		{"session-storage-total-bytes", strconv.Itoa(p.StorageTotalBytes()), "session-wide key/value bytes"},
+		{"local-storage", orOff(p.LocalStorage), "origin-isolated localStorage with the session quotas; file: one owner-only file opened before lockdown"},
 		{"cookies", orOff(p.Cookies), "in-memory session cookies; cross-origin subrequests excluded"},
 		{"frame-dom", orOff(p.FrameDOM), "bounded same-origin DOM bridge; no shared JavaScript globals"},
 		{"frames", orOff(p.Frames), "isolated child pages; origin, explicit grants, or any public origin"},

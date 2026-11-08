@@ -68,4 +68,14 @@ func TestDiagnosticPolicyGrantsOnlyExactFileWhenEnabled(t *testing.T) {
 	if strings.Contains(policy, `(subpath "/private/tmp`) {
 		t.Fatal("granted directory")
 	}
+	// The localStorage file is granted only under local-storage=file.
+	store := "/private/tmp/local-storage.dat"
+	if strings.Contains(Policy(p, "", "", "/bin/test", path, store), store) {
+		t.Fatal("closed local-storage gate granted the store file")
+	}
+	p.LocalStorage = profile.LocalStorageFile
+	policy = Policy(p, "", "", "/bin/test", path, store)
+	if !strings.Contains(policy, `(allow file-write-data (literal "/private/tmp/local-storage.dat"))`) || strings.Contains(policy, `(subpath "/private/tmp`) {
+		t.Fatal(policy)
+	}
 }
