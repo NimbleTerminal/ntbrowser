@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Render GitHub's inline octicons in place with the local nthtml renderer:
+  icon-sized SVGs flow with their text and are budgeted apart from the
+  32-diagram count, so repository pages no longer fall back to `[SVG: …]`
+  labels, and images inside `visibility: hidden` panels (GitHub's closed
+  mega-menus) are no longer painted. The loop's diagram-budget fallback is
+  unchanged and still covers full-size diagrams.
+
 - Stop three uncaught errors seen on a Symfony/Stimulus podcast site. DOM
   queries accept CSS attribute value selectors (`=`, `~=`, `|=`, `^=`, `$=`,
   `*=`, quoted or identifier values; es-module-shims probes

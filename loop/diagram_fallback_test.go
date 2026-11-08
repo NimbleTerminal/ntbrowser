@@ -25,9 +25,11 @@ func TestDiagramBudgetClassification(t *testing.T) {
 		t.Fatal("unrelated error accepted")
 	}
 }
+// diagramPage holds count full-size SVGs (a viewBox without a declared size
+// is a diagram, not an icon, so each one spends the renderer's diagram count).
 func diagramPage(count int) string {
 	return `<style>svg{width:12px;height:12px}h1{color:#ff0000}</style><h1>Repository</h1>` +
-		strings.Repeat(`<svg aria-label="icon" width="12" height="12" viewBox="0 0 12 12"><path d="M0 0H12V12H0Z"/></svg>`, count) +
+		strings.Repeat(`<svg aria-label="icon" viewBox="0 0 12 12"><path d="M0 0H12V12H0Z"/></svg>`, count) +
 		`<a href="/after">Readable after icons</a>`
 }
 func TestDiagramBudgetFallbackKeepsPageAndResetsOnNavigation(t *testing.T) {
