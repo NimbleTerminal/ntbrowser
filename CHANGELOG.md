@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Render GitHub's repository sidebar beside the README and keep narrow page
+  layouts readable, using the local nthtml renderer's fixed-width intrinsic
+  sizing, 4,096 custom properties per element, `calc()` width media ranges,
+  column flex minimum heights and clipped alt text in sized image boxes. No
+  ntbrowser budget or gate changes.
+
 - Apply CSS `:hover` in the default CSS viewer using presented-frame hit tests
   and generation checks. Coalesce worker renders under the existing frame
   pacing and deadline; pages without hover rules avoid pointer-driven reflows.
