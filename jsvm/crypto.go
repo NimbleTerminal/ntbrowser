@@ -13,10 +13,10 @@ import (
 const maxRandomValuesBytes = 65536
 
 // installCrypto defines crypto.getRandomValues and crypto.randomUUID. Both
-// draw from the sandbox's host-replaceable random source, the same one behind
-// Math.random (design decision 10): reader-mode scripts get no CSPRNG, and an
-// injected seeded source keeps replays deterministic. crypto.subtle is absent
-// so pages feature-detect it honestly.
+// draw from the sandbox's random source, the same one behind Math.random
+// (design decision 10): an OS-keyed ChaCha8 generator by default, or the
+// host's seeded source for deterministic replays. crypto.subtle is absent so
+// pages feature-detect it honestly.
 func (s *Sandbox) installCrypto() {
 	vm := s.vm
 	typedProto := vm.Get("Uint8Array").(*goja.Object).Get("prototype").(*goja.Object).Prototype()

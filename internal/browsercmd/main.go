@@ -112,7 +112,7 @@ func parseCommandArgs(command string, args []string) (config, error) {
 	fs.IntVar(&c.StylesheetBytes, "stylesheet-bytes", sheetBytes, "maximum bytes per stylesheet (1024..1048576)")
 	fs.IntVar(&c.StylesheetTotalBytes, "stylesheet-total-bytes", sheetTotal, "separate host stylesheet allowance (0 shares DOM budget; max 4194304)")
 	fs.IntVar(&c.Stylesheets, "stylesheets", sheetCount, "maximum stylesheets per page including imports (1..64)")
-	fs.Uint64Var(&c.Seed, "seed", 0, "PRNG seed for Math.random, for reproducible runs (0 = time-based); the clock is never fixed, timers depend on it")
+	fs.Uint64Var(&c.Seed, "seed", 0, "seed for Math.random and crypto, for reproducible runs (0 = a fresh unpredictable generator per page); the clock is never fixed, timers depend on it")
 	if err := fs.Parse(legacyLongFlags(fs, args)); err != nil {
 		return c, err
 	}
@@ -401,7 +401,7 @@ func Run(command string) int {
 	defer cancel()
 	script := jsvm.Config{Slice: c.Slice, HeapBudget: c.HeapBudgetMiB << 20}
 	if c.Seed != 0 {
-		script.Rand = seededRand(c.Seed)
+		script.Rand = jsvm.RandomSource(c.Seed) // one replayable sequence for every page and frame
 	}
 	mode, err := subres.ParseMode(string(c.Profile.Subresources))
 	if err != nil {
@@ -544,18 +544,3 @@ func lockDown(st state, sandboxed bool) (profile.Strengths, error) {
 type sinkFunc func(tea.Msg)
 
 func (f sinkFunc) Send(msg tea.Msg) { f(msg) }
-
-// seededRand is the same xorshift64* generator jsvm uses by default, seeded
-// explicitly so a run can be replayed. A zero seed would never leave zero.
-func seededRand(seed uint64) func() float64 {
-	state := seed
-	if state == 0 {
-		state = 0x9E3779B97F4A7C15
-	}
-	return func() float64 {
-		state ^= state << 13
-		state ^= state >> 7
-		state ^= state << 17
-		return float64(state>>11) / float64(1<<53)
-	}
-}

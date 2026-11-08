@@ -269,7 +269,7 @@ func New(cfg Config, tree *dom.Tree, host Host) *Sandbox {
 	}
 	origin, now := prepareClocks(&cfg)
 	if cfg.Rand == nil {
-		cfg.Rand = defaultRand
+		cfg.Rand = RandomSource(0) // fresh OS-keyed generator for this page
 	}
 	s := &Sandbox{cfg: cfg, host: host, tree: tree, performanceOrigin: origin, performanceNow: now,
 		weakW: map[dom.NodeID]weak.Pointer[goja.Object]{}, strong: map[dom.NodeID]*goja.Object{},
@@ -680,17 +680,6 @@ func safeString(v goja.Value) string {
 		}
 		return r
 	}, str)
-}
-
-// defaultRand is intentionally not crypto/rand: scripts in reader mode do
-// not get a CSPRNG, and the host can inject a seeded source for replay.
-var randState uint64 = 0x9E3779B97F4A7C15
-
-func defaultRand() float64 {
-	randState ^= randState << 13
-	randState ^= randState >> 7
-	randState ^= randState << 17
-	return float64(randState>>11) / float64(1<<53)
 }
 
 // ToValue converts plain Go scalars/strings for the loop (e.g. rAF

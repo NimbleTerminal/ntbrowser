@@ -306,7 +306,7 @@ supported.
 | `--frame-callbacks n` | Pending animation callbacks (default 256, range 1–1024) |
 | `--frame-budget-ms n` | Shared callback budget per frame in ms (default 8, range 1–50) |
 | `--slice d` | JavaScript time budget per entry (50ms); three overruns disable the page |
-| `--seed n` | PRNG seed for `Math.random` (0 = time-based) |
+| `--seed n` | Seed for `Math.random` and `crypto`, for reproducible runs (0 = a fresh unpredictable generator per page) |
 
 ## What a response becomes
 
@@ -843,9 +843,10 @@ throw RangeError, rather than silently decoding as UTF-8.
 
 `crypto.getRandomValues()` fills integer typed arrays in place (at most 65,536
 bytes per call; float views throw `TypeMismatchError`) and `crypto.randomUUID()`
-returns version-4 UUIDs. Both draw from the sandbox's host-replaceable random
-source, the one behind `Math.random`, so a seeded replay reproduces the same
-values and reader-mode scripts get no cryptographically strong generator.
+returns version-4 UUIDs. They share one source with `Math.random`: by default a
+ChaCha8 generator keyed from the operating system for each page, so values are
+unpredictable and never repeat between runs; with `--seed n` every page and
+frame of the run draws one reproducible sequence for replays and tests.
 `crypto.subtle` is not defined.
 
 These follow the supported portions of the

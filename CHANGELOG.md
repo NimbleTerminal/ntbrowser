@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Give each page its own unpredictable random source: `Math.random`,
+  `crypto.getRandomValues` and `crypto.randomUUID` now draw from a ChaCha8
+  generator keyed from the operating system per sandbox (`jsvm.RandomSource`),
+  replacing the fixed-state xorshift that repeated the same sequence every run
+  and was shared by all pages and frames. `--seed n` keeps determinism for
+  replays and tests by handing every page and frame one reproducible sequence.
+
 - Define `crypto.getRandomValues` and `crypto.randomUUID` in the script
   sandbox, so Go's `wasm_exec.js` loader and other scripts that require
   `globalThis.crypto` no longer abort with an uncaught error (seen on gloss's

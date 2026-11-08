@@ -92,7 +92,7 @@ Packages (module `nimbleterminal.dev/ntbrowser`):
 7. **Page text is sanitized twice, and the terminal boundary is the one that counts.** `jsvm.safeString` strips C0/C1 from `console.*` and uncaught-error text and caps lines at 4 KiB, so logs are readable in tests without a host. But page text also reaches the status line as `<title>`, hrefs in the confirm prompt, render warnings, and Go error strings that quote page input (`url.Parse` echoes the URL). `app.clean` therefore drops C0, DEL, C1 and U+2028/U+2029 from everything stored in `title`/`status` and once more in `View`. `ansi.Truncate` preserves escape sequences and is never treated as a sanitizer. `app.TestViewNeverCarriesTerminalEscapes` feeds an OSC 52 title, an SGR log line, a quoted-URL error and a C1 href through `Update` and checks `View()`.
 8. **Terminal keys are never swallowed by the page.** `q`/`ctrl+c` and nthtml's own navigation are handled by `app` first; the page gets a `keydown` copy.
 9. **Inline scripts only by default.** `-external-scripts` fetches `<script src>` through the same allowlist.
-10. **Coarse clock, seeded PRNG.** `Date.now()` has 10 ms granularity; `Math.random` is xorshift, host-replaceable for deterministic replays (matches `ntactor`'s determinism ethos). `crypto.getRandomValues`/`crypto.randomUUID` draw from the same source (integer views, 64 KiB per call); `crypto.subtle` is absent.
+10. **Coarse clock, replayable PRNG.** `Date.now()` has 10 ms granularity. `Math.random`, `crypto.getRandomValues` and `crypto.randomUUID` share one per-sandbox source (`jsvm.RandomSource`): an OS-keyed ChaCha8 generator by default, so pages get unpredictable nonces and identifiers, or a seeded one the host injects for deterministic replays (`--seed n`, matching `ntactor`'s determinism ethos). `getRandomValues` fills integer views only, 64 KiB per call; `crypto.subtle` is absent. (2026-11-08: replaced the fixed-state xorshift default, which repeated the same sequence every run and was shared by all sandboxes.)
 11. **Navigation is browser-like by default and configurable** (Evan: "free but user/dev-configurable"). `-nav free` (default): a user-activated link may go to any http(s) origin; Location navigation is separately gated by the profiles design’s script-navigation extension. `-nav allowlist`: navigation is confined to the current origin plus `-allow`. `-nav confirm`: leaving the origin asks in the status line (Enter/Esc). In every mode the new page's `fetch()` is confined to *its* origin plus `-allow`; `file:` is accepted only for the start page; same-origin includes the port.
 12. **Removed nodes live while JavaScript references them** (browser semantics, for arbitrary pages). `removeChild`/`remove`/`textContent=` *detach*; the subtree is *released* from the node budget only when no wrapper in it is alive. The GC story: every wrapper is held through a Go `weak.Pointer` with a `runtime.AddCleanup` that reports the NodeID; listeners live in a private WeakMap keyed by the wrapper, so a dropped wrapper takes its callbacks with it; wrappers of *attached* listener-bearing nodes are pinned strongly so their listeners keep firing after the page forgets them; detaching demotes to weak, re-attaching promotes. Goja's own WeakMap uses the same `weak`+`AddCleanup` mechanism, so JS reachability equals Go reachability. Under budget pressure the bridge forces a GC, waits ≤10 ms for cleanup reports, and retries once. Only integer counts live in Go (`listenCount`), so budgets survive collection. Known gap: a detached node's listener-bearing *descendant* that JS never referenced directly can be collected while detached, losing its listeners; browsers would keep them.
 13. **Minimal focus model and element-level clicks.** `element.focus()`/`blur()`, `document.activeElement`; `keydown` targets the focused element and bubbles to `document`; `event.key` uses DOM names for common keys (`Enter`, `Escape`, `ArrowUp`, …), Bubble Tea names otherwise (`ctrl+s`). Clicks on arbitrary elements: the host converts the terminal cell to a document-pixel area (`app.cellToDocument`, its own copy of nthtml's unexported `rasterCellSource`, tested against `Model.LinkAtCell`) and `loop.ClickAt` picks the smallest painted box with an anchor name; listener-bearing elements always have one (real or minted id). Focus follows clicks to focusable elements. Inline elements paint only a 1 px marker in nthtml, so a listener on a `<span>` is reached through its block ancestor. Keys typed into the viewer's `/` search never reach the page. Element clicks are delivered in v1 through the host copy of the cell mapping (`app/cell.go`, inlined in §8); §11.3 would only make `anchorFor` exact.
@@ -334,7 +334,7 @@ func New(cfg Config, tree *dom.Tree, host Host) *Sandbox {
 		cfg.Clock = func() time.Time { return time.Now().Truncate(10 * time.Millisecond) }
 	}
 	if cfg.Rand == nil {
-		cfg.Rand = defaultRand
+		cfg.Rand = RandomSource(0) // fresh OS-keyed ChaCha8 generator for this page
 	}
 	s := &Sandbox{cfg: cfg, host: host, tree: tree,
 		weakW: map[dom.NodeID]weak.Pointer[goja.Object]{}, strong: map[dom.NodeID]*goja.Object{},
@@ -601,16 +601,10 @@ func safeString(v goja.Value) string {
 	}, str)
 }
 
-// defaultRand is intentionally not crypto/rand: scripts in reader mode do
-// not get a CSPRNG, and the host can inject a seeded source for replay.
-var randState uint64 = 0x9E3779B97F4A7C15
-
-func defaultRand() float64 {
-	randState ^= randState << 13
-	randState ^= randState >> 7
-	randState ^= randState << 17
-	return float64(randState>>11) / float64(1<<53)
-}
+// RandomSource (jsvm/random.go) keys a ChaCha8 generator from crypto/rand
+// when seed is 0, or from the seed for replays; draws are serialized so one
+// source can serve every sandbox of a run.
+func RandomSource(seed uint64) func() float64
 
 // ToValue converts plain Go scalars/strings for the loop (e.g. rAF
 // timestamps). It must never be handed a struct or pointer: goja would
