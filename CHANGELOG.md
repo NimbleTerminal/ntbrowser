@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Enable full pointer-motion reporting for viewer link hover/press feedback.
+  The local nthtml renderer supplies cyan hover and amber pressed outlines
+  without changing navigation permissions or DOM/frame dispatch gates.
+
 - Admit up to 32,768 CSS rules in glynx now that the local nthtml renderer
   evaluates cascade-layer blocks. Keep ntbrowser's 4,096-rule default and
   existing selector-work, stylesheet-byte and script-mutable DOM limits.

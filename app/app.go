@@ -840,7 +840,7 @@ func (m *Model) View() tea.View {
 	v := tea.NewView(body + "\n" + status + help)
 	v.AltScreen = true
 	if !m.closing {
-		v.MouseMode = tea.MouseModeCellMotion
+		v.MouseMode = tea.MouseModeAllMotion
 	}
 	return v
 }
