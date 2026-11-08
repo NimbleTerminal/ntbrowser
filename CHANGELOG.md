@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Render GitHub's header buttons at full width with the local nthtml
+  renderer, which now sizes grid tracks from their items: Notifications, Fork,
+  Star and the branch selector no longer clip or overlap their labels.
+
 - Accept the iframe sandbox tokens `allow-forms`, `allow-popups` and
   `allow-modals` as inert instead of refusing the frame; child frames have
   none of those capabilities, so nothing is granted. Other tokens still fail
