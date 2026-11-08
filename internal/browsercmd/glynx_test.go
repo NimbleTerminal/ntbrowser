@@ -156,3 +156,30 @@ func TestStylesheetBudgets(t *testing.T) {
 		}
 	}
 }
+
+// --image-bytes raises the per-image download cap for README demo GIFs;
+// glynx defaults to 8 MiB, ntbrowser keeps 1 MiB, and the ceiling is 16 MiB.
+func TestImageBudget(t *testing.T) {
+	for _, command := range []string{"glynx", "ntbrowser"} {
+		c, err := parseCommandArgs(command, nil)
+		if err != nil {
+			t.Fatal(command, err)
+		}
+		want := 1 << 20
+		if command == "glynx" {
+			want = 8 << 20
+		}
+		if c.ImageBytes != want {
+			t.Fatalf("%s default image bytes %d, want %d", command, c.ImageBytes, want)
+		}
+		c, err = parseCommandArgs(command, []string{"--image-bytes=16777216"})
+		if err != nil || c.ImageBytes != 16<<20 {
+			t.Fatalf("%s override: %d %v", command, c.ImageBytes, err)
+		}
+		for _, arg := range []string{"--image-bytes=0", "--image-bytes=1023", "--image-bytes=16777217"} {
+			if _, err := parseCommandArgs(command, []string{arg}); err == nil {
+				t.Fatalf("%s accepted %s", command, arg)
+			}
+		}
+	}
+}

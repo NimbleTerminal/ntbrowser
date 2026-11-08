@@ -52,6 +52,10 @@ type Transport interface {
 	Do(ctx context.Context, r netpolicy.Request) (netpolicy.Response, error)
 }
 
+// MaxImageBytesLimit is the ceiling for Config.MaxImageBytes: a host may raise
+// the per-image download cap this far and no further.
+const MaxImageBytesLimit = 16 << 20
+
 // Config bounds one page's subresource loading (decision 9).
 type Config struct {
 	Mode           Mode
@@ -59,6 +63,7 @@ type Config struct {
 	MaxImages      int           // distinct images per page, backgrounds included (64)
 	MaxSheetBytes  int           // bytes per sheet (256 KiB)
 	MaxImagePixels int           // decoded pixels per page (16 Mpx)
+	MaxImageBytes  int           // encoded bytes per fetched image (1 MiB; at most MaxImageBytesLimit)
 	MaxInFlight    int           // concurrent requests (6)
 	StyleTimeout   time.Duration // first-frame wait for blocking sheets (1.5 s)
 	Timeout        time.Duration // per request (10 s)
@@ -78,6 +83,10 @@ func (c Config) WithDefaults() Config {
 	if c.MaxImagePixels <= 0 {
 		c.MaxImagePixels = 16 << 20
 	}
+	if c.MaxImageBytes <= 0 {
+		c.MaxImageBytes = 1 << 20
+	}
+	c.MaxImageBytes = min(c.MaxImageBytes, MaxImageBytesLimit)
 	if c.MaxInFlight <= 0 {
 		c.MaxInFlight = 6
 	}

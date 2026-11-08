@@ -32,18 +32,18 @@ func TestSubresourceTransportPolicy(t *testing.T) {
 	if len(p.AllowHosts) != 1 || p.AllowHosts[0] != ".cdn.test" || !p.AllowPrivate || p.MaxRedirects != 5 {
 		t.Fatalf("policy fields not copied: %+v", p)
 	}
-	if p.MaxBody != 1<<20 || p.MaxInFlight != 6 || p.Timeout != 10*time.Second {
-		t.Fatalf("defaults: MaxBody=%d MaxInFlight=%d Timeout=%v", p.MaxBody, p.MaxInFlight, p.Timeout)
+	if p.MaxBody != 1<<20 || p.MaxImageBody != 1<<20 || p.MaxInFlight != 6 || p.Timeout != 10*time.Second {
+		t.Fatalf("defaults: MaxBody=%d MaxImageBody=%d MaxInFlight=%d Timeout=%v", p.MaxBody, p.MaxImageBody, p.MaxInFlight, p.Timeout)
 	}
-	p, err = policyFor(base, subres.Config{Mode: subres.ModeOrigin, MaxSheetBytes: 512 << 10, MaxInFlight: 12, Timeout: 3 * time.Second}, "http://example.test/")
+	p, err = policyFor(base, subres.Config{Mode: subres.ModeOrigin, MaxSheetBytes: 512 << 10, MaxImageBytes: 8 << 20, MaxInFlight: 12, Timeout: 3 * time.Second}, "http://example.test/")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if p.AnyOrigin || p.NoDowngradeFrom != "http" {
 		t.Fatalf("ModeOrigin http: AnyOrigin=%v NoDowngradeFrom=%q", p.AnyOrigin, p.NoDowngradeFrom)
 	}
-	if p.MaxBody != 1<<20 || p.MaxInFlight != 12 || p.Timeout != 3*time.Second {
-		t.Fatalf("raised config: MaxBody=%d MaxInFlight=%d Timeout=%v", p.MaxBody, p.MaxInFlight, p.Timeout)
+	if p.MaxBody != 1<<20 || p.MaxImageBody != 8<<20 || p.MaxInFlight != 12 || p.Timeout != 3*time.Second {
+		t.Fatalf("raised config: MaxBody=%d MaxImageBody=%d MaxInFlight=%d Timeout=%v", p.MaxBody, p.MaxImageBody, p.MaxInFlight, p.Timeout)
 	}
 	p, _ = policyFor(base, subres.Config{MaxSheetBytes: 2 << 20}, "http://example.test/")
 	if p.MaxBody != 2<<20 {

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Let glynx load page images of up to 8 MiB each (README demo GIFs exceeded
+  the 1 MiB cap on every GitHub visit), through a new `--image-bytes` budget
+  (1024..16 MiB; ntbrowser keeps 1 MiB). netpolicy gains a separate image body
+  cap so stylesheets, scripts and documents keep their limits, and the
+  subresource loader decodes rasters under the configured cap with the same
+  4096 px / 4 Mpx checks; the 16 Mpx page budget is unchanged.
+
 - Render GitHub's inline octicons in place with the local nthtml renderer:
   icon-sized SVGs flow with their text and are budgeted apart from the
   32-diagram count, so repository pages no longer fall back to `[SVG: …]`

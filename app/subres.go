@@ -56,6 +56,7 @@ func policyFor(policy netpolicy.Policy, cfg subres.Config, base string) (netpoli
 		AnyOrigin:       cfg.Mode == subres.ModeAny,
 		NoDowngradeFrom: downgrade,
 		MaxBody:         int64(max(cfg.MaxSheetBytes, 1<<20)),
+		MaxImageBody:    int64(cfg.MaxImageBytes),
 		Timeout:         cfg.Timeout,
 		MaxInFlight:     cfg.MaxInFlight,
 		MaxRedirects:    policy.MaxRedirects,

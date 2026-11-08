@@ -52,6 +52,7 @@ type config struct {
 	Slice                                              time.Duration
 	HeapBudgetMiB                                      uint64
 	StylesheetBytes, StylesheetTotalBytes, Stylesheets int
+	ImageBytes                                         int
 	CSSRules                                           int
 	Seed                                               uint64
 	ShowProfile                                        bool
@@ -60,17 +61,22 @@ type config struct {
 
 func parseArgs(args []string) (config, error) { return parseCommandArgs("ntbrowser", args) }
 
+// maxImageBytes is the --image-bytes ceiling (the subresource loader's own).
+const maxImageBytes = subres.MaxImageBytesLimit
+
 func parseCommandArgs(command string, args []string) (config, error) {
 	var c config
 	defaultProfile := "browse"
 	defaultHeapMiB := uint64(256)
 	sheetBytes, sheetTotal, sheetCount := 256<<10, 0, 16
 	cssRules := 4096
+	imageBytes := 1 << 20
 	if command == "glynx" {
 		defaultProfile = "glynx"
 		defaultHeapMiB = 512
 		sheetBytes, sheetTotal, sheetCount = 1<<20, 4<<20, 64
 		cssRules = 32768
+		imageBytes = 8 << 20 // README demo GIFs; decoded-size caps are unchanged
 	}
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
 	fs.StringVarP(&c.Diagnostics, "diagnostics", "d", "", "write bounded JSONL diagnostics to a new owner-only file")
@@ -112,6 +118,7 @@ func parseCommandArgs(command string, args []string) (config, error) {
 	fs.IntVar(&c.StylesheetBytes, "stylesheet-bytes", sheetBytes, "maximum bytes per stylesheet (1024..1048576)")
 	fs.IntVar(&c.StylesheetTotalBytes, "stylesheet-total-bytes", sheetTotal, "separate host stylesheet allowance (0 shares DOM budget; max 4194304)")
 	fs.IntVar(&c.Stylesheets, "stylesheets", sheetCount, "maximum stylesheets per page including imports (1..64)")
+	fs.IntVar(&c.ImageBytes, "image-bytes", imageBytes, "maximum encoded bytes per page image (1024..16777216)")
 	fs.Uint64Var(&c.Seed, "seed", 0, "seed for Math.random and crypto, for reproducible runs (0 = a fresh unpredictable generator per page); the clock is never fixed, timers depend on it")
 	if err := fs.Parse(legacyLongFlags(fs, args)); err != nil {
 		return c, err
@@ -124,6 +131,9 @@ func parseCommandArgs(command string, args []string) (config, error) {
 	}
 	if c.StylesheetBytes < 1024 || c.StylesheetBytes > 1<<20 || c.StylesheetTotalBytes < 0 || c.StylesheetTotalBytes > dom.MaxExternalStyleBytes || c.Stylesheets < 1 || c.Stylesheets > 64 {
 		return c, fmt.Errorf("invalid stylesheet budget: bytes 1024..1048576, total 0..4194304, count 1..64")
+	}
+	if c.ImageBytes < 1024 || c.ImageBytes > maxImageBytes {
+		return c, fmt.Errorf("--image-bytes must be between 1024 and %d", maxImageBytes)
 	}
 	p, ok := profile.Builtin(*name)
 	if !ok {
@@ -383,7 +393,7 @@ func Run(command string) int {
 				fmt.Fprintln(os.Stderr, "diagnostics:", err)
 			}
 		}()
-		trace.Record("session", map[string]any{"profile": c.Profile, "strengths": strengths, "heap_budget_bytes": c.HeapBudgetMiB << 20, "stylesheet_bytes": c.StylesheetBytes, "stylesheet_total_bytes": c.StylesheetTotalBytes, "stylesheets": c.Stylesheets, "css_rules": c.CSSRules})
+		trace.Record("session", map[string]any{"profile": c.Profile, "strengths": strengths, "heap_budget_bytes": c.HeapBudgetMiB << 20, "stylesheet_bytes": c.StylesheetBytes, "stylesheet_total_bytes": c.StylesheetTotalBytes, "stylesheets": c.Stylesheets, "css_rules": c.CSSRules, "image_bytes": c.ImageBytes})
 	}
 	// Process-wide soft heap cap: Goja has no per-runtime memory limit, so
 	// the GC is told to work harder past this point and dom/nthtml limits
@@ -408,7 +418,7 @@ func Run(command string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
-	subresCfg := subres.Config{Mode: mode, MaxSheetBytes: c.StylesheetBytes, MaxStylesheets: c.Stylesheets}
+	subresCfg := subres.Config{Mode: mode, MaxSheetBytes: c.StylesheetBytes, MaxStylesheets: c.Stylesheets, MaxImageBytes: c.ImageBytes}
 	var cookieStore *cookies.Store
 	if c.Profile.Cookies == profile.CookiesSession {
 		cookieStore = cookies.New()

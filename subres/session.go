@@ -385,7 +385,7 @@ func (s *Session) fetchImage(abs string) (image.Image, error) {
 	}
 	ctx, cancel := context.WithTimeout(s.ctx, s.cfg.Timeout)
 	defer cancel()
-	return decodeFetched(ctx, resp.Headers["content-type"], resp.Body)
+	return decodeFetched(ctx, resp.Headers["content-type"], resp.Body, s.cfg.MaxImageBytes)
 }
 
 // FirstFrameRendered closes the blocking set: sheets discovered from now on

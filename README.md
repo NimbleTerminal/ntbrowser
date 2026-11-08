@@ -307,6 +307,7 @@ supported.
 | `--frame-budget-ms n` | Shared callback budget per frame in ms (default 8, range 1–50) |
 | `--slice d` | JavaScript time budget per entry (50ms); three overruns disable the page |
 | `--seed n` | Seed for `Math.random` and `crypto`, for reproducible runs (0 = a fresh unpredictable generator per page) |
+| `--image-bytes n` | Maximum encoded bytes per page image (1024..16777216; glynx defaults to 8 MiB, ntbrowser to 1 MiB) |
 
 ## What a response becomes
 
@@ -400,7 +401,10 @@ forms, frames, and devtools. Press it again during shutdown to quit immediately
 if graphics cleanup is waiting.
 
 Glynx allows up to 64 stylesheets, 1 MiB each, with a separate 4 MiB host-only
-CSS allowance, and 32,768 CSS rules. Tune these using `--stylesheets`, `--stylesheet-bytes`, and
+CSS allowance, 32,768 CSS rules, and page images of up to 8 MiB each
+(`--image-bytes`, at most 16 MiB; ntbrowser keeps 1 MiB). Decoded-size caps
+(4096 px per side, 4 Mpx per image, 16 Mpx per page) are unchanged, and an
+animated GIF still shows its first frame. Tune these using `--stylesheets`, `--stylesheet-bytes`, and
 `--stylesheet-total-bytes` (zero shares the DOM allowance), and `--css-rules`. ntbrowser retains
 its 16-sheet / 256 KiB / 4,096-rule defaults. Script-mutable DOM limits remain unchanged.
 CSS rule-count and matching limits still apply. ES modules/import maps are not
@@ -421,7 +425,7 @@ the last rendered page remains available when scripting is disabled.
 | Script opens sockets / SSRF to metadata or LAN | only `fetch` exists; scheme/host allowlist; DNS-resolved IP vetted then dialed (`netip`-based: loopback, RFC1918, link-local, CGNAT, multicast, plus NAT64 `64:ff9b::/96` by embedded address, `64:ff9b:1::/48`, 6to4 by embedded address, Teredo, IPv4-compatible); redirects re-admitted; no proxy env; top-level navigation uses the same dialer with `AnyOrigin` | `netpolicy` (`TestForbiddenIPCoversTransitionPrefixes`) |
 | Subresource SSRF (`<link>`, `<img>`, `@import`, `url()` to metadata or LAN) | the same dialer and address vetting as `fetch()`; loopback and private targets only with `-allow-private`; redirects re-admitted; an `https:` page refuses `http:` subresources | `netpolicy` (`TestKindStyleAcceptAndGate`, `TestNoDowngradeFromHTTPS`), `loop` (`TestMixedContent`) |
 | Soft-404 or interstitial injected as CSS | stylesheets need a 2xx `text/css` (or octet-stream with a `.css` path); images need a 2xx decodable type | `netpolicy` (`TestKindStyleAcceptAndGate`, `TestKindImageAcceptAndGate`) |
-| Pixel bombs and request floods | `DecodeImage` reads the header first and caps 1 MiB / 4096 px / 4 Mpx; 16 Mpx per page; 64 images and 16 stylesheets per page; six in flight | `subres` (`TestImageCapsAndPixelBudget`, `TestMaxInFlightQueue`) |
+| Pixel bombs and request floods | the raster decoder reads the header first and caps 4096 px / 4 Mpx per image and 1 MiB encoded (glynx 8 MiB, ceiling 16 MiB); 16 Mpx per page; 64 images and 16 stylesheets per page; six in flight | `subres` (`TestImageCapsAndPixelBudget`, `TestImageByteCapFollowsConfig`, `TestMaxInFlightQueue`) |
 | A stylesheet that never arrives holds the first frame | the first frame waits at most 1.5 s for the blocking stylesheets, then paints unstyled and restyles when they land | `loop` (`TestStyleTimeoutUnstyledThenStyled`) |
 | Exfiltrate via DNS/timing | no DNS primitive; 10 ms clock; MaxInFlight 4 | `jsvm`, `netpolicy` |
 | Terminal escape injection via `console.log`, `<title>`, hrefs, warnings or error strings | `jsvm.safeString` for console text; `app.clean` (C0, DEL, C1, U+2028/9) on everything stored for the status and title lines and again in `View`; nthtml strips controls on its own paths | `jsvm`, `app` (`TestViewNeverCarriesTerminalEscapes`) |

@@ -153,7 +153,7 @@ func TestParseMode(t *testing.T) {
 
 func TestDefaults(t *testing.T) {
 	got := Config{}.WithDefaults()
-	want := Config{MaxStylesheets: 16, MaxImages: 64, MaxSheetBytes: 256 << 10, MaxImagePixels: 16 << 20, MaxInFlight: 6, StyleTimeout: 1500 * time.Millisecond, Timeout: 10 * time.Second}
+	want := Config{MaxStylesheets: 16, MaxImages: 64, MaxSheetBytes: 256 << 10, MaxImagePixels: 16 << 20, MaxImageBytes: 1 << 20, MaxInFlight: 6, StyleTimeout: 1500 * time.Millisecond, Timeout: 10 * time.Second}
 	if got != want {
 		t.Fatalf("defaults = %+v, want %+v", got, want)
 	}
@@ -643,5 +643,30 @@ func TestPendingIncludesQueuedAndFailedResources(t *testing.T) {
 	r.settle(t, func() bool { return !s.Pending() })
 	if ft.total() != 3 {
 		t.Fatal("loads not settled", ft.total())
+	}
+}
+
+// TestImageByteCapFollowsConfig: a fetched raster over MaxImageBytes is
+// dropped with a warning; raising the cap admits it, up to the 16 MiB ceiling.
+func TestImageByteCapFollowsConfig(t *testing.T) {
+	big := pngBytes(t, 64, 64)
+	padded := append(big, make([]byte, 1500)...) // trailing bytes keep the PNG decodable
+	ft := newFake(func(_ context.Context, r netpolicy.Request) (netpolicy.Response, error) {
+		return img("image/png", padded)
+	})
+	cfg := testCfg()
+	cfg.MaxImageBytes = len(big)
+	s, r := newTestSession(t, cfg, ft)
+	s.Discover(nil, []string{"a.png"}, nil)
+	r.settle(t, func() bool { return ft.hit("https://page.test/a.png") == 1 && r.quiet(50*time.Millisecond) })
+	if s.Images()["a.png"] != nil || !strings.Contains(strings.Join(s.Warnings(), "\n"), "over") {
+		t.Fatalf("image over the byte cap was kept: %v", s.Warnings())
+	}
+	cfg.MaxImageBytes = len(padded)
+	s, r = newTestSession(t, cfg, ft)
+	s.Discover(nil, []string{"b.png"}, nil)
+	r.settle(t, func() bool { return s.Images()["b.png"] != nil })
+	if (Config{MaxImageBytes: 99 << 20}).WithDefaults().MaxImageBytes != MaxImageBytesLimit || (Config{}).WithDefaults().MaxImageBytes != 1<<20 {
+		t.Fatal("image byte defaults")
 	}
 }

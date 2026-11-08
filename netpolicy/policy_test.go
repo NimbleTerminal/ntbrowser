@@ -6,6 +6,7 @@ package netpolicy
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -74,5 +75,44 @@ func TestSameOriginIncludesPort(t *testing.T) {
 	}
 	if _, err := f.Resolve("https://host.example:443/x"); err != nil {
 		t.Fatalf("default port should match: %v", err)
+	}
+}
+
+// TestImageBodyCapIsSeparate: MaxImageBody raises the download cap for image
+// requests only; stylesheets, scripts and documents keep MaxBody.
+func TestImageBodyCapIsSeparate(t *testing.T) {
+	payload := strings.Repeat("x", 6000)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, ".png"):
+			w.Header().Set("Content-Type", "image/png")
+		case strings.HasSuffix(r.URL.Path, ".css"):
+			w.Header().Set("Content-Type", "text/css")
+		default:
+			w.Header().Set("Content-Type", "text/html")
+		}
+		_, _ = io.WriteString(w, payload)
+	}))
+	defer srv.Close()
+	origin, _ := url.Parse(srv.URL)
+	f := New(Policy{Origin: origin, AllowPrivate: true, MaxBody: 4096, MaxImageBody: 8192})
+	ctx := context.Background()
+	if resp, err := f.Do(ctx, Request{URL: srv.URL + "/a.png", Kind: KindImage}); err != nil || len(resp.Body) != len(payload) {
+		t.Fatalf("image under its own cap: %v", err)
+	}
+	for _, path := range []string{"/a.css", "/page.html"} {
+		kind := KindStyle
+		if path == "/page.html" {
+			kind = KindNavigate
+		}
+		var limit *BodyLimitError
+		if _, err := f.Do(ctx, Request{URL: srv.URL + path, Kind: kind}); !errors.As(err, &limit) || limit.Limit != 4096 {
+			t.Fatalf("%s should keep MaxBody: %v", path, err)
+		}
+	}
+	plain := New(Policy{Origin: origin, AllowPrivate: true, MaxBody: 4096})
+	var limit *BodyLimitError
+	if _, err := plain.Do(ctx, Request{URL: srv.URL + "/a.png", Kind: KindImage}); !errors.As(err, &limit) || limit.Limit != 4096 || limit.Resource != "image" {
+		t.Fatalf("without MaxImageBody images keep MaxBody: %v", err)
 	}
 }

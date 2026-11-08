@@ -51,6 +51,7 @@ type Policy struct {
 	// "" or "http" refuse nothing.
 	NoDowngradeFrom string
 	MaxBody         int64         // response bytes (default 2 MiB)
+	MaxImageBody    int64         // response bytes for KindImage requests (0: MaxBody)
 	Timeout         time.Duration // whole request (default 10s)
 	MaxInFlight     int           // concurrent requests per page (default 4)
 	MaxRedirects    int           // default 3
@@ -394,14 +395,25 @@ func (f *Fetcher) Do(ctx context.Context, r Request) (result Response, resultErr
 		return Response{}, err
 	}
 	defer o.Body.Close()
-	body, err := io.ReadAll(io.LimitReader(o.Body, f.p.MaxBody+1))
+	limit := f.p.bodyLimit(r.Kind)
+	body, err := io.ReadAll(io.LimitReader(o.Body, limit+1))
 	if err != nil {
 		return Response{}, err
 	}
-	if int64(len(body)) > f.p.MaxBody {
-		return Response{}, &BodyLimitError{Resource: bodyResource(r.Kind), URL: o.URL, Limit: f.p.MaxBody, Observed: int64(len(body)), AtLeast: true}
+	if int64(len(body)) > limit {
+		return Response{}, &BodyLimitError{Resource: bodyResource(r.Kind), URL: o.URL, Limit: limit, Observed: int64(len(body)), AtLeast: true}
 	}
 	return Response{Status: o.Status, StatusText: http.StatusText(o.Status), URL: o.URL, Headers: o.Headers, Body: string(body)}, nil
+}
+
+// bodyLimit is the response byte cap for one request kind. Images may carry
+// their own, larger cap (README demo GIFs run well past 1 MiB); every other
+// kind keeps MaxBody.
+func (p Policy) bodyLimit(k Kind) int64 {
+	if k == KindImage && p.MaxImageBody > 0 {
+		return p.MaxImageBody
+	}
+	return p.MaxBody
 }
 
 func acceptFor(k Kind) string {

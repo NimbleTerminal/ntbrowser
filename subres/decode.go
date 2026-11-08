@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/xml"
 	"errors"
+	"fmt"
 	"image"
 	"mime"
 	"net/url"
@@ -85,10 +86,18 @@ func parseSVGLength(v string) float64 {
 
 func clampSide(n int) int { return max(1, min(svgMaxSide, n)) }
 
+// Raster decode caps shared with document.DecodeImage: the header is read
+// first, so nothing larger than this is ever allocated.
+const (
+	rasterMaxSide   = 4096
+	rasterMaxPixels = 4 << 20
+)
+
 // decodeFetched turns a fetched image body into an image: SVG through
 // nthtml's bounded diagram renderer at the SVG's own size, everything else
-// through document.DecodeImage (GIF/JPEG/PNG, plus webp registered above).
-func decodeFetched(ctx context.Context, contentType, body string) (image.Image, error) {
+// through decodeRaster (GIF/JPEG/PNG, plus webp registered above) under the
+// page's per-image byte cap.
+func decodeFetched(ctx context.Context, contentType, body string, maxBytes int) (image.Image, error) {
 	mt, _, err := mime.ParseMediaType(contentType)
 	if err != nil {
 		mt = strings.ToLower(strings.TrimSpace(strings.SplitN(contentType, ";", 2)[0]))
@@ -97,7 +106,28 @@ func decodeFetched(ctx context.Context, contentType, body string) (image.Image, 
 		w, h := svgSize(body)
 		return document.DefaultDiagramRenderer{}.RenderDiagram(ctx, "svg", body, w, h)
 	}
-	return document.DecodeImage(strings.NewReader(body))
+	return decodeRaster(body, maxBytes)
+}
+
+// decodeRaster mirrors document.DecodeImage's dimension checks with a
+// host-chosen byte cap (document.DecodeImage fixes 1 MiB). An animated GIF
+// decodes to its first frame; the page's pixel budget still applies after.
+func decodeRaster(body string, maxBytes int) (image.Image, error) {
+	if maxBytes <= 0 {
+		maxBytes = 1 << 20
+	}
+	if len(body) > maxBytes {
+		return nil, fmt.Errorf("%w: image over %d bytes", document.ErrLimit, maxBytes)
+	}
+	cfg, _, err := image.DecodeConfig(strings.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	if cfg.Width < 1 || cfg.Height < 1 || cfg.Width > rasterMaxSide || cfg.Height > rasterMaxSide || cfg.Width > rasterMaxPixels/cfg.Height {
+		return nil, fmt.Errorf("%w: image dimensions %dx%d", document.ErrLimit, cfg.Width, cfg.Height)
+	}
+	img, _, err := image.Decode(strings.NewReader(body))
+	return img, err
 }
 
 // decodeDataURL decodes a data: image locally (decision 12): SVG through the
