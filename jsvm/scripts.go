@@ -47,6 +47,22 @@ func (s *Sandbox) installScripts() {
 	_ = ctor.Set("prototype", p)
 	defineFrozen(p, "constructor", ctor)
 	defineFrozen(s.vm.GlobalObject(), "HTMLScriptElement", ctor)
+	// The sandbox recognizes classic, module and import-map scripts: classic
+	// ones run, the other two are accepted and left inert (Goja has no module
+	// loader). Reporting all three as supported keeps pages from installing
+	// module polyfills such as es-module-shims, which need Blob URLs and
+	// dynamic import() and could only fail noisily here. Exact match, as
+	// specified: no trimming or case folding.
+	defineFrozen(ctor, "supports", s.vm.ToValue(func(c goja.FunctionCall) goja.Value {
+		if len(c.Arguments) == 0 {
+			panic(s.vm.NewTypeError("type required"))
+		}
+		switch c.Argument(0).String() {
+		case "classic", "module", "importmap":
+			return s.vm.ToValue(true)
+		}
+		return s.vm.ToValue(false)
+	}))
 	for _, name := range []string{"src", "type", "integrity", "crossOrigin", "referrerPolicy", "nonce"} {
 		attr := strings.ToLower(name)
 		s.accessor(p, name, func(t goja.Value) goja.Value {

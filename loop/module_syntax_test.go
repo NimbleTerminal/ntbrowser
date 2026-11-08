@@ -48,3 +48,28 @@ func TestDynamicImportScriptIsSkippedAsUnsupported(t *testing.T) {
 		t.Fatalf("unexpected report: %+v", lm)
 	}
 }
+
+// TestExcludedGlobalIsWarnedNotErrored: the loop reports a script stopped by a
+// design-excluded global at warn level, keeping error for real page faults.
+func TestExcludedGlobalIsWarnedNotErrored(t *testing.T) {
+	p, _ := profile.Builtin("browse")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sink := make(chanSink, 256)
+	l := New(ctx, Config{Profile: p, Width: 400}, sink)
+	go l.Run()
+	l.LoadPage(`<p>page</p><script>new XMLHttpRequest</script><script>undefinedFunction()</script>`, "https://example.test/", nil)
+	var logs []LogMsg
+	waitFor(t, sink, func(m tea.Msg) bool {
+		if lm, ok := m.(LogMsg); ok {
+			logs = append(logs, lm)
+		}
+		return len(logs) == 2
+	})
+	if logs[0].Level != "warn" || !strings.Contains(logs[0].Line, "script uses XMLHttpRequest, which this browser does not provide at https://example.test/#inline-0:1:") {
+		t.Fatalf("unexpected first report: %+v", logs[0])
+	}
+	if logs[1].Level != "error" || !strings.Contains(logs[1].Line, "uncaught ReferenceError: undefinedFunction is not defined") {
+		t.Fatalf("unexpected second report: %+v", logs[1])
+	}
+}

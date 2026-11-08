@@ -547,9 +547,14 @@ func (l *Loop) runScripts(page *Page, i int) {
 }
 
 func (l *Loop) report(err error) {
-	if err != nil {
-		l.send(LogMsg{"error", err.Error()})
+	if err == nil {
+		return
 	}
+	level := "error"
+	if errors.Is(err, jsvm.ErrUnsupportedAPI) {
+		level = "warn" // the page is fine; this browser lacks the API
+	}
+	l.send(LogMsg{level, err.Error()})
 }
 
 // ---- input routing from the Bubble Tea goroutine ----

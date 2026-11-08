@@ -612,26 +612,44 @@ func (t *Tree) ByID(id string) *Node {
 	return t.find(t.root, func(n *Node) bool { v, ok := n.Attr("id"); return ok && v == id })
 }
 
-// Query supports tag, #id, .class, attribute-presence suffixes and
-// descendant combinations. Anything richer throws in JS.
+// Query supports tag, #id, .class, attribute presence and value suffixes
+// ([a], [a=v], [a~=v], [a|=v], [a^=v], [a$=v], [a*=v]), descendant
+// combinations and comma-separated selector lists. Anything richer throws in
+// JS. Results are in tree order and never repeat an element.
 func (t *Tree) Query(from *Node, selector string, all bool) ([]*Node, error) {
-	parts, splitErr := selectorParts(selector)
-	if splitErr != nil || len(parts) == 0 || len(parts) > 8 {
+	groups, splitErr := selectorGroups(selector)
+	if splitErr != nil {
 		return nil, errors.New("ntbrowser/dom: unsupported selector")
 	}
-	preds := make([]func(*Node) bool, 0, len(parts))
-	for _, p := range parts {
-		pred, err := simplePredicate(p)
-		if err != nil {
-			return nil, err
+	chains := make([][]func(*Node) bool, 0, len(groups))
+	for _, group := range groups {
+		parts, splitErr := selectorParts(group)
+		if splitErr != nil || len(parts) == 0 || len(parts) > 8 {
+			return nil, errors.New("ntbrowser/dom: unsupported selector")
 		}
-		preds = append(preds, pred)
+		preds := make([]func(*Node) bool, 0, len(parts))
+		for _, p := range parts {
+			pred, err := simplePredicate(p)
+			if err != nil {
+				return nil, err
+			}
+			preds = append(preds, pred)
+		}
+		chains = append(chains, preds)
+	}
+	matches := func(c *Node) bool {
+		for _, preds := range chains {
+			if preds[len(preds)-1](c) && ancestorsMatch(c, preds[:len(preds)-1], from) {
+				return true
+			}
+		}
+		return false
 	}
 	var out []*Node
 	var walk func(n *Node) bool
 	walk = func(n *Node) bool {
 		for _, c := range n.children {
-			if c.kind == Element && preds[len(preds)-1](c) && ancestorsMatch(c, preds[:len(preds)-1], from) {
+			if c.kind == Element && matches(c) {
 				out = append(out, c)
 				if !all {
 					return true
@@ -667,21 +685,21 @@ func simplePredicate(p string) (func(*Node) bool, error) {
 		if err != nil {
 			return nil, err
 		}
-		var attrs []string
+		var attrs []attrTest
 		rest := p[first:]
 		for len(rest) > 0 {
 			if rest[0] != '[' || len(attrs) >= 8 {
 				return nil, fmt.Errorf("ntbrowser/dom: unsupported selector %q", p)
 			}
-			end := strings.IndexByte(rest, ']')
+			end := closingBracket(rest)
 			if end < 0 {
 				return nil, fmt.Errorf("ntbrowser/dom: unsupported selector %q", p)
 			}
-			name := strings.Trim(rest[1:end], " \t\r\n\f")
-			if !validName(name) || strings.ContainsAny(name, ":|") {
+			test, ok := parseAttrTest(rest[1:end])
+			if !ok {
 				return nil, fmt.Errorf("ntbrowser/dom: unsupported selector %q", p)
 			}
-			attrs = append(attrs, strings.ToLower(name))
+			attrs = append(attrs, test)
 			rest = rest[end+1:]
 		}
 		return func(n *Node) bool {
@@ -689,7 +707,7 @@ func simplePredicate(p string) (func(*Node) bool, error) {
 				return false
 			}
 			for _, a := range attrs {
-				if _, ok := n.Attr(a); !ok {
+				if !a.match(n) {
 					return false
 				}
 			}
@@ -714,6 +732,100 @@ func simplePredicate(p string) (func(*Node) bool, error) {
 		return func(n *Node) bool { return n.tag == tag }, nil
 	}
 	return nil, fmt.Errorf("ntbrowser/dom: unsupported selector %q", p)
+}
+
+// attrTest is one bracketed attribute condition: presence when op is empty,
+// otherwise a CSS attribute value comparison. Values are case-sensitive.
+type attrTest struct {
+	name, op, value string
+}
+
+func (a attrTest) match(n *Node) bool {
+	v, ok := n.Attr(a.name)
+	if !ok {
+		return false
+	}
+	switch a.op {
+	case "":
+		return true
+	case "=":
+		return v == a.value
+	case "~=":
+		if a.value == "" || strings.ContainsAny(a.value, " \t\r\n\f") {
+			return false
+		}
+		for _, word := range strings.Fields(v) {
+			if word == a.value {
+				return true
+			}
+		}
+		return false
+	case "|=":
+		return v == a.value || strings.HasPrefix(v, a.value+"-")
+	case "^=":
+		return a.value != "" && strings.HasPrefix(v, a.value)
+	case "$=":
+		return a.value != "" && strings.HasSuffix(v, a.value)
+	case "*=":
+		return a.value != "" && strings.Contains(v, a.value)
+	}
+	return false
+}
+
+// closingBracket finds the ']' that ends the condition opened at rest[0],
+// skipping brackets inside a quoted value; -1 when the condition never closes.
+func closingBracket(rest string) int {
+	var quote byte
+	for i := 1; i < len(rest); i++ {
+		c := rest[i]
+		switch {
+		case quote != 0:
+			if c == quote {
+				quote = 0
+			}
+		case c == '"' || c == '\'':
+			quote = c
+		case c == ']':
+			return i
+		}
+	}
+	return -1
+}
+
+// parseAttrTest reads the inside of one bracket pair: a name, optionally an
+// operator and a value that is either a quoted string or an identifier.
+// Backslash escapes, namespaces and case flags are not supported.
+func parseAttrTest(body string) (attrTest, bool) {
+	const space = " \t\r\n\f"
+	body = strings.Trim(body, space)
+	eq := strings.IndexByte(body, '=')
+	if eq < 0 {
+		if !validName(body) || strings.ContainsAny(body, ":|") {
+			return attrTest{}, false
+		}
+		return attrTest{name: strings.ToLower(body)}, true
+	}
+	name, op := body[:eq], "="
+	if eq > 0 && strings.IndexByte("~|^$*", body[eq-1]) >= 0 {
+		name, op = body[:eq-1], body[eq-1:eq+1]
+	}
+	name = strings.TrimRight(name, space)
+	if !validName(name) || strings.ContainsAny(name, ":|") {
+		return attrTest{}, false
+	}
+	value := strings.TrimLeft(body[eq+1:], space)
+	switch {
+	case value == "":
+		return attrTest{}, false
+	case value[0] == '"' || value[0] == '\'':
+		if len(value) < 2 || value[len(value)-1] != value[0] || strings.ContainsAny(value[1:len(value)-1], "\\\n") {
+			return attrTest{}, false
+		}
+		value = value[1 : len(value)-1]
+	case !validName(value) || strings.ContainsAny(value, ":|"):
+		return attrTest{}, false
+	}
+	return attrTest{name: strings.ToLower(name), op: op, value: value}, true
 }
 
 func hasClass(n *Node, cls string) bool {

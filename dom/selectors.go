@@ -2,11 +2,58 @@
 // SPDX-License-Identifier: AGPL-3.0-only WITH LicenseRef-NimbleTerminal-Linking-Exception OR LicenseRef-Neomantra-Commercial
 package dom
 
-import "errors"
+import (
+	"errors"
+	"strings"
+)
 
-// Only presence selectors are supported inside brackets. Preserve their CSS
-// whitespace without treating it as a descendant combinator. Bound work before
-// allocating predicates; escapes, values and namespaces are rejected downstream.
+// selectorGroups splits a selector list at commas outside brackets and quoted
+// values, at most eight groups, none empty. The byte bound applies to the
+// whole list before any group is parsed.
+func selectorGroups(selector string) ([]string, error) {
+	if len(selector) > 4096 {
+		return nil, errors.New("selector too long")
+	}
+	var groups []string
+	start := 0
+	bracket := false
+	var quote rune
+	for i, c := range selector {
+		switch {
+		case quote != 0:
+			if c == quote {
+				quote = 0
+			}
+		case c == '"' || c == '\'':
+			if bracket {
+				quote = c
+			}
+		case c == '[':
+			bracket = true
+		case c == ']':
+			bracket = false
+		case c == ',' && !bracket:
+			groups = append(groups, selector[start:i])
+			start = i + 1
+			if len(groups) >= 8 {
+				return nil, errors.New("too many selector groups")
+			}
+		}
+	}
+	groups = append(groups, selector[start:])
+	for i, g := range groups {
+		if strings.Trim(g, " \t\r\n\f") == "" {
+			return nil, errors.New("empty selector group")
+		}
+		groups[i] = g
+	}
+	return groups, nil
+}
+
+// Brackets hold presence and value selectors. Preserve their CSS whitespace,
+// and quoted values' brackets, without treating them as combinators. Bound
+// work before allocating predicates; escapes and namespaces are rejected
+// downstream.
 func selectorParts(selector string) ([]string, error) {
 	if len(selector) > 4096 {
 		return nil, errors.New("selector too long")
@@ -14,8 +61,19 @@ func selectorParts(selector string) ([]string, error) {
 	var parts []string
 	start := -1
 	bracket := false
+	var quote rune
 	for i, c := range selector {
+		if quote != 0 {
+			if c == quote {
+				quote = 0
+			}
+			continue
+		}
 		switch c {
+		case '"', '\'':
+			if bracket {
+				quote = c
+			}
 		case '[':
 			if bracket {
 				return nil, errors.New("nested attribute selector")
@@ -42,7 +100,7 @@ func selectorParts(selector string) ([]string, error) {
 			start = i
 		}
 	}
-	if bracket {
+	if bracket || quote != 0 {
 		return nil, errors.New("unclosed attribute selector")
 	}
 	if start >= 0 {

@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Stop three uncaught errors seen on a Symfony/Stimulus podcast site. DOM
+  queries accept CSS attribute value selectors (`=`, `~=`, `|=`, `^=`, `$=`,
+  `*=`, quoted or identifier values; es-module-shims probes
+  `script[type=esms-options]`) and comma-separated selector lists of up to
+  eight groups, within the existing selector bounds. The
+  sandbox defines an inert `window.history` (page-local `state`, `length` 1,
+  no navigation) and legacy `performance.timing`/`performance.navigation` at
+  the coarse time origin with empty `getEntries*()` results, which Cloudflare's
+  analytics beacon reads unguarded. `HTMLScriptElement.supports()` reports
+  classic, module and import-map scripts as recognized so pages skip
+  es-module-shims, which cannot run here, and a script that stops on a
+  design-excluded global (`XMLHttpRequest`, `WebSocket`, `Worker`,
+  `WebAssembly`, shared memory) is reported as a `warn`-level browser gap
+  instead of a page error. No new host authority or clock precision.
+
 - Give each page its own unpredictable random source: `Math.random`,
   `crypto.getRandomValues` and `crypto.randomUUID` now draw from a ChaCha8
   generator keyed from the operating system per sandbox (`jsvm.RandomSource`),

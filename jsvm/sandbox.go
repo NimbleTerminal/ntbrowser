@@ -361,6 +361,7 @@ func (s *Sandbox) installGlobals() {
 	defineFrozen(global, "document", doc)
 	defineFrozen(global, "fetch", vm.ToValue(s.fetch))
 	s.installLocation()
+	s.installHistory()
 	navigator := vm.NewObject()
 	defineFrozen(navigator, "cookieEnabled", vm.ToValue(s.cfg.CookieRead != nil && s.cfg.CookieWrite != nil))
 	defineFrozen(navigator, "userAgent", vm.ToValue("ntbrowser"))
@@ -440,16 +441,43 @@ func (s *Sandbox) Run(fn func(vm *goja.Runtime) error) (err error) {
 		message := safeString(exception.Value())
 		// Use the captured frames, not a page-controlled Error.stack property.
 		// Callbacks retain their original source location here as well.
+		location := ""
 		for _, frame := range exception.Stack() {
 			pos := frame.Position()
 			if pos.Line > 0 {
-				message += fmt.Sprintf(" at %s:%d:%d", pos.Filename, pos.Line, pos.Column)
+				location = fmt.Sprintf(" at %s:%d:%d", pos.Filename, pos.Line, pos.Column)
 				break
 			}
 		}
-		return fmt.Errorf("ntbrowser/jsvm: uncaught %s", safeString(s.vm.ToValue(message)))
+		if name := excludedGlobal(exception.Value()); name != "" {
+			return fmt.Errorf("ntbrowser/jsvm: script uses %s, %w%s", name, ErrUnsupportedAPI, safeString(s.vm.ToValue(location)))
+		}
+		return fmt.Errorf("ntbrowser/jsvm: uncaught %s", safeString(s.vm.ToValue(message+location)))
 	}
 	return err
+}
+
+// ErrUnsupportedAPI marks a script that stopped on a global the design leaves
+// out on purpose (spec §6: no XMLHttpRequest, WebSocket, Worker, WebAssembly,
+// shared memory). The host reports it as a gap in this browser rather than as
+// an error in the page.
+var ErrUnsupportedAPI = errors.New("which this browser does not provide")
+
+var excludedGlobals = map[string]bool{"XMLHttpRequest": true, "WebSocket": true, "Worker": true, "SharedWorker": true, "WebAssembly": true, "SharedArrayBuffer": true, "Atomics": true, "importScripts": true, "require": true, "process": true}
+
+// excludedGlobal names the design-excluded global behind a native
+// ReferenceError, or "" for any other exception. The check reads the engine's
+// own error class and message shape; a page can only influence the log level.
+func excludedGlobal(v goja.Value) string {
+	obj, ok := v.(*goja.Object)
+	if !ok || obj.ClassName() != "Error" || obj.Get("name").String() != "ReferenceError" {
+		return ""
+	}
+	name, ok := strings.CutSuffix(obj.Get("message").String(), " is not defined")
+	if !ok || !excludedGlobals[name] {
+		return ""
+	}
+	return name
 }
 
 func (s *Sandbox) strike() {

@@ -402,7 +402,9 @@ new diagnostic capability. URL input length is bounded at 2048 bytes.
 Replace/reload reuse the current history slot on successful load. Fragment
 changes commit on the owning VM goroutine without refetching. These features
 do not implement the full History platform or navigation events, ancestorOrigins,
-frames, or cross-window Location semantics. Source: [HTML Location interface](https://html.spec.whatwg.org/multipage/nav-history-apis.html#the-location-interface).
+frames, or cross-window Location semantics. (2026-11-08: `window.history` exists
+as inert page-local state so scripts that wrap `pushState` run; it records
+`state`, ignores URLs, keeps `length` 1 and never navigates.) Source: [HTML Location interface](https://html.spec.whatwg.org/multipage/nav-history-apis.html#the-location-interface).
 
 
 ## Animation resource controls (2026-11-06)

@@ -64,10 +64,33 @@ func (s *Sandbox) installPerformance() {
 	defineFrozen(vm.GlobalObject(), "Performance", ctor)
 	s.method(p, "now", func(c goja.FunctionCall) goja.Value { brand(c.This); return vm.ToValue(s.PerformanceNow()) })
 	s.accessor(p, "timeOrigin", func(this goja.Value) goja.Value { brand(this); return vm.ToValue(s.performanceOrigin) }, nil)
+	// Legacy Navigation Timing: the document's fetch and response share the
+	// coarse time origin, nothing finer is exposed, and the load milestones
+	// read 0 ("not available") since the sandbox has no load lifecycle.
+	timing := vm.NewObject()
+	for _, name := range []string{"navigationStart", "fetchStart", "domainLookupStart", "domainLookupEnd", "connectStart", "connectEnd", "requestStart", "responseStart", "responseEnd", "domLoading"} {
+		defineFrozen(timing, name, vm.ToValue(s.performanceOrigin))
+	}
+	for _, name := range []string{"unloadEventStart", "unloadEventEnd", "redirectStart", "redirectEnd", "secureConnectionStart", "domInteractive", "domContentLoadedEventStart", "domContentLoadedEventEnd", "domComplete", "loadEventStart", "loadEventEnd"} {
+		defineFrozen(timing, name, vm.ToValue(0))
+	}
+	navigation := vm.NewObject()
+	for name, v := range map[string]int{"type": 0, "redirectCount": 0, "TYPE_NAVIGATE": 0, "TYPE_RELOAD": 1, "TYPE_BACK_FORWARD": 2, "TYPE_RESERVED": 255} {
+		defineFrozen(navigation, name, vm.ToValue(v))
+	}
+	s.accessor(p, "timing", func(this goja.Value) goja.Value { brand(this); return timing }, nil)
+	s.accessor(p, "navigation", func(this goja.Value) goja.Value { brand(this); return navigation }, nil)
+	// No entries are recorded, so the Performance Timeline getters return
+	// fresh empty arrays; pages take that path rather than a missing method.
+	for _, name := range []string{"getEntries", "getEntriesByType", "getEntriesByName"} {
+		s.method(p, name, func(c goja.FunctionCall) goja.Value { brand(c.This); return vm.NewArray() })
+	}
 	s.method(p, "toJSON", func(c goja.FunctionCall) goja.Value {
 		brand(c.This)
 		out := vm.NewObject()
 		_ = out.Set("timeOrigin", s.performanceOrigin)
+		_ = out.Set("timing", timing)
+		_ = out.Set("navigation", navigation)
 		return out
 	})
 	defineFrozen(vm.GlobalObject(), "performance", object)

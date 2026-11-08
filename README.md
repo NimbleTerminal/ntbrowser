@@ -327,8 +327,11 @@ and `performance.toJSON()` are available. Elapsed time is monotonic with the
 default clock. `Date.now()`, performance values and animation-frame timestamps
 all use the profile's clock resolution (10 ms by default), with a shared
 quantization phase. Injected clocks support deterministic replay and backward
-movement is clamped for elapsed time. Legacy `performance.timing`, performance
-entries/observers and user-timing marks/measures are not implemented.
+movement is clamped for elapsed time. Legacy `performance.timing` reports the
+coarse time origin for `navigationStart` and the fetch/response phases (nothing
+finer is measured) and 0 for the load milestones; `performance.navigation` is a
+plain navigation; `getEntries*()` return empty arrays. Performance observers
+and user-timing marks/measures are not implemented.
 
 **JavaScript anchors.** Parsed and script-created `<a>` elements share an
 `HTMLAnchorElement` prototype. The interface exposes `href`, URL components
@@ -592,7 +595,10 @@ Assign appends history on success; replace and reload reuse the current entry.
 Same-document fragments update the URL and reveal the target without a fetch.
 As elsewhere in ntbrowser, Back/Forward refetch the selected history entry.
 This is not a complete navigation platform: no cross-window Location,
-History API, hashchange/popstate/beforeunload events, or ancestorOrigins list.
+hashchange/popstate/beforeunload events, or ancestorOrigins list. `history`
+exists but is inert page-local state: `pushState`/`replaceState` record
+`history.state` and ignore the URL, `length` stays 1, and `back`/`forward`/`go`
+never navigate; the session history belongs to the host.
 The location URL remains the committed document URL while a load or confirmation
 is pending. Destination-policy refusals are reported asynchronously by the host.
 
@@ -657,6 +663,13 @@ DOMException class hierarchy.
 
 Classic `<script>` elements created by JavaScript now support `src`, `text`,
 `type`, `async`, `defer`, `noModule`, `onload`/`onerror`, and event listeners.
+`HTMLScriptElement.supports()` reports `classic`, `module` and `importmap` as
+recognized types, since the sandbox accepts all three (module and import-map
+scripts stay inert); pages therefore skip module polyfills such as
+es-module-shims, which could only fail here. A script that stops on a global
+this browser leaves out by design (`XMLHttpRequest`, `WebSocket`, `Worker`,
+`WebAssembly`, shared memory) is reported at `warn` level as a browser gap, not
+as a page error.
 `document.head` is available. Connecting an eligible script (including inside a
 subtree), adding its text, or setting its connected `src` prepares it once.
 Removing, moving, or changing a prepared script does not execute it again.
@@ -690,13 +703,16 @@ running dynamic script; parser-script execution still reports null. Parsed
 script nodes remain discoverable but never replay through insertion or mutation.
 All script elements are omitted from rendered HTML.
 
-DOM queries support attribute-presence selectors such as `[nonce]`,
-`script[nonce]`, `.item[data-ready]`, and descendant combinations. Empty-valued
-attributes count as present; HTML attribute names are case-insensitive. Queries
-are bounded to 4096 bytes, eight descendant parts and eight presence tests per
-part. Attribute value operators, namespaces, escapes and general compound CSS
-selectors remain unsupported. This follows the presence-selector semantics in
-[Selectors Level 4](https://www.w3.org/TR/selectors-4/#attribute-representation).
+DOM queries support attribute selectors: presence (`[nonce]`, `script[nonce]`,
+`.item[data-ready]`) and the CSS value comparisons `=`, `~=`, `|=`, `^=`, `$=`
+and `*=` with quoted or identifier values (`script[type=esms-options]`,
+`[lang|="en"]`), descendant combinations and comma-separated selector lists
+(`script[type=module-shim],link[rel=modulepreload-shim]`), returning each
+element once in tree order. Empty-valued attributes count as present; HTML
+attribute names are case-insensitive and values are case-sensitive. Queries are
+bounded to 4096 bytes, eight groups, eight descendant parts per group and eight
+attribute tests per part. Case flags, namespaces, escapes and general compound
+CSS selectors are rejected with a TypeError.
 
 `document.getElementsByTagName()` and `element.getElementsByTagName()` return
 live `HTMLCollection` objects: `length`, indexed access, `item()`, `namedItem()`,
