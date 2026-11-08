@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Define `crypto.getRandomValues` and `crypto.randomUUID` in the script
+  sandbox, so Go's `wasm_exec.js` loader and other scripts that require
+  `globalThis.crypto` no longer abort with an uncaught error (seen on gloss's
+  web terminal frame). Both draw from the sandbox's host-replaceable random
+  source behind `Math.random`, per design decision 10, so replays stay
+  deterministic and reader-mode scripts still get no CSPRNG. Integer typed
+  arrays only, 65,536 bytes per call, in-place fills of the view's own bytes;
+  `crypto.subtle` stays absent for honest feature detection.
+
 - Report a classic script that reaches for a dynamic `import()` (SvelteKit and
   Vite bootstraps, for example) as a skipped unsupported feature, in a `warn`
   status line naming the script, instead of a `SyntaxError` blaming the page.

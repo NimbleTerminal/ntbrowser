@@ -16,7 +16,7 @@ func (s *Sandbox) eventException(name, message string) *goja.Object {
 	_ = st.Set("kind", "DOMException")
 	_ = st.Set("name", name)
 	_ = st.Set("message", message)
-	codes := map[string]int{"InvalidStateError": 11, "NotSupportedError": 9, "AbortError": 20, "TimeoutError": 23, "SyntaxError": 12, "DataCloneError": 25, "QuotaExceededError": 22}
+	codes := map[string]int{"InvalidStateError": 11, "NotSupportedError": 9, "AbortError": 20, "TimeoutError": 23, "SyntaxError": 12, "DataCloneError": 25, "QuotaExceededError": 22, "TypeMismatchError": 17}
 	_ = st.Set("code", codes[name])
 	s.putPrivate(e, st)
 	return e

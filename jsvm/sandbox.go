@@ -291,6 +291,7 @@ func New(cfg Config, tree *dom.Tree, host Host) *Sandbox {
 	s.installStorage()
 	s.installPerformance()
 	s.installEncoding()
+	s.installCrypto()
 	s.installMessages()
 	s.installWindowMessages()
 	s.installMutations()

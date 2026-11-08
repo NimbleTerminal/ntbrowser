@@ -839,6 +839,15 @@ buffers and spoofed views are rejected. Legacy character encodings and
 TextEncoderStream/TextDecoderStream are not implemented. Unsupported labels
 throw RangeError, rather than silently decoding as UTF-8.
 
+### Randomness
+
+`crypto.getRandomValues()` fills integer typed arrays in place (at most 65,536
+bytes per call; float views throw `TypeMismatchError`) and `crypto.randomUUID()`
+returns version-4 UUIDs. Both draw from the sandbox's host-replaceable random
+source, the one behind `Math.random`, so a seeded replay reproduces the same
+values and reader-mode scripts get no cryptographically strong generator.
+`crypto.subtle` is not defined.
+
 These follow the supported portions of the
 [Encoding Standard](https://encoding.spec.whatwg.org/#api) and grant no network,
 filesystem or storage access. `jsvm.Config.MaxCodecBytes` defaults to 2 MiB:
