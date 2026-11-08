@@ -395,7 +395,7 @@ func (p Profile) Table(s Strengths) string {
 		{"session-storage-total-bytes", strconv.Itoa(p.StorageTotalBytes()), "session-wide key/value bytes"},
 		{"local-storage", orOff(p.LocalStorage), "origin-isolated localStorage with the session quotas"},
 		{"persist", orOff(p.Persist), "file: cookies with an expiry and localStorage survive restarts in owner-only files opened before lockdown"},
-		{"cookies", orOff(p.Cookies), "in-memory session cookies; cross-origin subrequests excluded"},
+		{"cookies", orOff(p.Cookies), "session cookie store, memory-only unless persist=file keeps cookies with an expiry; cross-origin subrequests excluded"},
 		{"frame-dom", orOff(p.FrameDOM), "bounded same-origin DOM bridge; no shared JavaScript globals"},
 		{"frames", orOff(p.Frames), "isolated child pages; origin, explicit grants, or any public origin"},
 		{"frame-grants", fmt.Sprint(p.FrameGrants), "frame source/destination origins; no script or fetch grants"},
