@@ -388,8 +388,9 @@ make Google Search compatible.
 JavaScript runs in a pure-Go interpreter with no `os`, `net` or environment access, a per-entry time slice, a heap budget, and a bounded DOM; the only network path is a `fetch()` confined to the page's origin plus `-allow`, dialled through an address-vetting transport. Page text reaches the terminal only through a control-stripping boundary.
 
 Links show a cyan outline under the mouse and an amber outline while pressed
-(text mode uses reverse video). This viewer feedback does not yet apply
-page-defined CSS `:hover` or `:active` rules.
+(text mode uses reverse video). CSS mode also applies page-defined `:hover` rules to the pointed element and
+its ancestors. Updates use the normal bounded render worker; semantic chunk
+mode retains viewer feedback only. CSS `:active` remains unsupported.
 
 Ctrl+C exits from every focus mode, including page search, address entry,
 forms, frames, and devtools. Press it again during shutdown to quit immediately

@@ -526,6 +526,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.SetClipboard(v.Text)
 
+	case tea.MouseMotionMsg:
+		if !m.overlay() && m.viewer != nil && m.frameInputReady() {
+			area, _ := m.viewer.CellToDocument(image.Pt(v.X, v.Y))
+			m.loop.HoverAtFrame(m.gen, area)
+		}
 	case tea.MouseClickMsg:
 		if m.overlay() {
 			return m, nil // nothing reaches the page beneath a picture or video

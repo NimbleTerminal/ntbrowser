@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Apply CSS `:hover` in the default CSS viewer using presented-frame hit tests
+  and generation checks. Coalesce worker renders under the existing frame
+  pacing and deadline; pages without hover rules avoid pointer-driven reflows.
+
 - Enable full pointer-motion reporting for viewer link hover/press feedback.
   The local nthtml renderer supplies cyan hover and amber pressed outlines
   without changing navigation permissions or DOM/frame dispatch gates.

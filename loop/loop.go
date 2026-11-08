@@ -118,12 +118,13 @@ type Page struct {
 	// used to map a document-pixel hit back to an element (Box.Anchor = id).
 	boxes []document.Box
 	// result is the last frame's Result (SourceAt refines clicks, forms.go).
-	result     *document.Result
-	frameGen   uint64
-	chunkState *chunkRender // transferred between serial workers; never inspected by VM
-	chunkReq   chunkRequest
-	chunkInfo  ChunkInfo
-	chunkIndex chunkLookup
+	hoverSource string
+	result      *document.Result
+	frameGen    uint64
+	chunkState  *chunkRender // transferred between serial workers; never inspected by VM
+	chunkReq    chunkRequest
+	chunkInfo   ChunkInfo
+	chunkIndex  chunkLookup
 	// lastFocus is the focus the host was last told about; focusValue the
 	// focused control's value at focus or last commit (change detection).
 	lastFocus     dom.NodeID
@@ -647,6 +648,25 @@ func (l *Loop) LinkActivatedAt(gen uint64, link document.Link) {
 func (l *Loop) ClickAt(area image.Rectangle) { l.ClickAtFrame(0, area) }
 
 // ClickAtFrame keeps displayed CSS or chunk-local coordinates paired with their DOM/frame.
+// HoverAtFrame updates CSS pointer state using the currently presented frame.
+func (l *Loop) HoverAtFrame(gen uint64, area image.Rectangle) {
+	l.tryPost(func() {
+		p := l.page
+		if p == nil || !l.FrameCurrent(gen) || p.frameGen != gen || p.Tree.Dirty() || l.cfg.Chunked || !p.result.HasHoverStyles() {
+			return
+		}
+		id := ""
+		if !area.Empty() && p.result != nil {
+			id, _ = p.result.SourceAt(area.Min.Add(area.Size().Div(2)))
+		}
+		if id == p.hoverSource {
+			return
+		}
+		p.hoverSource = id
+		l.scheduleFrame()
+	})
+}
+
 func (l *Loop) ClickAtFrame(gen uint64, area image.Rectangle) {
 	l.tryPost(func() {
 		if l.page == nil || gen != 0 && (!l.FrameCurrent(gen) || l.page.frameGen != gen || l.page.Tree.Dirty()) {
@@ -849,7 +869,7 @@ func (l *Loop) startRender() {
 		l.dropPage(l.page)
 	}
 	page := l.page
-	opts := document.Options{DisableDiagrams: page.diagramsDisabled, ViewportHeight: l.cfg.FrameHeight, NoImage: !l.cfg.Chunked, Width: l.cfg.Width, Limits: l.cfg.RenderLimit, Fonts: l.cfg.Fonts, FallbackFaces: fallbackFaces}
+	opts := document.Options{HoverSource: page.hoverSource, DisableDiagrams: page.diagramsDisabled, ViewportHeight: l.cfg.FrameHeight, NoImage: !l.cfg.Chunked, Width: l.cfg.Width, Limits: l.cfg.RenderLimit, Fonts: l.cfg.Fonts, FallbackFaces: fallbackFaces}
 	var loaderWarnings []string
 	if page.diagramsDisabled {
 		loaderWarnings = append(loaderWarnings, diagramFallbackWarning)
