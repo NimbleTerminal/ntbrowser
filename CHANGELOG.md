@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Report a classic script that reaches for a dynamic `import()` (SvelteKit and
+  Vite bootstraps, for example) as a skipped unsupported feature, in a `warn`
+  status line naming the script, instead of a `SyntaxError` blaming the page.
+  Goja has no ES module loader; `type="module"` scripts were already skipped
+  by type. Genuine syntax errors keep their reports and the script budgets are
+  unchanged.
+
 - Probe the terminal's Kitty graphics support at program start, through one
   terminal session shared by every page viewer and media picture, so discovery
   finishes while the first page loads. In a terminal that identifies itself as

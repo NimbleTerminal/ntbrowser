@@ -1366,5 +1366,11 @@ func (l *Loop) evalScript(page *Page, name, source string) {
 		result = err.Error()
 	}
 	l.cfg.Trace.Record("script_result", map[string]string{"url": name, "result": result})
+	if errors.Is(err, jsvm.ErrModuleSyntax) {
+		// Module scripts are skipped by type; a classic bootstrap that reaches
+		// for import() is the same gap and gets the same quiet notice.
+		l.send(LogMsg{"warn", fmt.Sprintf("script skipped: %s uses import(), and ES modules are not supported", name)})
+		return
+	}
 	l.report(err)
 }

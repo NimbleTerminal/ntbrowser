@@ -536,12 +536,20 @@ func (s *Sandbox) Close() {
 // WithDisableSourceMaps set on the runtime would be ignored and a
 // "//# sourceMappingURL=/etc/passwd" comment would reach os.ReadFile.
 // Parse with explicit options, then CompileAST.
+// ErrModuleSyntax marks a classic script that fails to parse only because it
+// uses ES module syntax. Goja has no module loader, so a dynamic import() is
+// an unsupported feature of this browser, not a syntax error in the page.
+var ErrModuleSyntax = errors.New("ES modules are not supported")
+
 func (s *Sandbox) Eval(name, src string) error {
 	if len(src) > maxScriptBytes {
 		return fmt.Errorf("ntbrowser/jsvm: script %s over %d bytes", name, maxScriptBytes)
 	}
 	ast, err := goja.Parse(name, src, sandboxParserOptions()...)
 	if err != nil {
+		if usesDynamicImport(src, err) {
+			return fmt.Errorf("%w: the script uses import()", ErrModuleSyntax)
+		}
 		return err
 	}
 	prg, err := goja.CompileAST(ast, false)
@@ -727,6 +735,22 @@ func (s *Sandbox) checkHeap() {
 
 // sandboxParserOptions is the single definition of how page source is parsed.
 func sandboxParserOptions() []parser.Option { return []parser.Option{parser.WithDisableSourceMaps} }
+
+// usesDynamicImport reports whether a parse failure sits on an import( call,
+// the one piece of module syntax a classic script may legitimately contain.
+// The parser reports the reserved word's own byte offset, so the check reads a
+// few bytes there and never rescans the source.
+func usesDynamicImport(src string, err error) bool {
+	var syntax *goja.CompilerSyntaxError
+	if !errors.As(err, &syntax) || syntax.Message != "Unexpected reserved word" || syntax.Offset < 0 || syntax.Offset >= len(src) {
+		return false
+	}
+	rest, ok := strings.CutPrefix(src[syntax.Offset:], "import")
+	if !ok {
+		return false
+	}
+	return strings.HasPrefix(strings.TrimLeft(rest, " \t\r\n"), "(")
+}
 
 // Reap applies pending GC reports now (the loop calls it after runtime.GC
 // when the node budget is hit; Run calls it on every entry).

@@ -401,7 +401,9 @@ CSS allowance, and 32,768 CSS rules. Tune these using `--stylesheets`, `--styles
 `--stylesheet-total-bytes` (zero shares the DOM allowance), and `--css-rules`. ntbrowser retains
 its 16-sheet / 256 KiB / 4,096-rule defaults. Script-mutable DOM limits remain unchanged.
 CSS rule-count and matching limits still apply. ES modules/import maps are not
-supported, so GitHub's script-driven controls are not yet available.
+supported, so GitHub's script-driven controls are not yet available; a classic
+script that calls `import()` is skipped with a `warn` status line rather than
+reported as a page syntax error.
 
 The heap guard defaults to 512 MiB in glynx and 256 MiB in ntbrowser, measured
 as **process-wide Go heap**, including the renderer. Set `--heap-budget-mib=768`
