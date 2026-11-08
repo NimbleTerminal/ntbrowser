@@ -50,7 +50,9 @@ func (m *Model) installCSSFrame(v loop.FrameMsg) tea.Cmd {
 		if m.viewer != nil {
 			init = m.viewer.Close()
 		}
-		m.viewer = nthtml.NewWithOptions(nil, viewerOptions)
+		opts := viewerOptions
+		opts.Session = m.session
+		m.viewer = nthtml.NewWithOptions(nil, opts)
 		m.cssPainted = true
 		m.viewerInitialized = false
 		m.viewer.SetBounds(0, 0, m.cols, m.viewRows())

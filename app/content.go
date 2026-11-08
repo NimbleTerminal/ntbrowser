@@ -235,13 +235,11 @@ func (v *mediaView) close() tea.Cmd {
 }
 
 // pictureOptions are for pictures shown in the page's place. They share the
-// viewer's terminal session, so Kitty discovery need not happen again.
+// terminal session Init probed, so Kitty discovery never happens again.
 func (m *Model) pictureOptions() ntpicture.Options {
 	opts := viewerOptions.Picture
 	opts.AutoMode = true
-	if m.viewer != nil {
-		opts.Session = m.viewer.Picture().Session()
-	}
+	opts.Session = m.session
 	return opts
 }
 

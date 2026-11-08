@@ -41,7 +41,7 @@ func TestSearchFormEndToEnd(t *testing.T) {
 	go l.Run()
 	m := New(l, testProfile(nil, true, NavFree), srv.URL+"/")
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-	m.Update(m.Init()())
+	drive(m, m.Init())
 
 	// pump feeds loop messages to the model until done says stop. A
 	// NavigateMsg's command (the page fetch) is run here, the way Bubble Tea

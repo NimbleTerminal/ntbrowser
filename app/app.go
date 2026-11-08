@@ -74,6 +74,8 @@ type Model struct {
 
 	loop              *loop.Loop
 	viewer            *nthtml.Model
+	session           *ntpicture.TerminalSession // one terminal discovery for every picture, probed at Init
+	heldFrame         *loop.FrameMsg             // the first frame, waiting for the terminal's probe reply
 	cssPainted        bool
 	viewerInitialized bool
 	layoutWidth       int
@@ -155,7 +157,7 @@ var viewerOptions = nthtml.ModelOptions{
 }
 
 func New(l *loop.Loop, p profile.Profile, start string) *Model {
-	return &Model{loop: l, profile: p, policy: PolicyFor(p), nav: p.Navigate, cols: 80, rows: 24, start: start, hIndex: -1}
+	return &Model{loop: l, profile: p, policy: PolicyFor(p), nav: p.Navigate, cols: 80, rows: 24, start: start, hIndex: -1, session: ntpicture.NewTerminalSession(ntpicture.TerminalOptions{})}
 }
 
 // PolicyFor is the network policy template a profile implies.
@@ -163,11 +165,27 @@ func PolicyFor(p profile.Profile) netpolicy.Policy {
 	return netpolicy.Policy{AllowHosts: append([]string(nil), p.Hosts...), AllowPrivate: p.PrivateNetwork}
 }
 
+// Init starts terminal discovery (the Kitty graphics probe) at once, so it
+// completes while the first page loads instead of after its first frame.
 func (m *Model) Init() tea.Cmd {
 	if m.start == "" {
-		return m.openAddress()
+		return tea.Batch(m.session.Init(), m.openAddress())
 	}
-	return m.navigate(m.start, pushNew, true)
+	return tea.Batch(m.session.Init(), m.navigate(m.start, pushNew, true))
+}
+
+// holdFrames reports whether the first frame should wait for the terminal's
+// probe reply. A terminal that identifies itself as Kitty-capable (rex, kitty,
+// ghostty, …) normally answers within milliseconds; painting glyphs first and
+// switching moments later is a visible flicker. ntpicture bounds the wait at
+// its 250 ms probe timeout, after which the session reports Unsupported and
+// the frame paints in glyphs. Unidentified terminals paint at once.
+func (m *Model) holdFrames() bool {
+	if m.viewer != nil || m.closing {
+		return false
+	}
+	state := m.session.Snapshot()
+	return state.EnvSignalled && state.Kitty == ntpicture.KittyCapabilityUnknown
 }
 
 // navigate loads an absolute URL and hands the HTML to the loop.
@@ -305,6 +323,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 	if m.closing {
 		if _, ok := msg.(shutdownReadyMsg); ok {
+			m.session.Close() // after the pictures: releases pending probes
 			return m, tea.Quit
 		}
 		if m.viewer != nil {
@@ -403,6 +422,11 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if v.Navigation != 0 && !m.loop.NavigationCurrent(v.Navigation) {
 			return m, nil
 		}
+		if m.holdFrames() {
+			held := v // the newest frame wins; it is replayed when the terminal answers
+			m.heldFrame = &held
+			return m, nil
+		}
 		// Frames arrive from the render worker; drop anything older than
 		// what is on screen so a slow render cannot regress the view.
 		if v.Gen <= m.lastFrame {
@@ -455,6 +479,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// UI goroutine; the viewer must never re-render on its own.
 			opts := viewerOptions
 			opts.HostPainted = false
+			opts.Session = m.session
 			m.viewer = nthtml.NewWithOptions(v.Result, opts)
 			m.resetView = false
 			cmd := tea.Batch(m.viewer.Init(), m.viewer.SetBounds(0, 0, m.cols, m.viewRows()))
@@ -731,6 +756,16 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		overlay = m.player.pic.Update(msg)
 	case m.media != nil:
 		overlay = m.media.update(msg)
+	case m.viewer == nil:
+		// No picture forwards terminal events yet: probe replies, cell-size
+		// reports and probe timeouts reach the shared session directly.
+		overlay = m.session.Update(msg)
+	}
+	if m.heldFrame != nil && !m.holdFrames() {
+		held := *m.heldFrame
+		m.heldFrame = nil
+		_, cmd := m.Update(held)
+		overlay = tea.Batch(overlay, cmd)
 	}
 	// The viewer's own picture messages must reach it even under an overlay:
 	// its render job would otherwise never finish and the page stay frozen.

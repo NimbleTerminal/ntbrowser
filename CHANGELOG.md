@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Probe the terminal's Kitty graphics support at program start, through one
+  terminal session shared by every page viewer and media picture, so discovery
+  finishes while the first page loads. In a terminal that identifies itself as
+  Kitty-capable (rex, kitty, ghostty, WezTerm, …) the first frame waits for the
+  reply, bounded by ntpicture's 250 ms probe timeout, instead of painting
+  glyphs and switching a moment later. Unidentified terminals still paint at
+  once. The session closes on shutdown after the pictures.
+
 - Render GitHub's repository sidebar beside the README and keep narrow page
   layouts readable, using the local nthtml renderer's fixed-width intrinsic
   sizing, 4,096 custom properties per element, `calc()` width media ranges,
