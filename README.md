@@ -1052,7 +1052,9 @@ By default this mode isolates even same-origin frame DOMs:
 `contentDocument` is null and proxy document/location/storage access throws
 `SecurityError`. The separate `--frame-dom=same-origin` gate enables the bounded
 DOM bridge described below; Location and storage access remain denied. Child cookies and session storage are disabled. Sandbox
-supports `allow-scripts` and `allow-same-origin`; other tokens fail closed.
+supports `allow-scripts` and `allow-same-origin`; `allow-forms`, `allow-popups`
+and `allow-modals` are accepted as inert, since child frames submit no forms
+and open no windows or dialogs; other tokens fail closed.
 Opaque sandbox children report origin `null`, cannot use fetch, and cannot
 create descendants. Embedding restrictions are enforced conservatively:
 X-Frame-Options and supported frame-ancestors checks apply; CSP sandbox,

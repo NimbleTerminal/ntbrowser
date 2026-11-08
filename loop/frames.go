@@ -302,6 +302,10 @@ func (l *Loop) fetchFrame(ctx context.Context, page *Page, spec jsvm.FrameSpec) 
 				scripts = l.cfg.Profile.ScriptsOn()
 			case "allow-same-origin":
 				opaque = false
+			case "allow-forms", "allow-popups", "allow-modals":
+				// Grants for capabilities child frames do not have (form
+				// submission, new windows, dialogs): accepting them changes
+				// nothing, refusing them would drop pages like GitHub's login.
 			default:
 				err = fmt.Errorf("unsupported iframe sandbox token %q", token)
 				return

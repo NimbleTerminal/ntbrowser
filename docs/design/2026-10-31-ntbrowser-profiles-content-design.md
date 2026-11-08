@@ -578,7 +578,9 @@ pixels. Srcdoc has a 64 KiB cap. Source/destination frame grants are capped at
 128 entries and do not grant script or fetch access. Same-origin is implicitly
 admitted in origin and allowlist modes. Opaque children cannot fetch or embed
 descendants. Sandbox tokens other than allow-scripts/allow-same-origin fail
-closed. Child input is generation-checked, but native child form editing and
+closed, except allow-forms, allow-popups and allow-modals, which are accepted
+as inert (2026-11-08): they grant capabilities child frames do not have, and
+refusing them dropped GitHub's password-reset frame. Child input is generation-checked, but native child form editing and
 link/form navigation are not implemented. Renderer substitution preserves
 class/inline style, not iframe tag selectors. Srcdoc uses the parent URL for
 resolution and Location reporting in this subset.

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Accept the iframe sandbox tokens `allow-forms`, `allow-popups` and
+  `allow-modals` as inert instead of refusing the frame; child frames have
+  none of those capabilities, so nothing is granted. Other tokens still fail
+  closed.
+
 - Accept `:has()` and tag/id/class compounds in DOM queries: `pre:has(code)`
   (gloss's docs), `div:has(> p a)`, `div.box`, `a#top.active`. `:has()` takes
   one descendant chain with an optional leading `>`, once per compound and

@@ -147,7 +147,7 @@ func TestFrameBrokerRevisionAndOrigin(t *testing.T) {
 }
 
 func TestFrameSandboxStaticAndOpaque(t *testing.T) {
-	for _, sandbox := range []string{"", "allow-scripts"} {
+	for _, sandbox := range []string{"", "allow-scripts", "allow-scripts allow-forms allow-popups allow-modals"} {
 		t.Run(sandbox, func(t *testing.T) {
 			p := externalProfile
 			p.Frames = profile.FramesOrigin
