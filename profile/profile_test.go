@@ -246,27 +246,30 @@ func TestSessionStorageGateAndQuotas(t *testing.T) {
 	}
 }
 
-// TestLocalStorageGate: local-storage is off in every built-in except glynx,
-// which keeps a file-backed store; memory and file are the only open values.
-func TestLocalStorageGate(t *testing.T) {
+// TestLocalStorageAndPersistGates: local-storage and persist are off in every
+// built-in except glynx, which keeps localStorage and persists state to files.
+func TestLocalStorageAndPersistGates(t *testing.T) {
 	for _, name := range []string{"locked", "reader", "browse"} {
 		p, _ := Builtin(name)
-		if p.LocalStorage != "" {
-			t.Fatalf("%s opens local storage", name)
+		if p.LocalStorage != "" || p.Persist != "" {
+			t.Fatalf("%s opens local storage or persistence", name)
 		}
 	}
 	g, _ := Builtin("glynx")
-	if g.LocalStorage != LocalStorageFile {
-		t.Fatalf("glynx local storage %q", g.LocalStorage)
+	if g.LocalStorage != LocalStorageOn || g.Persist != PersistFile {
+		t.Fatalf("glynx local storage %q persist %q", g.LocalStorage, g.Persist)
 	}
-	if _, err := Parse([]byte(`{"local-storage":"disk"}`)); err == nil {
-		t.Fatal("unknown local-storage value accepted")
+	for _, raw := range []string{`{"local-storage":"file"}`, `{"local-storage":"memory"}`, `{"persist":"disk"}`, `{"persist":"on"}`} {
+		if _, err := Parse([]byte(raw)); err == nil {
+			t.Fatalf("%s accepted", raw)
+		}
 	}
-	p, err := Parse([]byte(`{"local-storage":"memory"}`))
-	if err != nil || p.LocalStorage != LocalStorageMemory {
+	p, err := Parse([]byte(`{"local-storage":"on","persist":"file"}`))
+	if err != nil || p.LocalStorage != LocalStorageOn || p.Persist != PersistFile {
 		t.Fatal(p, err)
 	}
-	if !strings.Contains(g.Table(Strengths{}), "local-storage") {
-		t.Fatal("table omits local-storage")
+	table := g.Table(Strengths{})
+	if !strings.Contains(table, "local-storage") || !strings.Contains(table, "persist") {
+		t.Fatal("table omits a gate")
 	}
 }

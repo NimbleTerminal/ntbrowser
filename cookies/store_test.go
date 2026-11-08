@@ -3,7 +3,9 @@
 package cookies
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 	"testing"
@@ -130,5 +132,70 @@ func TestIDNAAndSecureCookiePathOverlay(t *testing.T) {
 func TestSameOriginDefaultPorts(t *testing.T) {
 	if !sameOrigin(uri("https://EXAMPLE.com/"), uri("https://example.com:443/")) || sameOrigin(uri("https://example.com/"), uri("https://example.com:444/")) {
 		t.Fatal("origin port mismatch")
+	}
+}
+
+// TestSnapshotRestoreKeepsPersistentCookiesOnly: cookies with an expiry
+// survive a snapshot round trip with their attributes and order; session
+// cookies, expired cookies and over-cap entries do not. OnChange fires only
+// for stored writes.
+func TestSnapshotRestoreKeepsPersistentCookiesOnly(t *testing.T) {
+	now := time.Date(2026, 11, 8, 12, 0, 0, 0, time.UTC)
+	s := New()
+	s.now = func() time.Time { return now }
+	changes := 0
+	s.OnChange(func() { changes++ })
+	u, _ := url.Parse("https://shop.example.test/cart/")
+	s.Set(u, "sid=abc; Max-Age=86400; Secure; HttpOnly; SameSite=Lax; Path=/", false)
+	s.Set(u, "pref=dark; Expires="+now.Add(48*time.Hour).UTC().Format(http.TimeFormat)+"; Domain=example.test", false)
+	s.Set(u, "temp=1", false)                                             // session cookie
+	s.Set(u, "gone=1; Max-Age=1", false)                                  // expires before the restore below
+	s.Set(u, "bad=1; Secure", false)                                      // ignored: Secure needs https... it is https, so stored
+	s.Set(&url.URL{Scheme: "http", Host: "x.test"}, "s=1; Secure", false) // refused: Secure over http
+	if changes != 5 {
+		t.Fatalf("changes %d", changes)
+	}
+	data := s.Snapshot()
+	if strings.Contains(string(data), `"temp"`) || !strings.Contains(string(data), `"sid"`) || !strings.Contains(string(data), `"pref"`) {
+		t.Fatalf("snapshot: %s", data)
+	}
+	r := New()
+	r.now = func() time.Time { return now.Add(2 * time.Second) }
+	if err := r.Restore(data); err != nil {
+		t.Fatal(err)
+	}
+	if got := r.Document("https://shop.example.test/cart/x"); got != "pref=dark" { // sid is HttpOnly: not visible to script
+		t.Fatalf("document after restore: %q", got)
+	}
+	var header []string
+	for _, c := range r.selected(u, false, false, true) {
+		header = append(header, c.Name)
+	}
+	if strings.Join(header, ",") != "sid,pref" && strings.Join(header, ",") != "pref,sid" {
+		t.Fatalf("restored cookies: %v", header)
+	}
+	if _, ok := r.entries["example.test\x00/\x00gone"]; ok {
+		t.Fatal("expired cookie restored")
+	}
+	if strings.Contains(r.Document("http://shop.example.test/"), "sid") {
+		t.Fatal("Secure cookie served over http after restore")
+	}
+	// Garbage, versions and oversize input start empty; caps hold.
+	for _, raw := range []string{"nope", `{"version":9,"cookies":[]}`, strings.Repeat("x", MaxSnapshotBytes+1)} {
+		x := New()
+		x.Set(u, "k=v; Max-Age=60", false)
+		if err := x.Restore([]byte(raw)); err == nil || len(x.entries) != 0 {
+			t.Fatalf("%.10q: %v", raw, err)
+		}
+	}
+	many := snapshot{Version: 1}
+	for i := 0; i < MaxDomainCookies+5; i++ {
+		many.Cookies = append(many.Cookies, snapshotCookie{Name: fmt.Sprint("c", i), Value: "v", Domain: "a.test", Path: "/", HostOnly: true, Expires: now.Add(time.Hour)})
+	}
+	encoded, _ := json.Marshal(many)
+	x := New()
+	x.now = func() time.Time { return now }
+	if err := x.Restore(encoded); err != nil || len(x.entries) != MaxDomainCookies {
+		t.Fatalf("domain cap on restore: %d %v", len(x.entries), err)
 	}
 }

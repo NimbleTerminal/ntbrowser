@@ -68,14 +68,14 @@ func TestDiagnosticPolicyGrantsOnlyExactFileWhenEnabled(t *testing.T) {
 	if strings.Contains(policy, `(subpath "/private/tmp`) {
 		t.Fatal("granted directory")
 	}
-	// The localStorage file is granted only under local-storage=file.
-	store := "/private/tmp/local-storage.dat"
-	if strings.Contains(Policy(p, "", "", "/bin/test", path, store), store) {
-		t.Fatal("closed local-storage gate granted the store file")
+	// State files are granted only under persist=file, each as a literal.
+	store, jar := "/private/tmp/local-storage.dat", "/private/tmp/cookies.dat"
+	if policy := Policy(p, "", "", "/bin/test", path, store, jar); strings.Contains(policy, store) || strings.Contains(policy, jar) {
+		t.Fatal("closed persist gate granted state files")
 	}
-	p.LocalStorage = profile.LocalStorageFile
-	policy = Policy(p, "", "", "/bin/test", path, store)
-	if !strings.Contains(policy, `(allow file-write-data (literal "/private/tmp/local-storage.dat"))`) || strings.Contains(policy, `(subpath "/private/tmp`) {
+	p.Persist = profile.PersistFile
+	policy = Policy(p, "", "", "/bin/test", path, store, "", jar)
+	if !strings.Contains(policy, `(allow file-write-data (literal "/private/tmp/local-storage.dat"))`) || !strings.Contains(policy, `(allow file-write-data (literal "/private/tmp/cookies.dat"))`) || strings.Contains(policy, `(subpath "/private/tmp`) || strings.Contains(policy, `(literal "")`) {
 		t.Fatal(policy)
 	}
 }

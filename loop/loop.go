@@ -196,9 +196,10 @@ type Loop struct {
 	scriptPermissionID uint64
 
 	storage         *sessionstorage.Session
-	localDirty      bool // localStorage changed since the last sink write
-	localPending    bool // a coalescing flush is scheduled
-	localFailed     bool // the sink failed once; later failures stay quiet
+	done            chan struct{} // closed when Run has returned, after the final localStorage flush
+	localDirty      bool          // localStorage changed since the last sink write
+	localPending    bool          // a coalescing flush is scheduled
+	localFailed     bool          // the sink failed once; later failures stay quiet
 	frameNavigation atomic.Uint64
 	locationCommit  atomic.Uint64
 	resizeWidth     atomic.Int64
@@ -268,7 +269,7 @@ func New(ctx context.Context, cfg Config, sink Sink) *Loop {
 		cfg.DOMLimits.ExternalStyleBytes = min(cfg.DOMLimits.ExternalStyleBytes, max(0, min(cfg.RenderLimit.Bytes, document.MaxLimits.Bytes)-content))
 	}
 	cfg.Subresources = cfg.Subresources.WithDefaults()
-	l := &Loop{ctx: ctx, cfg: cfg, sink: sink, inbox: make(chan func(), cfg.Inbox), outbox: make(chan tea.Msg, cfg.Outbox), timerT: stoppedTimer(), frameTimer: stoppedTimer()}
+	l := &Loop{ctx: ctx, cfg: cfg, sink: sink, inbox: make(chan func(), cfg.Inbox), outbox: make(chan tea.Msg, cfg.Outbox), timerT: stoppedTimer(), frameTimer: stoppedTimer(), done: make(chan struct{})}
 	if cfg.Profile.SessionStorage == profile.SessionStorageOn {
 		l.storage = sessionstorage.New(cfg.Profile.StorageBytes(), cfg.Profile.StorageTotalBytes())
 	}
@@ -289,6 +290,7 @@ func New(ctx context.Context, cfg Config, sink Sink) *Loop {
 // only by its own loop; synchronous foreign DOM operations touch plain DOM
 // data under this same lock, never another runtime's JS objects.
 func (l *Loop) Run() {
+	defer close(l.done)
 	defer func() {
 		l.cfg.frameOwner.Lock()
 		defer l.cfg.frameOwner.Unlock()
@@ -563,6 +565,10 @@ func (l *Loop) runScripts(page *Page, i int) {
 		l.report(err)
 	}
 }
+
+// Done is closed once Run has returned; the host waits on it at exit so the
+// last localStorage snapshot reaches the sink before the process ends.
+func (l *Loop) Done() <-chan struct{} { return l.done }
 
 // localChanged schedules one coalesced snapshot write after a burst of
 // localStorage changes. It runs on the loop goroutine.

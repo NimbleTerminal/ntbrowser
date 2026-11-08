@@ -34,6 +34,7 @@ type Store struct {
 	entries  map[string]entry
 	sequence uint64
 	now      func() time.Time
+	changed  func() // set before use; called after each stored write, outside the lock
 }
 
 // New creates a separate browser session with no persistent backing.
@@ -72,30 +73,37 @@ func (s *Store) prune(now time.Time) {
 // Set accepts one Set-Cookie value. Script writes may neither create nor
 // overwrite HttpOnly cookies. Invalid or disallowed writes are ignored.
 func (s *Store) Set(u *url.URL, raw string, script bool) {
+	if s.set(u, raw, script) && s.changed != nil {
+		s.changed()
+	}
+}
+
+// set stores one cookie and reports whether the store changed.
+func (s *Store) set(u *url.URL, raw string, script bool) bool {
 	if s == nil || len(raw) > MaxCookieBytes {
-		return
+		return false
 	}
 	h := host(u)
 	if h == "" {
-		return
+		return false
 	}
 	c, err := http.ParseSetCookie(raw)
 	if err != nil || c.Partitioned {
-		return
+		return false
 	}
 	if script && c.HttpOnly || c.Secure && u.Scheme != "https" || c.SameSite == http.SameSiteNoneMode && !c.Secure {
-		return
+		return false
 	}
 	d := h
 	hostOnly := c.Domain == ""
 	if !hostOnly {
 		d, err = idna.Lookup.ToASCII(strings.ToLower(strings.TrimPrefix(c.Domain, ".")))
 		if err != nil || d == "" || strings.HasSuffix(d, ".") || !domainMatch(h, d) {
-			return
+			return false
 		}
 		suffix, _ := publicsuffix.PublicSuffix(d)
 		if suffix == d && net.ParseIP(d) == nil {
-			return
+			return false
 		}
 	}
 	p := c.Path
@@ -110,13 +118,13 @@ func (s *Store) Set(u *url.URL, raw string, script bool) {
 	}
 	name := strings.ToLower(c.Name)
 	if strings.HasPrefix(name, "__secure-") && !c.Secure {
-		return
+		return false
 	}
 	if strings.HasPrefix(name, "__host-") && (!c.Secure || !hostOnly || c.Path != "/") {
-		return
+		return false
 	}
 	if (strings.HasPrefix(name, "__http-") || strings.HasPrefix(name, "__host-http-")) && (!c.Secure || !c.HttpOnly || script) {
-		return
+		return false
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -125,27 +133,27 @@ func (s *Store) Set(u *url.URL, raw string, script bool) {
 	key := d + "\x00" + p + "\x00" + c.Name
 	old, exists := s.entries[key]
 	if exists && script && old.cookie.HttpOnly {
-		return
+		return false
 	}
 	// An insecure origin must not shadow or delete a secure cookie.
 	if u.Scheme != "https" {
 		for _, e := range s.entries {
 			if e.cookie.Secure && e.cookie.Name == c.Name && (domainMatch(d, e.domain) || domainMatch(e.domain, d)) && pathMatch(p, e.path) {
-				return
+				return false
 			}
 		}
 	}
 	expires := c.Expires
 	if c.MaxAge < 0 {
 		delete(s.entries, key)
-		return
+		return false
 	}
 	if c.MaxAge > 0 {
 		expires = now.Add(time.Duration(min(c.MaxAge, 400*24*60*60)) * time.Second)
 	}
 	if !expires.IsZero() && !now.Before(expires) {
 		delete(s.entries, key)
-		return
+		return false
 	}
 	if expires.After(now.Add(400 * 24 * time.Hour)) {
 		expires = now.Add(400 * 24 * time.Hour)
@@ -158,12 +166,13 @@ func (s *Store) Set(u *url.URL, raw string, script bool) {
 			}
 		}
 		if len(s.entries) >= MaxCookies || count >= MaxDomainCookies {
-			return
+			return false
 		}
 		s.sequence++
 		old.order = s.sequence
 	}
 	s.entries[key] = entry{cookie: *c, domain: d, path: p, hostOnly: hostOnly, expires: expires, order: old.order}
+	return true
 }
 
 func (s *Store) selected(u *url.URL, script, crossSite, safeNavigation bool) []*http.Cookie {

@@ -39,7 +39,7 @@ The name and keymap recall the [historical graphical Lynx proposal](https://wear
 
 Glynx enables `scripts=external`, `script-sources=any`, `dynamic-code=on`,
 `subresources=any`, `frames=any`, `frame-dom=same-origin`,
-`cookies=session`, `session-storage=on`, `local-storage=file`, `navigate=free`, and
+`cookies=session`, `session-storage=on`, `local-storage=on`, `persist=file`, `navigate=free`, and
 `script-navigation=confirm`. Script and frame admission includes public HTTP(S)
 origins and redirects without per-site grants. HTTPS subrequests cannot downgrade
 to HTTP. Script-request MIME/SRI checks, private-network restrictions, same-origin
@@ -258,6 +258,7 @@ A profile is a named set of positions for every gate out of the sandbox. It is f
 | `cookies` | off | off | off |
 | `session-storage` | off | off | off |
 | `local-storage` | off | off | off |
+| `persist` | off | off | off |
 | `files` | off | off | start-page |
 | `native-code` | off | off | off |
 | `media` | off | image | animation |
@@ -294,9 +295,10 @@ supported.
 | `--session-storage off\|on` | Origin-isolated memory-only sessionStorage (default off) |
 | `--session-storage-bytes n` | Per-origin key/value byte quota (default 1 MiB; maximum 8 MiB) |
 | `--session-storage-total-bytes n` | Total session byte quota (default 8 MiB; maximum 64 MiB) |
-| `--local-storage off\|memory\|file` | Origin-isolated `localStorage` with the session quotas; `file` persists it in one owner-only file (glynx default) |
-| `--local-storage-file path` | The store file for `local-storage=file` (default `$XDG_DATA_HOME/<command>/local-storage.dat`) |
-| `--safe` | Keep nothing on disk this run: a file-backed `localStorage` becomes memory-only |
+| `--local-storage off\|on` | Origin-isolated `localStorage` with the session quotas (glynx default on) |
+| `--persist off\|file` | Keep cookies with an expiry and `localStorage` across runs in owner-only files (glynx default `file`) |
+| `--state-dir dir` | Directory for `persist=file` (default `$XDG_DATA_HOME/<command>`, created 0700) |
+| `--safe` | Memory-only run, the same as `--persist=off`: nothing new reaches the disk |
 | `--cookies off\|session` | In-memory cookies for this browser session (default off) |
 | `--dynamic-code off\|on` | Native `eval` and Function-family compilation (default off) |
 | `--clipboard off\|copy` | Selected-text copy |
@@ -646,25 +648,29 @@ when a stored key has the same name; use getItem for such keys.
 
 Data survives reloads and navigation back to the same origin within one browser
 session. Scheme, normalized host and effective port define the origin; paths
-and fragments do not. Separate launches never share data. Only HTTP(S) origins
+and fragments do not. Separate launches never share session storage. Only HTTP(S) origins
 are supported; disabled or unsupported access throws an error named
 `SecurityError`. The session store has no filesystem or networking capability
 and is never imported or shared across origins.
 
-### Local storage
+### Local storage and persistence
 
 `local-storage` adds `window.localStorage`, the same `Storage` interface over a
-second origin-isolated store with the same quotas and caps. `memory` keeps it
-for the run; `file` (glynx's default) loads it from, and writes it back to, one
-owner-only file that the host opens before lockdown (`--local-storage-file`,
-default `$XDG_DATA_HOME/<command>/local-storage.dat`, created 0600 in a 0700
-directory, symlinks refused). That inherited descriptor is the only write path
-the sandboxed process keeps; on macOS the policy grants exactly that literal
-file. Writes are coalesced to one snapshot per second and once more at exit;
-a write failure is reported once and the store keeps working in memory. A
-file that does not parse starts the store empty. `--safe` turns a file-backed
-store into a memory one for the run, so nothing new reaches the disk. Child
-frames never see either store. Values are not emitted through diagnostics.
+second origin-isolated store with the same quotas and caps. Both it and the
+cookie store are memory-only unless `persist=file`, glynx's default, which
+keeps them across runs so a daily driver stays signed in and keeps site
+settings: cookies with an expiry (session cookies are dropped at exit, as in a
+browser) and all of `localStorage`. Each store has one owner-only file under
+`--state-dir` (default `$XDG_DATA_HOME/<command>`, created 0700): `cookies.dat`
+and `local-storage.dat`, created 0600 with symlinks refused, opened before
+lockdown like the diagnostics file. Those inherited descriptors are the only
+write paths the sandboxed process keeps; on macOS the policy grants exactly
+those literal files. Writes are coalesced to one snapshot per second per store
+and once more at exit; a write failure is reported once and the store keeps
+working in memory. A file that does not parse starts its store empty.
+`--safe` makes the run memory-only without touching the files. Child frames
+never see either store, and no contents reach diagnostics. ntbrowser keeps
+`local-storage=off` and `persist=off`.
 
 Quotas count two bytes per UTF-16 code unit in both keys and values. Defaults
 are 1 MiB per origin and 8 MiB in total, tunable with the byte-quota flags above

@@ -18,13 +18,15 @@
   searches instead of running quadratically. Other pseudo-classes and sibling
   combinators are still rejected.
 
-- Add `window.localStorage` behind a new `local-storage` gate (`off`,
-  `memory`, `file`) with the session storage quotas. Glynx defaults to `file`:
-  one owner-only store under `$XDG_DATA_HOME/glynx/` (or the platform data
-  directory), opened before lockdown like the diagnostics file and granted as
-  a single literal path on macOS, loaded at start and rewritten in place from
-  coalesced snapshots. `--safe` keeps a file-backed store in memory for the
-  run, `--local-storage-file` picks the file, and ntbrowser stays off. Child
+- Add `window.localStorage` behind a new `local-storage` gate (`off`, `on`)
+  with the session storage quotas, and a `persist` gate (`off`, `file`) that
+  keeps cookies with an expiry and `localStorage` across runs. Glynx defaults
+  to both, as a daily driver should stay signed in: two owner-only files under
+  `$XDG_DATA_HOME/glynx/` (or the platform data directory), opened before
+  lockdown like the diagnostics file and granted as literal paths on macOS,
+  loaded at start and rewritten in place from coalesced snapshots. `--safe`
+  (or `--persist=off`) makes a run memory-only, `--state-dir` picks the
+  directory, and ntbrowser stays memory-only with `localStorage` off. Child
   frames keep storage disabled. Gloss's docs site, which threw on
   `localStorage`, now runs its theme script.
 

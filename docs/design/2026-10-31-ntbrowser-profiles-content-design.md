@@ -447,32 +447,39 @@ StorageEvents, frames/opener cloning and localStorage are outside this scope.
 No contents are emitted through diagnostics by the host. Source:
 [HTML Web Storage](https://html.spec.whatwg.org/multipage/webstorage.html).
 
-### Local storage extension (2026-11-08)
+### Local storage and persistence extension (2026-11-08)
 
-`local-storage` is a separate gate with three positions. `off` (every built-in
-but glynx) leaves `localStorage` absent: access raises SecurityError exactly
-like closed session storage. `memory` binds a second `sessionstorage.Session`
-with the session quotas, discarded at exit. `file` (glynx's default) persists
-that store in one file. Evan asked for glynx to keep a local store by default
-with an escape hatch; `--safe` is that hatch and demotes `file` to `memory`.
+Two gates. `local-storage` (`off`, `on`; on only in glynx) binds
+`window.localStorage` to a second `sessionstorage.Session` with the session
+quotas; off leaves it absent (SecurityError), as closed session storage.
+`persist` (`off`, `file`; file only in glynx) decides whether the cookie
+store and the local store outlive the run. Evan's direction: glynx is a daily
+driver and should keep its logins and site settings; ntbrowser stays
+memory-only; one tighter switch, `--safe`, forces `persist=off`.
 
-The file is the second host-owned file after diagnostics and follows the same
-rules: the host opens it before lockdown (`O_RDWR|O_CREATE|O_NOFOLLOW`, 0600,
-parent 0700, regular file required), clears close-on-exec for the macOS
-re-exec, resolves the path and grants exactly that literal for
-`file-write-data`; the sandboxed process receives the descriptor through
-`state.StorageFD` and never opens a path. The format is a header line with
-the payload length followed by a JSON snapshot whose keys and values are
-base64 of the raw UTF-16LE strings; rewrites happen in place from offset 0,
-so no truncation is needed and stale bytes are ignored. `Restore` re-applies
-every entry through `Set`, so quotas, the 64-origin and 1024-key caps and the
-origin parser hold for loaded data too; oversize, unversioned or malformed
-files start the store empty.
+Persistence is one owner-only file per store under the state directory
+(`$XDG_DATA_HOME/<command>`, 0700): `cookies.dat` and `local-storage.dat`.
+They follow the diagnostics-file rules: opened before lockdown
+(`O_RDWR|O_CREATE|O_NOFOLLOW`, 0600, regular file required), close-on-exec
+cleared for the macOS re-exec, paths resolved and granted as literals for
+`file-write-data`; the sandboxed process receives descriptors through
+`state.StorageFD`/`state.CookieFD` and never opens a path. Each file is a
+header line with the payload length followed by the store's JSON snapshot;
+rewrites happen in place from offset 0, so no truncation is needed and stale
+bytes are ignored. `Restore` re-applies every entry through the store's own
+write path, so quotas, caps, origin parsing, expiry and the 400-day ceiling
+hold for loaded data; oversize, unversioned or malformed files start a store
+empty and are overwritten by the next write.
 
-Writes stay on the loop goroutine: the store's change hook marks the loop
-dirty and a one-second timer posts one `Snapshot` to the host sink; `Run`'s
-exit flushes once more. A failing sink is reported once at `warn`. Child
-frames get neither store. Contents never enter diagnostics.
+Only cookies with an expiry are written; session cookies end with the run,
+as in a browser. The cookie store notifies a locked persister after each
+stored write (fetch workers and the VM goroutine both write), which coalesces
+to one snapshot a second and writes once more at Close, after the program
+has stopped. The local store's change hook marks the loop dirty; a
+one-second timer posts one `Snapshot` to the host sink and `Run`'s exit
+flushes once more, and the host now waits on `Loop.Done` before returning
+so that flush lands. A failing sink is reported once. Child frames get
+neither store. Contents never enter diagnostics.
 
 ### Dynamic classic-script extension (2026-11-06)
 

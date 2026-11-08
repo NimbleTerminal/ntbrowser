@@ -30,7 +30,6 @@ import (
 	flag "github.com/spf13/pflag"
 
 	"nimbleterminal.dev/ntbrowser/app"
-	"nimbleterminal.dev/ntbrowser/cookies"
 	"nimbleterminal.dev/ntbrowser/devtools"
 	"nimbleterminal.dev/ntbrowser/diagnostics"
 	"nimbleterminal.dev/ntbrowser/dom"
@@ -46,8 +45,9 @@ import (
 // the chosen one with the gate flags applied, validated and then frozen.
 type config struct {
 	Diagnostics                                        string
-	LocalStorageFile                                   string // resolved path of the local-storage=file store
-	Safe                                               bool   // --safe: nothing new reaches the disk this run
+	StateDir                                           string // persist=file directory (--state-dir)
+	LocalStoreFile, CookieFile                         string // resolved state file paths, set when opened before lockdown
+	Safe                                               bool   // --safe: persist=off, so nothing new reaches the disk this run
 	Profile                                            profile.Profile
 	Start                                              string
 	Width                                              int
@@ -102,9 +102,10 @@ func parseCommandArgs(command string, args []string) (config, error) {
 	storageMode := fs.String("session-storage", "", "sessionStorage: off, on (default from profile; memory only)")
 	storageBytes := fs.Int("session-storage-bytes", 0, "per-origin storage byte quota (default 1 MiB; max 8 MiB)")
 	storageTotal := fs.Int("session-storage-total-bytes", 0, "session storage byte quota (default 8 MiB; max 64 MiB)")
-	localMode := fs.String("local-storage", "", "localStorage: off, memory, file (default from profile; same quotas as session storage)")
-	fs.StringVar(&c.LocalStorageFile, "local-storage-file", "", "owner-only file for local-storage=file (default $XDG_DATA_HOME/<command>/local-storage.dat)")
-	fs.BoolVar(&c.Safe, "safe", false, "keep nothing on disk this run: a file-backed localStorage becomes memory-only")
+	localMode := fs.String("local-storage", "", "localStorage: off, on (default from profile; same quotas as session storage)")
+	persistMode := fs.String("persist", "", "keep cookies with an expiry and localStorage across runs: off, file (default from profile)")
+	fs.StringVar(&c.StateDir, "state-dir", "", "directory for persist=file (default $XDG_DATA_HOME/<command>); owner-only files, created 0700")
+	fs.BoolVar(&c.Safe, "safe", false, "memory-only run: same as --persist=off, nothing new reaches the disk")
 	frameMS := fs.Int("frame-ms", 0, "minimum frame interval in ms (default 33; max 1000)")
 	frameCallbacks := fs.Int("frame-callbacks", 0, "pending animation callbacks (default 256; max 1024)")
 	frameBudget := fs.Int("frame-budget-ms", 0, "shared animation callback budget in ms (default 8; max 50)")
@@ -208,8 +209,11 @@ func parseCommandArgs(command string, args []string) (config, error) {
 	if *localMode != "" {
 		p.LocalStorage = profile.LocalStorage(*localMode)
 	}
-	if c.Safe && p.LocalStorage == profile.LocalStorageFile {
-		p.LocalStorage = profile.LocalStorageMemory
+	if *persistMode != "" {
+		p.Persist = profile.Persist(*persistMode)
+	}
+	if c.Safe {
+		p.Persist = profile.PersistOff
 	}
 	if fs.Changed("frame-ms") {
 		p.FrameMillis = *frameMS
@@ -268,12 +272,12 @@ func parseCommandArgs(command string, args []string) (config, error) {
 		p.Name += "+flags" // the name must not outlive what it promised
 	}
 	c.Profile = p
-	if p.LocalStorage == profile.LocalStorageFile && c.LocalStorageFile == "" {
-		path, err := defaultLocalStorePath(command)
+	if p.Persist == profile.PersistFile && c.StateDir == "" {
+		dir, err := defaultStateDir(command)
 		if err != nil {
-			return c, fmt.Errorf("local-storage=file needs --local-storage-file: %v", err)
+			return c, fmt.Errorf("persist=file needs --state-dir: %v", err)
 		}
-		c.LocalStorageFile = path
+		c.StateDir = dir
 	}
 	if c.ShowProfile {
 		return c, nil
@@ -299,7 +303,8 @@ func parseCommandArgs(command string, args []string) (config, error) {
 // across as data: a profile is read once, never again inside the sandbox.
 type state struct {
 	DiagnosticFD int
-	StorageFD    int // local-storage=file descriptor, opened before lockdown
+	StorageFD    int // persist=file localStorage descriptor, opened before lockdown
+	CookieFD     int // persist=file cookie descriptor, opened before lockdown
 	Config       config
 	TempDir      string
 	HelperFD     int
@@ -384,13 +389,16 @@ func Run(command string) int {
 	if diagnostic != nil {
 		defer diagnostic.Close()
 	}
-	storeFile, err := localStoreFile(&st, sandboxed)
+	storeFile, cookieFile, err := stateFiles(&st, sandboxed)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
 	}
 	if storeFile != nil {
 		defer storeFile.Close()
+	}
+	if cookieFile != nil {
+		defer cookieFile.Close()
 	}
 	strengths, err := lockDown(st, sandboxed)
 	if err != nil {
@@ -420,7 +428,7 @@ func Run(command string) int {
 				fmt.Fprintln(os.Stderr, "diagnostics:", err)
 			}
 		}()
-		trace.Record("session", map[string]any{"profile": c.Profile, "strengths": strengths, "heap_budget_bytes": c.HeapBudgetMiB << 20, "stylesheet_bytes": c.StylesheetBytes, "stylesheet_total_bytes": c.StylesheetTotalBytes, "stylesheets": c.Stylesheets, "css_rules": c.CSSRules, "image_bytes": c.ImageBytes})
+		trace.Record("session", map[string]any{"profile": c.Profile, "strengths": strengths, "heap_budget_bytes": c.HeapBudgetMiB << 20, "stylesheet_bytes": c.StylesheetBytes, "stylesheet_total_bytes": c.StylesheetTotalBytes, "stylesheets": c.Stylesheets, "css_rules": c.CSSRules, "image_bytes": c.ImageBytes, "persist": string(c.Profile.Persist)})
 	}
 	// Process-wide soft heap cap: Goja has no per-runtime memory limit, so
 	// the GC is told to work harder past this point and dom/nthtml limits
@@ -446,10 +454,8 @@ func Run(command string) int {
 		return 2
 	}
 	subresCfg := subres.Config{Mode: mode, MaxSheetBytes: c.StylesheetBytes, MaxStylesheets: c.Stylesheets, MaxImageBytes: c.ImageBytes}
-	var cookieStore *cookies.Store
-	if c.Profile.Cookies == profile.CookiesSession {
-		cookieStore = cookies.New()
-	}
+	cookieStore, cookieSaver := openCookieStore(c.Profile, cookieFile)
+	defer cookieSaver.Close() // the final snapshot, after the program has stopped
 	policy := app.PolicyFor(c.Profile)
 	policy.Cookies = cookieStore
 	policy.Trace = trace
@@ -477,6 +483,13 @@ func Run(command string) int {
 		m.SetMedia(bridge, st.TempDir)
 	}
 	_, err = program.Run()
+	// Stop the loop and wait for it: its exit flush writes the last
+	// localStorage snapshot, which must land before the process ends.
+	cancel()
+	select {
+	case <-l.Done():
+	case <-time.After(2 * time.Second):
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 1
@@ -572,7 +585,7 @@ func lockDown(st state, sandboxed bool) (profile.Strengths, error) {
 		if err != nil {
 			return nil, err
 		}
-		if err := sandbox.Reexec(c.Profile, start, st.TempDir, []string{arg}, c.Diagnostics, c.LocalStorageFile); err != nil {
+		if err := sandbox.Reexec(c.Profile, start, st.TempDir, []string{arg}, c.Diagnostics, c.LocalStoreFile, c.CookieFile); err != nil {
 			return nil, err
 		}
 	}

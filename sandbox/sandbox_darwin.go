@@ -33,8 +33,9 @@ func q(s string) string { return strconv.Quote(s) }
 // Policy is the sandbox-exec profile: deny by default, then only what a
 // terminal Go program needs. No process may be started but this executable.
 // files are the host's writable files, by position: [0] the diagnostics
-// file, granted under the diagnostics gate; [1] the localStorage file,
-// granted under local-storage=file. Each grant is one literal path.
+// file, granted under the diagnostics gate; the rest are persistent state
+// files (cookies, localStorage), granted under persist=file. Each grant is
+// one literal path.
 func Policy(p profile.Profile, start, tempDir, exe string, files ...string) string {
 	var b strings.Builder
 	w := func(format string, args ...any) { fmt.Fprintf(&b, format+"\n", args...) }
@@ -63,8 +64,12 @@ func Policy(p profile.Profile, start, tempDir, exe string, files ...string) stri
 	if p.Diagnostics && len(files) > 0 && files[0] != "" {
 		w("(allow file-write-data (literal %s))", q(files[0]))
 	}
-	if p.LocalStorage == profile.LocalStorageFile && len(files) > 1 && files[1] != "" {
-		w("(allow file-write-data (literal %s))", q(files[1]))
+	if p.Persist == profile.PersistFile {
+		for _, f := range files[min(1, len(files)):] {
+			if f != "" {
+				w("(allow file-write-data (literal %s))", q(f))
+			}
+		}
 	}
 	return b.String()
 }
