@@ -612,28 +612,33 @@ func (t *Tree) ByID(id string) *Node {
 	return t.find(t.root, func(n *Node) bool { v, ok := n.Attr("id"); return ok && v == id })
 }
 
+// maxSelectorWork bounds the nodes one Query may visit inside :has()
+// subtree searches, on top of the single tree walk; past it the query fails
+// instead of running quadratically on a deep page.
+const maxSelectorWork = 1 << 20
+
+// queryState carries the per-Query :has() work budget to predicates.
+type queryState struct {
+	work     int
+	exceeded bool
+}
+
 // Query supports tag, #id, .class, attribute presence and value suffixes
-// ([a], [a=v], [a~=v], [a|=v], [a^=v], [a$=v], [a*=v]), descendant
-// combinations and comma-separated selector lists. Anything richer throws in
-// JS. Results are in tree order and never repeat an element.
+// ([a], [a=v], [a~=v], [a|=v], [a^=v], [a$=v], [a*=v]), a trailing
+// :has(relative selector) with descendant or leading-child combinators,
+// descendant combinations and comma-separated selector lists. Anything
+// richer throws in JS. Results are in tree order and never repeat an element.
 func (t *Tree) Query(from *Node, selector string, all bool) ([]*Node, error) {
 	groups, splitErr := selectorGroups(selector)
 	if splitErr != nil {
 		return nil, errors.New("ntbrowser/dom: unsupported selector")
 	}
+	q := &queryState{}
 	chains := make([][]func(*Node) bool, 0, len(groups))
 	for _, group := range groups {
-		parts, splitErr := selectorParts(group)
-		if splitErr != nil || len(parts) == 0 || len(parts) > 8 {
-			return nil, errors.New("ntbrowser/dom: unsupported selector")
-		}
-		preds := make([]func(*Node) bool, 0, len(parts))
-		for _, p := range parts {
-			pred, err := simplePredicate(p)
-			if err != nil {
-				return nil, err
-			}
-			preds = append(preds, pred)
+		preds, err := compoundChain(group, q, true)
+		if err != nil {
+			return nil, err
 		}
 		chains = append(chains, preds)
 	}
@@ -662,7 +667,124 @@ func (t *Tree) Query(from *Node, selector string, all bool) ([]*Node, error) {
 		return false
 	}
 	walk(from)
+	if q.exceeded {
+		return nil, fmt.Errorf("%w: selector work over %d nodes", ErrLimit, maxSelectorWork)
+	}
 	return out, nil
+}
+
+// compoundChain parses one whitespace-separated descendant chain of at most
+// eight compounds. allowHas admits :has() only at the top level.
+func compoundChain(group string, q *queryState, allowHas bool) ([]func(*Node) bool, error) {
+	parts, splitErr := selectorParts(group)
+	if splitErr != nil || len(parts) == 0 || len(parts) > 8 {
+		return nil, errors.New("ntbrowser/dom: unsupported selector")
+	}
+	preds := make([]func(*Node) bool, 0, len(parts))
+	for _, p := range parts {
+		pred, err := compoundPredicate(p, q, allowHas)
+		if err != nil {
+			return nil, err
+		}
+		preds = append(preds, pred)
+	}
+	return preds, nil
+}
+
+// compoundPredicate handles an optional trailing :has(...) on a compound and
+// delegates the rest to simplePredicate.
+func compoundPredicate(p string, q *queryState, allowHas bool) (func(*Node) bool, error) {
+	at := strings.Index(p, ":has(")
+	if at < 0 {
+		if strings.Contains(p, "(") {
+			return nil, fmt.Errorf("ntbrowser/dom: unsupported selector %q", p)
+		}
+		return simplePredicate(p)
+	}
+	if !allowHas || !strings.HasSuffix(p, ")") || strings.Contains(p[at+5:], ":has(") {
+		return nil, fmt.Errorf("ntbrowser/dom: unsupported selector %q", p)
+	}
+	base := p[:at]
+	if base == "" {
+		base = "*"
+	}
+	basePred, err := simplePredicate(base)
+	if err != nil {
+		return nil, err
+	}
+	arg := strings.Trim(p[at+5:len(p)-1], " \t\r\n\f")
+	child := false
+	if rest, ok := strings.CutPrefix(arg, ">"); ok {
+		child = true
+		arg = strings.TrimLeft(rest, " \t\r\n\f")
+	}
+	if arg == "" || strings.ContainsAny(arg, ",>+~()") {
+		return nil, fmt.Errorf("ntbrowser/dom: unsupported selector %q", p)
+	}
+	chain, err := compoundChain(arg, q, false)
+	if err != nil {
+		return nil, err
+	}
+	h := hasTest{preds: chain, child: child, q: q}
+	return func(n *Node) bool { return basePred(n) && h.match(n) }, nil
+}
+
+// hasTest is a :has() argument: a descendant chain that must occur inside
+// the candidate, anchored on a direct child when the argument began with >.
+type hasTest struct {
+	preds []func(*Node) bool
+	child bool
+	q     *queryState
+}
+
+func (h hasTest) match(root *Node) bool {
+	last := h.preds[len(h.preds)-1]
+	var walk func(n *Node) bool
+	walk = func(n *Node) bool {
+		for _, c := range n.children {
+			h.q.work++
+			if h.q.work > maxSelectorWork {
+				h.q.exceeded = true
+				return false
+			}
+			if c.kind == Element && last(c) && h.chainWithin(c, root) {
+				return true
+			}
+			if walk(c) {
+				return true
+			}
+			if h.q.exceeded {
+				return false
+			}
+		}
+		return false
+	}
+	return walk(root)
+}
+
+// chainWithin checks the ancestors of c, strictly below root, against the
+// chain's earlier compounds. With a leading child combinator the first
+// compound must match root's direct child on that path.
+func (h hasTest) chainWithin(c, root *Node) bool {
+	earlier := h.preds[:len(h.preds)-1]
+	if !h.child {
+		return ancestorsMatch(c, earlier, root)
+	}
+	// Find root's direct child on the path to c.
+	top := c
+	for top.parent != nil && top.parent != root {
+		top = top.parent
+	}
+	if top.parent != root {
+		return false
+	}
+	if len(earlier) == 0 {
+		return c == top
+	}
+	if !earlier[0](top) || top == c {
+		return false
+	}
+	return ancestorsMatch(c, earlier[1:], top)
 }
 
 func ancestorsMatch(n *Node, preds []func(*Node) bool, stop *Node) bool {
@@ -714,24 +836,59 @@ func simplePredicate(p string) (func(*Node) bool, error) {
 			return true
 		}, nil
 	}
-	if strings.ContainsAny(p, "[]") {
+	if strings.ContainsAny(p, "[]()") {
 		return nil, fmt.Errorf("ntbrowser/dom: unsupported selector %q", p)
 	}
 
-	switch {
-	case strings.HasPrefix(p, "#"):
-		id := p[1:]
-		return func(n *Node) bool { v, ok := n.Attr("id"); return ok && v == id }, nil
-	case strings.HasPrefix(p, "."):
-		cls := p[1:]
-		return func(n *Node) bool { return hasClass(n, cls) }, nil
-	case p == "*":
-		return func(*Node) bool { return true }, nil
-	case validName(p):
-		tag := strings.ToLower(p)
-		return func(n *Node) bool { return n.tag == tag }, nil
+	// A compound: optional tag or *, then any number of #id and .class
+	// tests (div.box, a#top.active, .one.two). Each piece must be a name.
+	rest := p
+	var tests []func(*Node) bool
+	if cut := strings.IndexAny(rest, "#."); cut != 0 {
+		head := rest
+		if cut > 0 {
+			head, rest = rest[:cut], rest[cut:]
+		} else {
+			rest = ""
+		}
+		switch {
+		case head == "*":
+		case validName(head) && !strings.ContainsAny(head, ":|"): // pseudo-classes and namespaces are not supported
+			tag := strings.ToLower(head)
+			tests = append(tests, func(n *Node) bool { return n.tag == tag })
+		default:
+			return nil, fmt.Errorf("ntbrowser/dom: unsupported selector %q", p)
+		}
 	}
-	return nil, fmt.Errorf("ntbrowser/dom: unsupported selector %q", p)
+	for len(rest) > 0 && len(tests) < 8 {
+		kind := rest[0]
+		end := strings.IndexAny(rest[1:], "#.")
+		var name string
+		if end < 0 {
+			name, rest = rest[1:], ""
+		} else {
+			name, rest = rest[1:end+1], rest[end+1:]
+		}
+		if !validName(name) || strings.ContainsAny(name, ":|") {
+			return nil, fmt.Errorf("ntbrowser/dom: unsupported selector %q", p)
+		}
+		if kind == '#' {
+			tests = append(tests, func(n *Node) bool { v, ok := n.Attr("id"); return ok && v == name })
+		} else {
+			tests = append(tests, func(n *Node) bool { return hasClass(n, name) })
+		}
+	}
+	if len(rest) > 0 {
+		return nil, fmt.Errorf("ntbrowser/dom: unsupported selector %q", p)
+	}
+	return func(n *Node) bool {
+		for _, test := range tests {
+			if !test(n) {
+				return false
+			}
+		}
+		return true
+	}, nil
 }
 
 // attrTest is one bracketed attribute condition: presence when op is empty,

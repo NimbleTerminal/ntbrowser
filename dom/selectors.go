@@ -17,6 +17,7 @@ func selectorGroups(selector string) ([]string, error) {
 	var groups []string
 	start := 0
 	bracket := false
+	paren := 0
 	var quote rune
 	for i, c := range selector {
 		switch {
@@ -32,7 +33,11 @@ func selectorGroups(selector string) ([]string, error) {
 			bracket = true
 		case c == ']':
 			bracket = false
-		case c == ',' && !bracket:
+		case c == '(':
+			paren++
+		case c == ')':
+			paren--
+		case c == ',' && !bracket && paren <= 0:
 			groups = append(groups, selector[start:i])
 			start = i + 1
 			if len(groups) >= 8 {
@@ -61,6 +66,7 @@ func selectorParts(selector string) ([]string, error) {
 	var parts []string
 	start := -1
 	bracket := false
+	paren := 0
 	var quote rune
 	for i, c := range selector {
 		if quote != 0 {
@@ -84,8 +90,18 @@ func selectorParts(selector string) ([]string, error) {
 				return nil, errors.New("unmatched attribute selector")
 			}
 			bracket = false
+		case '(':
+			if paren > 0 {
+				return nil, errors.New("nested selector function")
+			}
+			paren++
+		case ')':
+			if paren == 0 {
+				return nil, errors.New("unmatched parenthesis")
+			}
+			paren--
 		case ' ', '\t', '\r', '\n', '\f':
-			if !bracket {
+			if !bracket && paren == 0 {
 				if start >= 0 {
 					parts = append(parts, selector[start:i])
 					start = -1
@@ -100,8 +116,8 @@ func selectorParts(selector string) ([]string, error) {
 			start = i
 		}
 	}
-	if bracket || quote != 0 {
-		return nil, errors.New("unclosed attribute selector")
+	if bracket || quote != 0 || paren != 0 {
+		return nil, errors.New("unclosed attribute selector or function")
 	}
 	if start >= 0 {
 		parts = append(parts, selector[start:])

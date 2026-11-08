@@ -726,16 +726,20 @@ running dynamic script; parser-script execution still reports null. Parsed
 script nodes remain discoverable but never replay through insertion or mutation.
 All script elements are omitted from rendered HTML.
 
-DOM queries support attribute selectors: presence (`[nonce]`, `script[nonce]`,
+DOM queries support compounds of a tag, an id and classes (`div.box`,
+`a#top.active`), attribute selectors: presence (`[nonce]`, `script[nonce]`,
 `.item[data-ready]`) and the CSS value comparisons `=`, `~=`, `|=`, `^=`, `$=`
 and `*=` with quoted or identifier values (`script[type=esms-options]`,
-`[lang|="en"]`), descendant combinations and comma-separated selector lists
+`[lang|="en"]`), a trailing `:has()` whose argument is a descendant chain with
+an optional leading `>` (`pre:has(code)`, `div:has(> p a)`), descendant
+combinations and comma-separated selector lists
 (`script[type=module-shim],link[rel=modulepreload-shim]`), returning each
 element once in tree order. Empty-valued attributes count as present; HTML
 attribute names are case-insensitive and values are case-sensitive. Queries are
-bounded to 4096 bytes, eight groups, eight descendant parts per group and eight
-attribute tests per part. Case flags, namespaces, escapes and general compound
-CSS selectors are rejected with a TypeError.
+bounded to 4096 bytes, eight groups, eight descendant parts per group, eight
+attribute tests per part, one non-nested `:has()` per compound and one million
+visited nodes inside `:has()` searches. Case flags, namespaces, escapes, other
+pseudo-classes and sibling combinators are rejected with a TypeError.
 
 `document.getElementsByTagName()` and `element.getElementsByTagName()` return
 live `HTMLCollection` objects: `length`, indexed access, `item()`, `namedItem()`,

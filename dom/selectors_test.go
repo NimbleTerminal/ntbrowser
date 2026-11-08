@@ -3,6 +3,7 @@
 package dom
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -94,6 +95,80 @@ func TestSelectorLists(t *testing.T) {
 			t.Fatal("accepted", bad)
 		}
 	}
+}
+
+// TestCompoundSelectors: a compound stacks a tag, an id and classes.
+func TestCompoundSelectors(t *testing.T) {
+	tr := mustParse(t, `<main><div id="a" class="box one"></div><div id="b" class="box"></div><span id="c" class="box one"></span><div id="d"></div></main>`, Limits{})
+	for _, tc := range []struct{ selector, want string }{
+		{"div.box", "ab"}, {".box.one", "ac"}, {"div.box.one", "a"}, {"div#b", "b"}, {"div#b.box", "b"}, {"#a.one", "a"}, {"span.one#c", "c"}, {"*.box", "abc"}, {"main div.box", "ab"}, {"div.box[id=b]", "b"}, {"div.missing", ""}, {"span#a", ""},
+	} {
+		nodes, err := tr.Query(tr.Root(), tc.selector, true)
+		if err != nil {
+			t.Fatal(tc.selector, err)
+		}
+		got := ""
+		for _, n := range nodes {
+			id, _ := n.Attr("id")
+			got += id
+		}
+		if got != tc.want {
+			t.Fatalf("%s: %q want %q", tc.selector, got, tc.want)
+		}
+	}
+	for _, bad := range []string{"div.", ".", "#", "div..a", "div#", "a#b#", "div>p", "1div", "div.a>"} {
+		if _, err := tr.Query(tr.Root(), bad, true); err == nil {
+			t.Fatal("accepted", bad)
+		}
+	}
+}
+
+// TestHasSelector: :has(relative selector) with descendant or leading-child
+// combinators, once per compound and never nested; the gloss docs query
+// "pre:has(code)" to make code blocks focusable.
+func TestHasSelector(t *testing.T) {
+	tr := mustParse(t, `<main><pre id="a"><code>x</code></pre><pre id="b">plain</pre><pre id="c"><span><code>deep</code></span></pre><div id="d" class="box"><p><a href="#">l</a></p></div><div id="e" class="box"><a href="#">direct</a></div><section id="f"><pre><code>in</code></pre></section></main>`, Limits{})
+	for _, tc := range []struct{ selector, want string }{
+		{"pre:has(code)", "ac"}, {"pre:has(> code)", "a"}, {"pre:has(> span code)", "c"}, {"pre:has(>code)", "a"},
+		{":has(> code)", "a"}, {"div.box:has(a)", "de"}, {"div.box:has(> a)", "e"}, {"div.box:has(p a)", "d"}, {"div:has(> p a)", "d"},
+		{"main :has(code)", "acf"}, {"section:has(pre code)", "f"}, {"section:has(pre code), pre:has(> code)", "af"}, {"pre[id=c]:has(code)", "c"}, {"pre:has(em)", ""}, {"main:has(code) pre:has(> code)", "a"},
+	} {
+		nodes, err := tr.Query(tr.Root(), tc.selector, true)
+		if err != nil {
+			t.Fatal(tc.selector, err)
+		}
+		got := ""
+		for _, n := range nodes {
+			id, _ := n.Attr("id")
+			got += id
+		}
+		if got != tc.want {
+			t.Fatalf("%s: %q want %q", tc.selector, got, tc.want)
+		}
+	}
+	for _, bad := range []string{"pre:has()", "pre:has(code", "pre:has(code))", "pre:has(:has(code))", "pre:has(code, em)", "pre:has(+ code)", "pre:has(~ code)", "pre:has(code):has(em)", ":not(pre)", "pre:first-child", "pre:has(code)tail", "pre:has(code)[id=c]"} {
+		if _, err := tr.Query(tr.Root(), bad, true); err == nil {
+			t.Fatal("accepted", bad)
+		}
+	}
+	// The parser's own caps (8,000 nodes, depth 48) keep a :has() query under
+	// 400k visits, so the work bound is a backstop; a state already near it
+	// trips on the next search and the query reports ErrLimit.
+	chain := strings.Repeat("<div>", 40) + "<span></span>" + strings.Repeat("</div>", 40)
+	deep := mustParse(t, strings.Repeat(chain, 150), Limits{})
+	if nodes, err := deep.Query(deep.Root(), "div:has(span)", true); err != nil || len(nodes) != 6000 {
+		t.Fatalf("under the bound: %d %v", len(nodes), err)
+	}
+	q := &queryState{work: maxSelectorWork - 5}
+	pred, err := compoundPredicate("div:has(span)", q, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	first, _ := deep.Query(deep.Root(), "div", false)
+	if pred(first[0]) || !q.exceeded {
+		t.Fatal("work bound did not stop the search")
+	}
+	_ = errors.Is
 }
 
 func TestAttributeSelectorUnsupportedAndBounds(t *testing.T) {

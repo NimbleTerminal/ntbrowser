@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Accept `:has()` and tag/id/class compounds in DOM queries: `pre:has(code)`
+  (gloss's docs), `div:has(> p a)`, `div.box`, `a#top.active`. `:has()` takes
+  one descendant chain with an optional leading `>`, once per compound and
+  never nested, and a query fails past one million visited nodes inside such
+  searches instead of running quadratically. Other pseudo-classes and sibling
+  combinators are still rejected.
+
 - Add `window.localStorage` behind a new `local-storage` gate (`off`,
   `memory`, `file`) with the session storage quotas. Glynx defaults to `file`:
   one owner-only store under `$XDG_DATA_HOME/glynx/` (or the platform data
