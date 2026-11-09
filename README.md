@@ -332,6 +332,7 @@ supported.
 | `--seed n` | Seed for `Math.random` and `crypto`, for reproducible runs (0 = a fresh unpredictable generator per page) |
 | `--image-bytes n` | Maximum encoded bytes per page image (1024..16777216; glynx defaults to 8 MiB, ntbrowser to 1 MiB) |
 | `--page-bytes n` | Maximum bytes of a page's HTML body and the DOM built from it (65536..8388608; glynx defaults to 4 MiB, ntbrowser to 1 MiB) |
+| `--images n` | Maximum distinct images per page, backgrounds included (1..1024; glynx defaults to 256, ntbrowser to 64); the per-page pixel budget still applies |
 
 ## What a response becomes
 
@@ -454,7 +455,7 @@ last rendered page remains available when scripting is disabled.
 | Script opens sockets / SSRF to metadata or LAN | only `fetch` exists; scheme/host allowlist; DNS-resolved IP vetted then dialed (`netip`-based: loopback, RFC1918, link-local, CGNAT, multicast, plus NAT64 `64:ff9b::/96` by embedded address, `64:ff9b:1::/48`, 6to4 by embedded address, Teredo, IPv4-compatible); redirects re-admitted; no proxy env; top-level navigation uses the same dialer with `AnyOrigin` | `netpolicy` (`TestForbiddenIPCoversTransitionPrefixes`) |
 | Subresource SSRF (`<link>`, `<img>`, `@import`, `url()` to metadata or LAN) | the same dialer and address vetting as `fetch()`; loopback and private targets only with `-allow-private`; redirects re-admitted; an `https:` page refuses `http:` subresources | `netpolicy` (`TestKindStyleAcceptAndGate`, `TestNoDowngradeFromHTTPS`), `loop` (`TestMixedContent`) |
 | Soft-404 or interstitial injected as CSS | stylesheets need a 2xx `text/css` (or octet-stream with a `.css` path); images need a 2xx decodable type | `netpolicy` (`TestKindStyleAcceptAndGate`, `TestKindImageAcceptAndGate`) |
-| Pixel bombs and request floods | the raster decoder reads the header first and caps 4096 px / 4 Mpx per image and 1 MiB encoded (glynx 8 MiB, ceiling 16 MiB); 16 Mpx per page; 64 images and 16 stylesheets per page; six in flight | `subres` (`TestImageCapsAndPixelBudget`, `TestImageByteCapFollowsConfig`, `TestMaxInFlightQueue`) |
+| Pixel bombs and request floods | the raster decoder reads the header first and caps 4096 px / 4 Mpx per image and 1 MiB encoded (glynx 8 MiB, ceiling 16 MiB); 16 Mpx per page; 64 images (glynx 256, `--images` up to 1024) and 16 stylesheets per page; six in flight | `subres` (`TestImageCapsAndPixelBudget`, `TestImageByteCapFollowsConfig`, `TestMaxInFlightQueue`) |
 | A stylesheet that never arrives holds the first frame | the first frame waits at most 1.5 s for the blocking stylesheets, then paints unstyled and restyles when they land | `loop` (`TestStyleTimeoutUnstyledThenStyled`) |
 | Exfiltrate via DNS/timing | no DNS primitive; 10 ms clock; MaxInFlight 4 | `jsvm`, `netpolicy` |
 | Terminal escape injection via `console.log`, `<title>`, hrefs, warnings or error strings | `jsvm.safeString` for console text; `app.clean` (C0, DEL, C1, U+2028/9) on everything stored for the status and title lines and again in `View`; nthtml strips controls on its own paths | `jsvm`, `app` (`TestViewNeverCarriesTerminalEscapes`) |

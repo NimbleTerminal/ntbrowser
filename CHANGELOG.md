@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add `--images` (glynx 256, ntbrowser 64, up to 1024) for distinct images
+  per page; the per-page pixel budget is unchanged. Skip a script whose
+  syntax Goja has not implemented ("Async generators are not supported
+  yet") with a warning instead of a page error, as for module syntax. With
+  the local nthtml's larger declaration budget, yahoo.com's front page now
+  keeps its stylesheets and its thumbnails.
+
 - Add `--page-bytes` (glynx 4 MiB, ntbrowser 1 MiB, 64 KiB to 8 MiB) for a
   page's HTML body and the DOM built from it; the loop raises nthtml's input
   cap to DOM plus host CSS within its 16 MiB ceiling. yahoo.com's front page

@@ -189,11 +189,11 @@ func (s *Sandbox) evalInserted(name, src string) error {
 	}
 	ast, err := goja.Parse(name, src, sandboxParserOptions()...)
 	if err != nil {
-		return err
+		return classifyCompileError(err)
 	}
 	program, err := goja.CompileAST(ast, false)
 	if err != nil {
-		return err
+		return classifyCompileError(err)
 	}
 	if s.running {
 		_, err = s.vm.RunProgram(program)

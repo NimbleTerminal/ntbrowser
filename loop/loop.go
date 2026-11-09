@@ -615,7 +615,7 @@ func (l *Loop) report(err error) {
 		return
 	}
 	level := "error"
-	if errors.Is(err, jsvm.ErrUnsupportedAPI) {
+	if errors.Is(err, jsvm.ErrUnsupportedAPI) || errors.Is(err, jsvm.ErrUnsupportedSyntax) {
 		level = "warn" // the page is fine; this browser lacks the API
 	}
 	l.send(LogMsg{level, err.Error()})
@@ -1500,6 +1500,10 @@ func (l *Loop) evalScript(page *Page, name, source string) {
 		// Module scripts are skipped by type; a classic bootstrap that reaches
 		// for import() is the same gap and gets the same quiet notice.
 		l.send(LogMsg{"warn", fmt.Sprintf("script skipped: %s uses import(), and ES modules are not supported", name)})
+		return
+	}
+	if errors.Is(err, jsvm.ErrUnsupportedSyntax) {
+		l.send(LogMsg{"warn", fmt.Sprintf("script skipped: %s uses %s", name, err)})
 		return
 	}
 	l.report(err)

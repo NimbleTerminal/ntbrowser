@@ -581,6 +581,11 @@ func (s *Sandbox) Close() {
 // an unsupported feature of this browser, not a syntax error in the page.
 var ErrModuleSyntax = errors.New("ES modules are not supported")
 
+// ErrUnsupportedSyntax marks a script the engine's parser rejects for using a
+// language feature it has not implemented (Goja reports these as "… not
+// supported yet"), as opposed to a syntax error in the page's own code.
+var ErrUnsupportedSyntax = errors.New("syntax this engine does not support")
+
 func (s *Sandbox) Eval(name, src string) error {
 	if len(src) > maxScriptBytes {
 		return fmt.Errorf("ntbrowser/jsvm: script %s over %d bytes", name, maxScriptBytes)
@@ -590,11 +595,11 @@ func (s *Sandbox) Eval(name, src string) error {
 		if usesDynamicImport(src, err) {
 			return fmt.Errorf("%w: the script uses import()", ErrModuleSyntax)
 		}
-		return err
+		return classifyCompileError(err)
 	}
 	prg, err := goja.CompileAST(ast, false)
 	if err != nil {
-		return err
+		return classifyCompileError(err)
 	}
 	return s.Run(func(vm *goja.Runtime) error { _, err := vm.RunProgram(prg); return err })
 }
@@ -797,6 +802,33 @@ func (s *Sandbox) recheckHeap() {
 
 // sandboxParserOptions is the single definition of how page source is parsed.
 func sandboxParserOptions() []parser.Option { return []parser.Option{parser.WithDisableSourceMaps} }
+
+// classifyCompileError turns Goja's "… not supported yet" rejections, which
+// the compiler raises for features such as async generators, into
+// ErrUnsupportedSyntax; other parse and compile errors pass through.
+func classifyCompileError(err error) error {
+	if feature, ok := unsupportedFeature(err); ok {
+		return fmt.Errorf("%w: %s", ErrUnsupportedSyntax, feature)
+	}
+	return err
+}
+
+// unsupportedFeature reports a parse or compile failure that names an
+// unimplemented language feature, with the feature's description.
+func unsupportedFeature(err error) (string, bool) {
+	var syntax *goja.CompilerSyntaxError
+	if !errors.As(err, &syntax) {
+		return "", false
+	}
+	feature, ok := strings.CutSuffix(strings.TrimSpace(syntax.Message), "are not supported yet")
+	if !ok {
+		feature, ok = strings.CutSuffix(strings.TrimSpace(syntax.Message), "is not supported yet")
+	}
+	if !ok {
+		return "", false
+	}
+	return strings.TrimSpace(feature), true
+}
 
 // usesDynamicImport reports whether a parse failure sits on an import( call,
 // the one piece of module syntax a classic script may legitimately contain.

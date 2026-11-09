@@ -73,3 +73,29 @@ func TestExcludedGlobalIsWarnedNotErrored(t *testing.T) {
 		t.Fatalf("unexpected second report: %+v", logs[1])
 	}
 }
+
+// A script Goja cannot parse for an unimplemented feature is skipped with a
+// warning, like a module script, instead of failing the page.
+func TestUnsupportedSyntaxIsWarnedNotErrored(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sink := make(chanSink, 256)
+	l := New(ctx, Config{Profile: testProfile, Width: 400}, sink)
+	go l.Run()
+	l.LoadPage(`<script>async function* g(){ yield 1 }</script><script>console.log("after")</script>`, "https://example.test/", nil)
+	var warned bool
+	waitFor(t, sink, func(m tea.Msg) bool {
+		lm, ok := m.(LogMsg)
+		if !ok {
+			return false
+		}
+		if lm.Level == "error" {
+			t.Fatalf("error for unsupported syntax: %s", lm.Line)
+		}
+		warned = warned || (lm.Level == "warn" && strings.Contains(lm.Line, "script skipped") && strings.Contains(lm.Line, "Async generators"))
+		return lm.Line == "after"
+	})
+	if !warned {
+		t.Fatal("no skip warning")
+	}
+}

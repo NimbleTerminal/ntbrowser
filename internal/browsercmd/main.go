@@ -53,6 +53,7 @@ type config struct {
 	Width                                              int
 	ColorScheme                                        string // --color-scheme auto|light|dark: auto follows the terminal background
 	PageBytes                                          int    // --page-bytes: top-level document body and DOM byte budget
+	Images                                             int    // --images: distinct images per page, backgrounds included
 	Slice                                              time.Duration
 	HeapBudgetMiB                                      uint64
 	StylesheetBytes, StylesheetTotalBytes, Stylesheets int
@@ -74,6 +75,7 @@ const maxImageBytes = subres.MaxImageBytesLimit
 const (
 	minPageBytes = 64 << 10
 	maxPageBytes = 8 << 20
+	maxImages    = 1024 // the per-page pixel budget still bounds decoded memory
 )
 
 func parseCommandArgs(command string, args []string) (config, error) {
@@ -84,6 +86,7 @@ func parseCommandArgs(command string, args []string) (config, error) {
 	cssRules := 4096
 	imageBytes := 1 << 20
 	pageBytes := 1 << 20
+	images := 64
 	if command == "glynx" {
 		defaultProfile = "glynx"
 		defaultHeapMiB = 512
@@ -91,6 +94,7 @@ func parseCommandArgs(command string, args []string) (config, error) {
 		cssRules = 32768
 		imageBytes = 8 << 20 // README demo GIFs; decoded-size caps are unchanged
 		pageBytes = 4 << 20  // portal front pages (yahoo.com) exceed 1 MiB of HTML
+		images = 256         // news front pages carry well over 64 thumbnails; the pixel budget still bounds memory
 	}
 	fs := flag.NewFlagSet(command, flag.ContinueOnError)
 	fs.StringVarP(&c.Diagnostics, "diagnostics", "d", "", "write bounded JSONL diagnostics to a new owner-only file")
@@ -139,6 +143,7 @@ func parseCommandArgs(command string, args []string) (config, error) {
 	fs.IntVar(&c.Stylesheets, "stylesheets", sheetCount, "maximum stylesheets per page including imports (1..64)")
 	fs.IntVar(&c.ImageBytes, "image-bytes", imageBytes, "maximum encoded bytes per page image (1024..16777216)")
 	fs.IntVar(&c.PageBytes, "page-bytes", pageBytes, "maximum bytes of a page's HTML and its DOM (65536..8388608)")
+	fs.IntVar(&c.Images, "images", images, "maximum distinct images per page, backgrounds included (1..1024)")
 	fs.Uint64Var(&c.Seed, "seed", 0, "seed for Math.random and crypto, for reproducible runs (0 = a fresh unpredictable generator per page); the clock is never fixed, timers depend on it")
 	if err := fs.Parse(legacyLongFlags(fs, args)); err != nil {
 		return c, err
@@ -159,6 +164,9 @@ func parseCommandArgs(command string, args []string) (config, error) {
 	}
 	if c.ImageBytes < 1024 || c.ImageBytes > maxImageBytes {
 		return c, fmt.Errorf("--image-bytes must be between 1024 and %d", maxImageBytes)
+	}
+	if c.Images < 1 || c.Images > maxImages {
+		return c, fmt.Errorf("--images must be between 1 and %d", maxImages)
 	}
 	if c.PageBytes < minPageBytes || c.PageBytes > maxPageBytes {
 		return c, fmt.Errorf("--page-bytes must be between %d and %d", minPageBytes, maxPageBytes)
@@ -450,7 +458,7 @@ func Run(command string) int {
 				fmt.Fprintln(os.Stderr, "diagnostics:", err)
 			}
 		}()
-		trace.Record("session", map[string]any{"profile": c.Profile, "strengths": strengths, "heap_budget_bytes": c.HeapBudgetMiB << 20, "stylesheet_bytes": c.StylesheetBytes, "stylesheet_total_bytes": c.StylesheetTotalBytes, "stylesheets": c.Stylesheets, "css_rules": c.CSSRules, "image_bytes": c.ImageBytes, "page_bytes": c.PageBytes, "persist": string(c.Profile.Persist)})
+		trace.Record("session", map[string]any{"profile": c.Profile, "strengths": strengths, "heap_budget_bytes": c.HeapBudgetMiB << 20, "stylesheet_bytes": c.StylesheetBytes, "stylesheet_total_bytes": c.StylesheetTotalBytes, "stylesheets": c.Stylesheets, "css_rules": c.CSSRules, "image_bytes": c.ImageBytes, "page_bytes": c.PageBytes, "images": c.Images, "persist": string(c.Profile.Persist)})
 	}
 	// Process-wide soft heap cap: Goja has no per-runtime memory limit, so
 	// the GC is told to work harder past this point and dom/nthtml limits
@@ -475,7 +483,7 @@ func Run(command string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
-	subresCfg := subres.Config{Mode: mode, MaxSheetBytes: c.StylesheetBytes, MaxStylesheets: c.Stylesheets, MaxImageBytes: c.ImageBytes}
+	subresCfg := subres.Config{Mode: mode, MaxSheetBytes: c.StylesheetBytes, MaxStylesheets: c.Stylesheets, MaxImageBytes: c.ImageBytes, MaxImages: c.Images}
 	cookieStore, cookieSaver := openCookieStore(c.Profile, cookieFile)
 	defer cookieSaver.Close() // the final snapshot, after the program has stopped
 	policy := app.PolicyFor(c.Profile)

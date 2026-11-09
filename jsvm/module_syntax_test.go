@@ -7,6 +7,8 @@ import (
 	"errors"
 	"strings"
 	"testing"
+
+	"nimbleterminal.dev/ntbrowser/dom"
 )
 
 // TestEvalFlagsDynamicImportAsModuleSyntax covers the SvelteKit bootstrap
@@ -36,5 +38,20 @@ func TestEvalFlagsDynamicImportAsModuleSyntax(t *testing.T) {
 	// An identifier that merely starts with "import" is ordinary code.
 	if err := s.Eval("https://example.test/#inline-2", "var imports = 1; imports(2)"); err == nil || errors.Is(err, ErrModuleSyntax) || !strings.Contains(err.Error(), "TypeError") {
 		t.Fatalf("identifier prefix misclassified: %v", err)
+	}
+}
+
+// A parser failure for a language feature Goja has not implemented is an
+// unsupported-syntax error, distinct from a syntax error in the page's code.
+func TestUnsupportedSyntaxIsClassified(t *testing.T) {
+	tree, _ := dom.Parse(strings.NewReader("<body></body>"), dom.Limits{})
+	s := New(Config{}, tree, &nopHost{})
+	t.Cleanup(s.Close)
+	err := s.Eval("gen.js", "async function* g(){ yield 1 }")
+	if !errors.Is(err, ErrUnsupportedSyntax) || !strings.Contains(err.Error(), "Async generators") {
+		t.Fatalf("async generator: %v", err)
+	}
+	if err := s.Eval("bad.js", "function (){"); err == nil || errors.Is(err, ErrUnsupportedSyntax) {
+		t.Fatalf("a real syntax error must stay an error: %v", err)
 	}
 }

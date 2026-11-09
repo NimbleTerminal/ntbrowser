@@ -229,3 +229,27 @@ func TestPageBudget(t *testing.T) {
 		}
 	}
 }
+
+// --images bounds distinct images per page: 256 in glynx, 64 in ntbrowser,
+// 1 to 1024 when set; the pixel budget still bounds decoded memory.
+func TestImagesFlag(t *testing.T) {
+	for _, command := range []string{"glynx", "ntbrowser"} {
+		c, err := parseCommandArgs(command, nil)
+		if err != nil {
+			t.Fatal(command, err)
+		}
+		want := 64
+		if command == "glynx" {
+			want = 256
+		}
+		if c.Images != want {
+			t.Fatalf("%s default images %d, want %d", command, c.Images, want)
+		}
+		if c, err := parseCommandArgs(command, []string{"--images=1024"}); err != nil || c.Images != 1024 {
+			t.Fatalf("%s override: %d %v", command, c.Images, err)
+		}
+		if _, err := parseCommandArgs(command, []string{"--images=1025"}); err == nil {
+			t.Fatalf("%s accepted 1025 images", command)
+		}
+	}
+}
