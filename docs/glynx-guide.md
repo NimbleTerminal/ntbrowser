@@ -144,6 +144,13 @@ it at exit, so that run's new cookies and storage are lost too.
 There is no per-site clearing yet. `document.cookie` writes from a page can
 expire a cookie, so signing out on the site itself also works.
 
+## Dark and light pages
+
+Sites that offer both themes follow your terminal: glynx asks the terminal
+for its background colour at startup and renders the page's dark theme on a
+dark terminal, its light theme otherwise. `--color-scheme light` or
+`--color-scheme dark` forces one.
+
 ## Diagnostics
 
 When a page renders wrong or a script fails, record a run:

@@ -51,6 +51,7 @@ type config struct {
 	Profile                                            profile.Profile
 	Start                                              string
 	Width                                              int
+	ColorScheme                                        string // --color-scheme auto|light|dark: auto follows the terminal background
 	Slice                                              time.Duration
 	HeapBudgetMiB                                      uint64
 	StylesheetBytes, StylesheetTotalBytes, Stylesheets int
@@ -118,6 +119,7 @@ func parseCommandArgs(command string, args []string) (config, error) {
 	maxMedia := fs.Int64("max-media-bytes", 0, "download cap for media")
 	fs.BoolVar(&c.Chunked, "chunked", false, "read long pages in bounded semantic chunks (reduced CSS support)")
 	fs.IntVar(&c.Width, "width", 800, "document pixel width")
+	fs.StringVar(&c.ColorScheme, "color-scheme", "auto", "page color scheme for prefers-color-scheme and light-dark(): auto (follow the terminal background), light, dark")
 	fs.DurationVar(&c.Slice, "slice", 50*time.Millisecond, "JS time slice per callback")
 	fs.Uint64Var(&c.HeapBudgetMiB, "heap-budget-mib", defaultHeapMiB, "process Go heap budget after GC in MiB (64..2048; includes rendering)")
 	fs.IntVar(&c.CSSRules, "css-rules", cssRules, "maximum CSS rules (256..32768; matching-work budget still applies)")
@@ -128,6 +130,11 @@ func parseCommandArgs(command string, args []string) (config, error) {
 	fs.Uint64Var(&c.Seed, "seed", 0, "seed for Math.random and crypto, for reproducible runs (0 = a fresh unpredictable generator per page); the clock is never fixed, timers depend on it")
 	if err := fs.Parse(legacyLongFlags(fs, args)); err != nil {
 		return c, err
+	}
+	switch c.ColorScheme {
+	case "auto", "light", "dark":
+	default:
+		return c, fmt.Errorf("--color-scheme must be auto, light or dark")
 	}
 	if c.HeapBudgetMiB < 64 || c.HeapBudgetMiB > 2048 {
 		return c, fmt.Errorf("--heap-budget-mib must be between 64 and 2048")
@@ -460,7 +467,7 @@ func Run(command string) int {
 	policy.Cookies = cookieStore
 	policy.Trace = trace
 	localStore, localSink := openLocalStore(c.Profile, storeFile)
-	l := loop.New(ctx, loop.Config{RenderLimit: document.Limits{Rules: c.CSSRules}, DOMLimits: dom.Limits{ExternalStyleBytes: c.StylesheetTotalBytes}, Trace: trace, Chunked: c.Chunked, Profile: c.Profile, Width: c.Width, Script: script, Subresources: subresCfg, SubresourceTransport: app.SubresourceTransport(policy, subresCfg), LocalStorage: localStore, LocalStorageSink: localSink}, sink)
+	l := loop.New(ctx, loop.Config{RenderLimit: document.Limits{Rules: c.CSSRules}, DOMLimits: dom.Limits{ExternalStyleBytes: c.StylesheetTotalBytes}, Trace: trace, Chunked: c.Chunked, Profile: c.Profile, Width: c.Width, ColorScheme: startScheme(c.ColorScheme), Script: script, Subresources: subresCfg, SubresourceTransport: app.SubresourceTransport(policy, subresCfg), LocalStorage: localStore, LocalStorageSink: localSink}, sink)
 	browserLoop = l
 	go l.Run()
 
@@ -468,6 +475,7 @@ func Run(command string) int {
 	if command == "glynx" {
 		m.SetGlynx()
 	}
+	m.SetColorSchemeAuto(c.ColorScheme == "auto")
 	m.SetDevTools(inspector)
 	m.SetDiagnostics(trace)
 	m.SetCookies(cookieStore)
@@ -595,3 +603,12 @@ func lockDown(st state, sandboxed bool) (profile.Strengths, error) {
 type sinkFunc func(tea.Msg)
 
 func (f sinkFunc) Send(msg tea.Msg) { f(msg) }
+
+// startScheme is the scheme the first layout uses: an explicit choice, or
+// light until the terminal reports a dark background in auto mode.
+func startScheme(flag string) string {
+	if flag == "dark" {
+		return "dark"
+	}
+	return "light"
+}

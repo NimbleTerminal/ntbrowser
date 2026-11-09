@@ -70,6 +70,7 @@ const shutdownGrace = 150 * time.Millisecond
 type Model struct {
 	debug             debugPanel
 	glynx             bool
+	autoScheme        bool // --color-scheme auto: follow the terminal's reported background
 	scriptPermissions []loop.ScriptPermissionMsg
 
 	loop              *loop.Loop
@@ -168,11 +169,19 @@ func PolicyFor(p profile.Profile) netpolicy.Policy {
 // Init starts terminal discovery (the Kitty graphics probe) at once, so it
 // completes while the first page loads instead of after its first frame.
 func (m *Model) Init() tea.Cmd {
-	if m.start == "" {
-		return tea.Batch(m.session.Init(), m.openAddress())
+	var scheme tea.Cmd
+	if m.autoScheme {
+		scheme = tea.RequestBackgroundColor
 	}
-	return tea.Batch(m.session.Init(), m.navigate(m.start, pushNew, true))
+	if m.start == "" {
+		return tea.Batch(m.session.Init(), scheme, m.openAddress())
+	}
+	return tea.Batch(m.session.Init(), scheme, m.navigate(m.start, pushNew, true))
 }
+
+// SetColorSchemeAuto makes the page's color scheme follow the terminal's
+// reported background: a dark terminal gets the page's dark theme.
+func (m *Model) SetColorSchemeAuto(on bool) { m.autoScheme = on }
 
 // holdFrames reports whether the first frame should wait for the terminal's
 // probe reply. A terminal that identifies itself as Kitty-capable (rex, kitty,
@@ -336,6 +345,13 @@ func (m *Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 			return m, m.viewer.Update(msg) // graphics cleanup still flows
 		}
 		return m, nil
+	}
+	if bg, ok := msg.(tea.BackgroundColorMsg); ok && m.autoScheme && m.loop != nil && bg.Color != nil {
+		scheme := "light"
+		if bg.IsDark() {
+			scheme = "dark"
+		}
+		m.loop.SetColorScheme(scheme)
 	}
 	if key, ok := msg.(tea.KeyPressMsg); ok && key.String() == "alt+c" {
 		return m, m.copyStatus()

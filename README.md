@@ -321,6 +321,7 @@ supported.
 | `--media off\|image\|animation\|video` | The most a top-level response may be shown as. Images inside a page are `--subresources`. `video` also opens `native-code` and `files=temp` |
 | `--max-media-bytes n` | Download cap for media (64 MiB) |
 | `--width px` | Initial document width; the terminal's pixel geometry takes over once known |
+| `--color-scheme auto\|light\|dark` | Page color scheme for `prefers-color-scheme` and `light-dark()`; `auto` (default) follows the terminal's reported background |
 | `--frame-dom off/same-origin` | Bounded same-origin DOM sharing between enabled frames (default off) |
 | `--frames MODE` | Isolated iframe documents (default off) |
 | `--allow-frame SOURCE=DEST` | Repeatable frame origin pair, used with `--frames=allowlist` |

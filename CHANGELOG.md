@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Follow the terminal's background for the page's color scheme:
+  `--color-scheme auto` (the default) asks the terminal for its background
+  and lays the page out with `prefers-color-scheme: dark` and the dark branch
+  of `light-dark()` on a dark terminal; `light` and `dark` force one, and the
+  loop re-flows when the scheme changes. Together with the local nthtml's
+  CSS nesting, `light-dark()`, logical properties, grid `justify-self`, spec
+  fr sizing, hairline borders and implied `</p>`, fallthrough.fm renders its
+  dark theme, header rules, tagline separator, hidden skip link and
+  right-aligned nav as Safari does.
+
 - Fix a podcast front page (fallthrough.fm) disabling its own scripts with
   "heap budget exceeded": the painted band was a pixel or two larger than the
   Kitty raster, so ntpicture resampled every frame through a kernel scaler

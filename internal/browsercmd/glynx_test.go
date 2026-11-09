@@ -183,3 +183,22 @@ func TestImageBudget(t *testing.T) {
 		}
 	}
 }
+
+// --color-scheme defaults to following the terminal and otherwise takes
+// light or dark; anything else is refused.
+func TestColorSchemeFlag(t *testing.T) {
+	c, err := parseCommandArgs("glynx", []string{"https://example.test/"})
+	if err != nil || c.ColorScheme != "auto" {
+		t.Fatalf("default scheme %q, %v", c.ColorScheme, err)
+	}
+	c, err = parseCommandArgs("glynx", []string{"--color-scheme=dark", "https://example.test/"})
+	if err != nil || c.ColorScheme != "dark" || startScheme(c.ColorScheme) != "dark" {
+		t.Fatalf("dark: %q %v", c.ColorScheme, err)
+	}
+	if startScheme("auto") != "light" {
+		t.Fatal("auto must start light until the terminal answers")
+	}
+	if _, err := parseCommandArgs("glynx", []string{"--color-scheme=sepia", "https://example.test/"}); err == nil {
+		t.Fatal("sepia accepted")
+	}
+}

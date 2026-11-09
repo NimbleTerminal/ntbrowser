@@ -165,6 +165,7 @@ type Config struct {
 	Trace       *diagnostics.Recorder
 	Chunked     bool          // opt-in semantic chunk renderer; CSS renderer remains the default
 	Width       int           // document pixel width handed to nthtml (default 800)
+	ColorScheme string        // "light" (default) or "dark": prefers-color-scheme and light-dark() for the page
 	MinFrame    time.Duration // minimum spacing between re-flows (default 33ms)
 	RenderLimit document.Limits
 	Fonts       document.FaceSource
@@ -203,6 +204,7 @@ type Loop struct {
 	frameNavigation atomic.Uint64
 	locationCommit  atomic.Uint64
 	resizeWidth     atomic.Int64
+	resizeScheme    atomic.Int32 // 0 unchanged, 1 light, 2 dark; applied with resizeWake
 	resizeWake      chan struct{}
 	cfg             Config
 	sink            Sink
@@ -312,6 +314,11 @@ func (l *Loop) Run() {
 				width := int(l.resizeWidth.Load())
 				if width > 0 && width != l.cfg.Width {
 					l.cfg.Width = width
+					l.pendingFrame = true
+					l.scheduleFrame()
+				}
+				if scheme := schemeName(l.resizeScheme.Load()); scheme != "" && scheme != l.cfg.ColorScheme {
+					l.cfg.ColorScheme = scheme
 					l.pendingFrame = true
 					l.scheduleFrame()
 				}
@@ -834,6 +841,47 @@ func (l *Loop) Resize(widthPx int) {
 	}
 }
 
+// SetColorScheme switches the page's preferred color scheme ("light" or
+// "dark") and re-flows, like Resize; any other value is ignored. The host
+// calls it when the terminal reports its background.
+func (l *Loop) SetColorScheme(scheme string) {
+	var v int32
+	switch scheme {
+	case "light":
+		v = 1
+	case "dark":
+		v = 2
+	default:
+		return
+	}
+	l.resizeScheme.Store(v)
+	select {
+	case l.resizeWake <- struct{}{}:
+	default:
+	}
+}
+
+func schemeName(v int32) string {
+	switch v {
+	case 1:
+		return "light"
+	case 2:
+		return "dark"
+	}
+	return ""
+}
+
+// ColorScheme reports the scheme the next layout uses.
+func (l *Loop) ColorScheme() string {
+	if s := schemeName(l.resizeScheme.Load()); s != "" {
+		return s
+	}
+	if l.cfg.ColorScheme == "" {
+		return "light"
+	}
+	return l.cfg.ColorScheme
+}
+
 // Dropped reports how many inputs/log lines were shed under back-pressure.
 func (l *Loop) Dropped() int64 { return l.dropped.Load() }
 
@@ -927,7 +975,7 @@ func (l *Loop) startRender() {
 		l.dropPage(l.page)
 	}
 	page := l.page
-	opts := document.Options{HoverSource: page.hoverSource, DisableDiagrams: page.diagramsDisabled, ViewportHeight: l.cfg.FrameHeight, NoImage: !l.cfg.Chunked, Width: l.cfg.Width, Limits: l.cfg.RenderLimit, Fonts: l.cfg.Fonts, FallbackFaces: fallbackFaces}
+	opts := document.Options{HoverSource: page.hoverSource, DisableDiagrams: page.diagramsDisabled, ViewportHeight: l.cfg.FrameHeight, NoImage: !l.cfg.Chunked, Width: l.cfg.Width, ColorScheme: l.cfg.ColorScheme, Limits: l.cfg.RenderLimit, Fonts: l.cfg.Fonts, FallbackFaces: fallbackFaces}
 	var loaderWarnings []string
 	if page.diagramsDisabled {
 		loaderWarnings = append(loaderWarnings, diagramFallbackWarning)
