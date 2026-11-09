@@ -22,6 +22,7 @@ import (
 	"runtime"
 	"runtime/debug"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -51,9 +52,11 @@ type config struct {
 	Profile                                            profile.Profile
 	Start                                              string
 	Width                                              int
-	ColorScheme                                        string // --color-scheme auto|light|dark: auto follows the terminal background
-	PageBytes                                          int    // --page-bytes: top-level document body and DOM byte budget
-	Images                                             int    // --images: distinct images per page, backgrounds included
+	ColorScheme                                        string  // --color-scheme auto|light|dark: auto follows the terminal background
+	Scale                                              string  // --scale auto|1..4: device pixels per CSS pixel
+	PageScale                                          float64 // parsed --scale; 0 for auto
+	PageBytes                                          int     // --page-bytes: top-level document body and DOM byte budget
+	Images                                             int     // --images: distinct images per page, backgrounds included
 	Slice                                              time.Duration
 	HeapBudgetMiB                                      uint64
 	StylesheetBytes, StylesheetTotalBytes, Stylesheets int
@@ -135,6 +138,7 @@ func parseCommandArgs(command string, args []string) (config, error) {
 	fs.BoolVar(&c.Chunked, "chunked", false, "read long pages in bounded semantic chunks (reduced CSS support)")
 	fs.IntVar(&c.Width, "width", 800, "document pixel width")
 	fs.StringVar(&c.ColorScheme, "color-scheme", "auto", "page color scheme for prefers-color-scheme and light-dark(): auto (follow the terminal background), light, dark")
+	fs.StringVar(&c.Scale, "scale", "auto", "device pixels per CSS pixel (window.devicePixelRatio): auto (from the terminal's cell height: 1x up to 23 px, 2x up to 39 px, then 3x and 4x) or a number from 1 to 4")
 	fs.DurationVar(&c.Slice, "slice", 50*time.Millisecond, "JS time slice per callback")
 	fs.Uint64Var(&c.HeapBudgetMiB, "heap-budget-mib", defaultHeapMiB, "process Go heap budget after GC in MiB (64..2048; includes rendering)")
 	fs.IntVar(&c.CSSRules, "css-rules", cssRules, "maximum CSS rules (256..32768; matching-work budget still applies)")
@@ -152,6 +156,13 @@ func parseCommandArgs(command string, args []string) (config, error) {
 	case "auto", "light", "dark":
 	default:
 		return c, fmt.Errorf("--color-scheme must be auto, light or dark")
+	}
+	if c.Scale != "auto" {
+		f, err := strconv.ParseFloat(c.Scale, 64)
+		if err != nil || f < 1 || f > 4 {
+			return c, fmt.Errorf("--scale must be auto or a number from 1 to 4")
+		}
+		c.PageScale = f
 	}
 	if c.HeapBudgetMiB < 64 || c.HeapBudgetMiB > 2048 {
 		return c, fmt.Errorf("--heap-budget-mib must be between 64 and 2048")
@@ -458,7 +469,7 @@ func Run(command string) int {
 				fmt.Fprintln(os.Stderr, "diagnostics:", err)
 			}
 		}()
-		trace.Record("session", map[string]any{"profile": c.Profile, "strengths": strengths, "heap_budget_bytes": c.HeapBudgetMiB << 20, "stylesheet_bytes": c.StylesheetBytes, "stylesheet_total_bytes": c.StylesheetTotalBytes, "stylesheets": c.Stylesheets, "css_rules": c.CSSRules, "image_bytes": c.ImageBytes, "page_bytes": c.PageBytes, "images": c.Images, "persist": string(c.Profile.Persist)})
+		trace.Record("session", map[string]any{"profile": c.Profile, "strengths": strengths, "heap_budget_bytes": c.HeapBudgetMiB << 20, "stylesheet_bytes": c.StylesheetBytes, "stylesheet_total_bytes": c.StylesheetTotalBytes, "stylesheets": c.Stylesheets, "css_rules": c.CSSRules, "image_bytes": c.ImageBytes, "page_bytes": c.PageBytes, "images": c.Images, "scale": c.Scale, "persist": string(c.Profile.Persist)})
 	}
 	// Process-wide soft heap cap: Goja has no per-runtime memory limit, so
 	// the GC is told to work harder past this point and dom/nthtml limits
@@ -499,6 +510,7 @@ func Run(command string) int {
 		m.SetGlynx()
 	}
 	m.SetColorSchemeAuto(c.ColorScheme == "auto")
+	m.SetPageScale(c.PageScale)
 	m.SetPageBytes(c.PageBytes)
 	m.SetDevTools(inspector)
 	m.SetDiagnostics(trace)

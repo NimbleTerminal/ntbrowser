@@ -216,3 +216,16 @@ paint latency and allocations near the layout limit; and the WASM compile gate.
 Ship the semantic chunk adapter separately as opt-in `-chunked` reading mode,
 with reduced CSS support explicit in its help and documentation. It is not
 transparent CSS-preserving adoption of the new dependencies.
+
+## Addendum (2026-11-09): device scale
+
+The host lays the page out at the device width divided by a device scale
+(`--scale`, default automatic from the cell height: one whole factor per
+16 px of row height, 1..4), and still plans with `Scale: 0`, so the plan
+derives the raster scale from the band and the CSS width (2.0 exactly when the
+device width is even; the CSS width rounds up otherwise, so `fitBand` crops a
+pixel and never stretches). Hit testing, zoom and the band budget are
+unchanged: they work in plan coordinates. The loop records the scale
+(`SetScale`) only for what scripts observe: `devicePixelRatio`, resolution
+media features and the viewport height in CSS pixels. The scale is a layout
+fact, not authority, and the raster budget stays in device pixels.

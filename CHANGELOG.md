@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Add a device scale (`--scale auto|1..4`). A HiDPI terminal reports cells
+  twice as large as a 1x display, and glynx laid pages out at one CSS pixel
+  per device pixel, so on a retina terminal every page was twice as wide and
+  half as tall as in a browser and its text tiny. `auto` picks a whole factor
+  from the cell height (16 px per factor: 1x up to 23 px, 2x to 39 px, then
+  3x, 4x); the page is laid out at the device width divided by it, rounded
+  up so the band is cropped rather than stretched, and painted at that scale.
+  Scripts see it as `window.devicePixelRatio`, in `resolution` and
+  `-webkit-device-pixel-ratio` queries, and in a CSS-pixel viewport height
+  (`TestHiDPICellsLayOutAtDeviceScale`, `TestSetScaleReachesScripts`,
+  `TestDevicePixelRatioFollowsScale`, `TestScaleFlag`).
+
 - Fill the terminal at every size. A terminal wider than the Kitty
   placeholder grid (297 columns) showed no page at all, because the
   transport refuses a placement it cannot address; the viewer now spans at

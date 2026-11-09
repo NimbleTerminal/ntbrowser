@@ -94,7 +94,7 @@ func TestDegenerateTerminalSizes(t *testing.T) {
 			t.Fatalf("empty view at %+v", sz)
 		}
 	}
-	if w := documentWidth(m.viewer); w < 32 || w > 4096 {
+	if w := m.documentWidth(); w < 32 || w > 4096 {
 		t.Fatalf("documentWidth out of range: %d", w)
 	}
 }

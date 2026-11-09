@@ -26,6 +26,7 @@ import (
 	"fmt"
 	"image"
 	"image/draw"
+	"math"
 	"runtime"
 	"strings"
 	"sync"
@@ -204,7 +205,8 @@ type Loop struct {
 	frameNavigation atomic.Uint64
 	locationCommit  atomic.Uint64
 	resizeWidth     atomic.Int64
-	resizeScheme    atomic.Int32 // 0 unchanged, 1 light, 2 dark; applied with resizeWake
+	resizeScheme    atomic.Int32  // 0 unchanged, 1 light, 2 dark; applied with resizeWake
+	pageScale       atomic.Uint64 // float64 bits of the device pixel ratio the host lays out for; 0 means 1
 	resizeWake      chan struct{}
 	cfg             Config
 	sink            Sink
@@ -859,11 +861,32 @@ func (l *Loop) Resize(widthPx int) {
 // preferred color scheme. All of it is already visible to the page through
 // its own layout; nothing here is host authority.
 func (l *Loop) mediaState() jsvm.MediaState {
-	st := jsvm.MediaState{Width: l.cfg.Width, Height: 600, ColorScheme: l.cfg.ColorScheme}
+	scale := l.Scale()
+	st := jsvm.MediaState{Width: l.cfg.Width, Height: 600, ColorScheme: l.cfg.ColorScheme, Scale: scale}
 	if v := l.viewport(); v.Rows > 0 && v.CellHeight > 0 {
-		st.Height = v.Rows * v.CellHeight
+		st.Height = max(1, int(math.Round(float64(v.Rows*v.CellHeight)/scale)))
 	}
 	return st
+}
+
+// SetScale records the device pixel ratio the host lays pages out for: the
+// terminal's pixels per CSS pixel. It changes what window.devicePixelRatio and
+// resolution media queries report and how the viewport height is expressed in
+// CSS pixels; the width itself arrives through Resize, which the host calls
+// alongside. Values outside [1, 8] are ignored.
+func (l *Loop) SetScale(scale float64) {
+	if scale < 1 || scale > 8 || math.IsNaN(scale) {
+		return
+	}
+	l.pageScale.Store(math.Float64bits(scale))
+}
+
+// Scale reports the device pixel ratio the host last set, 1 by default.
+func (l *Loop) Scale() float64 {
+	if bits := l.pageScale.Load(); bits != 0 {
+		return math.Float64frombits(bits)
+	}
+	return 1
 }
 
 // SetColorScheme switches the page's preferred color scheme ("light" or

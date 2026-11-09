@@ -253,3 +253,22 @@ func TestImagesFlag(t *testing.T) {
 		}
 	}
 }
+
+// --scale is auto (from the cell height) or a device pixel ratio from 1 to 4.
+func TestScaleFlag(t *testing.T) {
+	c, err := parseCommandArgs("glynx", []string{"https://example.test/"})
+	if err != nil || c.Scale != "auto" || c.PageScale != 0 {
+		t.Fatalf("default scale %q %g, %v", c.Scale, c.PageScale, err)
+	}
+	for arg, want := range map[string]float64{"2": 2, "1.5": 1.5, "1": 1, "4": 4} {
+		c, err = parseCommandArgs("ntbrowser", []string{"--scale=" + arg, "https://example.test/"})
+		if err != nil || c.PageScale != want {
+			t.Fatalf("--scale=%s: %g %v", arg, c.PageScale, err)
+		}
+	}
+	for _, arg := range []string{"0.5", "5", "retina", "-1", ""} {
+		if _, err := parseCommandArgs("glynx", []string{"--scale=" + arg, "https://example.test/"}); err == nil {
+			t.Fatalf("--scale=%q accepted", arg)
+		}
+	}
+}

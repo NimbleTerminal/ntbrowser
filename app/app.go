@@ -70,8 +70,9 @@ const shutdownGrace = 150 * time.Millisecond
 type Model struct {
 	debug             debugPanel
 	glynx             bool
-	autoScheme        bool // --color-scheme auto: follow the terminal's reported background
-	pageBytes         int  // top-level document body cap (default 1 MiB)
+	autoScheme        bool    // --color-scheme auto: follow the terminal's reported background
+	pageScale         float64 // --scale: device pixels per CSS pixel; 0 picks one from the cell height
+	pageBytes         int     // top-level document body cap (default 1 MiB)
 	scriptPermissions []loop.ScriptPermissionMsg
 
 	loop              *loop.Loop
@@ -183,6 +184,16 @@ func (m *Model) Init() tea.Cmd {
 // SetColorSchemeAuto makes the page's color scheme follow the terminal's
 // reported background: a dark terminal gets the page's dark theme.
 func (m *Model) SetColorSchemeAuto(on bool) { m.autoScheme = on }
+
+// SetPageScale fixes the device pixel ratio pages are laid out for, 1 to 4;
+// zero (the default) derives it from the terminal's cell height.
+func (m *Model) SetPageScale(scale float64) {
+	if scale >= 1 && scale <= 4 {
+		m.pageScale = scale
+	} else {
+		m.pageScale = 0
+	}
+}
 
 // SetPageBytes caps a top-level document's body; the loop's DOM budget is
 // configured to match. Zero keeps the 1 MiB default.
@@ -517,7 +528,7 @@ func (m *Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 			m.viewer = nthtml.NewWithOptions(v.Result, opts)
 			m.resetView = false
 			cmd := tea.Batch(m.viewer.Init(), m.viewer.SetBounds(0, 0, m.pictureCols(), m.viewRows()))
-			m.loop.Resize(documentWidth(m.viewer))
+			m.loop.Resize(m.documentWidth())
 			return m, tea.Batch(cmd, m.finishChunk(), m.applyRing(false))
 		}
 		// Re-flow in place (nthtml v0.1.0 Model.SetResult). SetResult resets
@@ -533,7 +544,7 @@ func (m *Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 			}
 		}
 		cmd := m.viewer.SetResult(v.Result)
-		m.loop.Resize(documentWidth(m.viewer)) // no-op unless the terminal's pixel geometry changed
+		m.loop.Resize(m.documentWidth()) // no-op unless the terminal's pixel geometry changed
 		if m.resetView || crop.Empty() || v.Chunk.Count > 0 && (oldChunk.Index != v.Chunk.Index || v.Chunk.Anchor != "" || v.Chunk.Bottom) {
 			scroll := m.resetView // a new page's script focus scrolls into view, as in browsers
 			m.resetView = false
@@ -779,7 +790,7 @@ func (m *Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		}
 		if m.viewer != nil {
 			cmd := tea.Batch(media, m.viewer.SetBounds(0, 0, m.pictureCols(), m.viewRows()), m.viewer.Update(msg))
-			m.loop.Resize(documentWidth(m.viewer)) // re-flow at the terminal's real pixel width
+			m.loop.Resize(m.documentWidth()) // re-flow at the terminal's real pixel width
 			return m, cmd
 		}
 		return m, media

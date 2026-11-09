@@ -77,7 +77,7 @@ func TestCellToDocumentAgreesWithLinkAtCell(t *testing.T) {
 	if _, ok := cellToDocument(m, image.Pt(0, 0)); ok {
 		t.Fatal("cell outside the widget origin mapped to a document area")
 	}
-	if w := documentWidth(m); w != 800 {
+	if w := documentWidth(m, 1); w != 800 {
 		t.Fatalf("glyph-fallback geometry should give 10px per column (800), got %d", w)
 	}
 }

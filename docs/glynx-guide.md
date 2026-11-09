@@ -147,6 +147,16 @@ it at exit, so that run's new cookies and storage are lost too.
 There is no per-site clearing yet. `document.cookie` writes from a page can
 expire a cookie, so signing out on the site itself also works.
 
+## Page scale on HiDPI terminals
+
+A browser on a retina display draws a page at two device pixels per CSS
+pixel. Glynx does the same from the terminal's cell height: cells up to 23 px
+tall are a 1x display, 24 to 39 px get 2x, then 3x and 4x, so the page's
+default text is about one terminal row tall. `--scale 1` keeps one CSS pixel
+per device pixel for the widest possible layout, and `--scale 2` (or 1.5, 3,
+4) forces a factor. Pages see the factor as `devicePixelRatio` and in
+`resolution` media queries.
+
 ## Dark and light pages
 
 Sites that offer both themes follow your terminal: glynx asks the terminal

@@ -17,7 +17,16 @@ import (
 // authority.
 type MediaState struct {
 	Width, Height int
-	ColorScheme   string // "light" or "dark"
+	ColorScheme   string  // "light" or "dark"
+	Scale         float64 // device pixels per CSS pixel (window.devicePixelRatio); 0 means 1
+}
+
+// scale is the device pixel ratio the page sees, 1 unless the host set one.
+func (st MediaState) scale() float64 {
+	if st.Scale >= 1 {
+		return st.Scale
+	}
+	return 1
 }
 
 func defaultMedia() MediaState { return MediaState{Width: 800, Height: 600, ColorScheme: "light"} }
@@ -91,6 +100,9 @@ func (s *Sandbox) installMatchMedia() {
 	}
 	s.method(proto, "addListener", listenerAlias(true))
 	s.method(proto, "removeListener", listenerAlias(false))
+	// devicePixelRatio is the same host state the resolution queries see:
+	// a layout fact the page already observes, not authority.
+	s.accessor(vm.GlobalObject(), "devicePixelRatio", func(goja.Value) goja.Value { return vm.ToValue(s.media().scale()) }, nil)
 	s.method(vm.GlobalObject(), "matchMedia", func(c goja.FunctionCall) goja.Value {
 		if len(c.Arguments) == 0 {
 			panic(vm.NewTypeError("matchMedia requires a query"))
@@ -325,11 +337,11 @@ func evalMediaFeature(f string, st MediaState) bool {
 		}
 		switch {
 		case strings.HasPrefix(name, "min-") || strings.HasPrefix(name, "-webkit-min"):
-			return 1 >= r
+			return st.scale() >= r
 		case strings.HasPrefix(name, "max-") || strings.HasPrefix(name, "-webkit-max"):
-			return 1 <= r
+			return st.scale() <= r
 		}
-		return r == 1
+		return r == st.scale()
 	}
 	return false
 }

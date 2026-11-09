@@ -10,6 +10,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"nimbleterminal.dev/nthtml"
 	"nimbleterminal.dev/nthtml/document"
 )
 
@@ -71,4 +72,32 @@ func TestSetColorSchemeFiresMatchMediaChange(t *testing.T) {
 	waitFor(t, sink, func(m tea.Msg) bool { lm, ok := m.(LogMsg); return ok && lm.Line == "initial false" })
 	l.SetColorScheme("dark")
 	waitFor(t, sink, func(m tea.Msg) bool { lm, ok := m.(LogMsg); return ok && lm.Line == "changed true dark" })
+}
+
+// TestSetScaleReachesScripts: the device scale the host lays out for is what
+// devicePixelRatio and resolution queries report, and the viewport height is
+// expressed in CSS pixels at that scale.
+func TestSetScaleReachesScripts(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sink := make(chanSink, 256)
+	l := New(ctx, Config{Profile: testProfile, Width: 400, MinFrame: time.Millisecond}, sink)
+	go l.Run()
+	l.SetViewport(nthtml.PaintViewport{Cols: 80, Rows: 20, CellWidth: 10, CellHeight: 40})
+	l.LoadPage(`<script>
+		const mq = matchMedia('(min-resolution: 2dppx)');
+		console.log('initial ' + devicePixelRatio + ' ' + mq.matches + ' ' + matchMedia('(min-height: 800px)').matches);
+		mq.addEventListener('change', e => console.log('changed ' + e.matches + ' ' + devicePixelRatio + ' ' + matchMedia('(max-height: 400px)').matches));
+	</script>`, "https://example.test/", nil)
+	waitFor(t, sink, func(m tea.Msg) bool { lm, ok := m.(LogMsg); return ok && lm.Line == "initial 1 false true" })
+	l.SetScale(2)
+	l.Resize(200)
+	waitFor(t, sink, func(m tea.Msg) bool { lm, ok := m.(LogMsg); return ok && lm.Line == "changed true 2 true" })
+	if l.Scale() != 2 {
+		t.Fatalf("scale %g", l.Scale())
+	}
+	l.SetScale(9) // out of range: ignored
+	if l.Scale() != 2 {
+		t.Fatalf("out-of-range scale accepted: %g", l.Scale())
+	}
 }

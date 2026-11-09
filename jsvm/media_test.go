@@ -84,3 +84,26 @@ func TestMatchMediaFollowsHostState(t *testing.T) {
 		t.Fatalf("list cap: %v", capped)
 	}
 }
+
+// devicePixelRatio and the resolution media features report the host's scale.
+func TestDevicePixelRatioFollowsScale(t *testing.T) {
+	state := MediaState{Width: 400, Height: 300, ColorScheme: "light"}
+	tree, _ := dom.Parse(strings.NewReader("<body></body>"), dom.Limits{})
+	s := New(Config{Media: func() MediaState { return state }}, tree, &nopHost{})
+	t.Cleanup(s.Close)
+	probe := func(want string) {
+		t.Helper()
+		var out string
+		if err := s.Eval("dpr.js", `globalThis.out = [devicePixelRatio, matchMedia('(min-resolution: 2dppx)').matches, matchMedia('(-webkit-min-device-pixel-ratio: 1.5)').matches, matchMedia('(resolution: 1dppx)').matches, matchMedia('(max-resolution: 192dpi)').matches].join('|')`); err != nil {
+			t.Fatal(err)
+		}
+		if err := s.vm.ExportTo(s.vm.Get("out"), &out); err != nil || out != want {
+			t.Fatalf("got %q (%v), want %q", out, err, want)
+		}
+	}
+	probe("1|false|false|true|true")
+	state.Scale = 2
+	probe("2|true|true|false|true")
+	state.Scale = 3
+	probe("3|true|true|false|false")
+}

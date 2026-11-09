@@ -18,7 +18,12 @@ import (
 	"nimbleterminal.dev/ntbrowser/loop"
 )
 
-func fillModel(t *testing.T, cols, rows, cw, ch int, page string) (*Model, chan tea.Msg) {
+func fillModel(t *testing.T, cols, rows, cw, ch int, page string) (*Model, loop.FrameMsg) {
+	return fillModelScaled(t, cols, rows, cw, ch, 0, page)
+}
+
+// fillModelScaled is fillModel with a fixed --scale (0 for auto).
+func fillModelScaled(t *testing.T, cols, rows, cw, ch int, scale float64, page string) (*Model, loop.FrameMsg) {
 	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -26,6 +31,7 @@ func fillModel(t *testing.T, cols, rows, cw, ch int, page string) (*Model, chan 
 	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 800, Fonts: document.MinimalFonts, MinFrame: time.Millisecond}, chanSink(sink))
 	go l.Run()
 	m := New(l, testProfile(nil, false, NavFree), "")
+	m.SetPageScale(scale)
 	m.session = ntpicture.NewTerminalSession(ntpicture.TerminalOptions{Kitty: ntpicture.KittyCapabilitySupported, CellPixelWidth: cw, CellPixelHeight: ch})
 	_, cmd := m.Update(tea.WindowSizeMsg{Width: cols, Height: rows})
 	drive(m, cmd)
@@ -34,8 +40,8 @@ func fillModel(t *testing.T, cols, rows, cw, ch int, page string) (*Model, chan 
 	// the terminal's width follows.
 	for i := 0; ; i++ {
 		f := chunkAppFrame(t, m, sink)
-		if f.Err == nil && f.Painted != nil && m.viewer != nil && f.Result.Bounds().Dx() == documentWidth(m.viewer) {
-			break
+		if f.Err == nil && f.Painted != nil && m.viewer != nil && f.Result.Bounds().Dx() == m.documentWidth() {
+			return m, f
 		}
 		if i == 3 || f.Err != nil || f.Painted == nil {
 			bounds, mode := "", ""
@@ -45,7 +51,35 @@ func fillModel(t *testing.T, cols, rows, cw, ch int, page string) (*Model, chan 
 			t.Fatalf("frame %d: %v (layoutWidth %d, pictureCols %d, bounds %s, mode %s)", i, f.Err, m.layoutWidth, m.pictureCols(), bounds, mode)
 		}
 	}
-	return m, sink
+}
+
+// HiDPI cells get a device scale: the page is laid out at half the device
+// pixels and painted at 2x, so its text is the size a browser gives it on a
+// retina display; 1x cells stay 1:1, and --scale overrides the choice. The
+// loop reports the scale to scripts.
+func TestHiDPICellsLayOutAtDeviceScale(t *testing.T) {
+	page := `<body style="margin:0">` + strings.Repeat(`<p style="height:1000px">long CSS text</p>`, 20)
+	m, f := fillModel(t, 200, 40, 19, 37, page)
+	if m.deviceScale() != 2 || m.layoutWidth != 1900 || f.Painted.Plan.Scale != 2 || f.Painted.Image.Bounds().Dx() != 3800 {
+		t.Fatalf("19x37 cells: scale %g, layout %d px, plan scale %g, band %d px; want 2, 1900, 2, 3800", m.deviceScale(), m.layoutWidth, f.Painted.Plan.Scale, f.Painted.Image.Bounds().Dx())
+	}
+	if st := m.loop.Scale(); st != 2 {
+		t.Fatalf("loop scale %g, want 2", st)
+	}
+	m, f = fillModel(t, 200, 40, 10, 20, page)
+	if m.deviceScale() != 1 || m.layoutWidth != 2000 || f.Painted.Plan.Scale != 1 {
+		t.Fatalf("10x20 cells: scale %g, layout %d px, plan scale %g; want 1, 2000, 1", m.deviceScale(), m.layoutWidth, f.Painted.Plan.Scale)
+	}
+	m, f = fillModelScaled(t, 200, 40, 19, 37, 1, page)
+	if m.deviceScale() != 1 || m.layoutWidth != 3800 || f.Painted.Plan.Scale != 1 {
+		t.Fatalf("--scale 1 on 19x37 cells: scale %g, layout %d px, plan scale %g; want 1, 3800, 1", m.deviceScale(), m.layoutWidth, f.Painted.Plan.Scale)
+	}
+	// An odd device width rounds the CSS width up, so the band is cropped by a
+	// pixel rather than stretched.
+	m, f = fillModelScaled(t, 201, 40, 19, 37, 2, page)
+	if m.layoutWidth != 1910 || f.Painted.Image.Bounds().Dx() < 201*19 {
+		t.Fatalf("201x19 px at 2x: layout %d (want 1910), band %d px (want at least %d)", m.layoutWidth, f.Painted.Image.Bounds().Dx(), 201*19)
+	}
 }
 
 // A terminal wider than the Kitty placeholder grid still shows the page: the
@@ -55,11 +89,14 @@ func TestWideTerminalStaysWithinKittyPlaceholderGrid(t *testing.T) {
 	limit := nthtml.MaxKittyPlaceholderCells()
 	cols, cw := limit+17, 14
 	m, _ := fillModel(t, cols, 40, cw, 28, `<body style="margin:0">`+strings.Repeat(`<p style="height:1000px">long CSS text</p>`, 20))
+	if m.deviceScale() != 2 {
+		t.Fatalf("28 px cells should give a 2x scale, got %g", m.deviceScale())
+	}
 	if got := m.viewer.Bounds().Dx(); got != limit {
 		t.Fatalf("viewer spans %d columns, want the %d-column placeholder grid", got, limit)
 	}
-	if m.layoutWidth != limit*cw || documentWidth(m.viewer) != limit*cw {
-		t.Fatalf("layout width %d (documentWidth %d), want %d", m.layoutWidth, documentWidth(m.viewer), limit*cw)
+	if m.layoutWidth != limit*cw/2 || m.documentWidth() != limit*cw/2 {
+		t.Fatalf("layout width %d (documentWidth %d), want %d", m.layoutWidth, m.documentWidth(), limit*cw/2)
 	}
 	if m.viewer.PaintViewport().Cols != limit {
 		t.Fatalf("paint viewport plans %d columns", m.viewer.PaintViewport().Cols)

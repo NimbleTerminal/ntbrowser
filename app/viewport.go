@@ -98,7 +98,8 @@ func (m *Model) syncViewport() tea.Cmd {
 	}
 	m.loop.SetViewport(v)
 	if m.viewer != nil {
-		width := documentWidth(m.viewer)
+		m.loop.SetScale(m.deviceScale())
+		width := m.documentWidth()
 		if width != m.layoutWidth {
 			m.layoutWidth = width
 			m.loop.Resize(width)

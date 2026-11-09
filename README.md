@@ -194,7 +194,12 @@ the 297 columns one placeholder image can address and the layout width follows
 it (up to nthtml's 8192 px ceiling), so a wider terminal shows the page in its
 leftmost 297 columns instead of a refused, blank frame; the body of the view
 always fills the rows above the status lines, with a short page followed by
-its canvas colour. Before these bounds a podcast front page
+its canvas colour. On HiDPI cells the page is laid out at the device width
+divided by the device scale (`--scale`, automatic from the cell height) and
+the paint plan rasterises it at that scale, so a retina terminal shows
+browser-sized text instead of a page twice as wide and half as tall; the
+layout width is rounded up so a band is cropped, never stretched. Before
+these bounds a podcast front page
 peaked near 1 GiB of transient heap on a HiDPI full screen (a kernel scaler's
 scratch is 32 bytes per pixel) and tripped the heap guard; it now peaks under
 200 MiB.
@@ -327,6 +332,7 @@ supported.
 | `--max-media-bytes n` | Download cap for media (64 MiB) |
 | `--width px` | Initial document width; the terminal's pixel geometry takes over once known |
 | `--color-scheme auto\|light\|dark` | Page color scheme for `prefers-color-scheme` and `light-dark()`; `auto` (default) follows the terminal's reported background |
+| `--scale auto\|N` | Device pixels per CSS pixel (`window.devicePixelRatio`), 1 to 4; `auto` (default) picks a whole factor from the terminal's cell height: 1x up to 23 px, 2x up to 39 px, then 3x and 4x, so a HiDPI terminal gets pages at the size a browser gives them on a retina display |
 | `--frame-dom off/same-origin` | Bounded same-origin DOM sharing between enabled frames (default off) |
 | `--frames MODE` | Isolated iframe documents (default off) |
 | `--allow-frame SOURCE=DEST` | Repeatable frame origin pair, used with `--frames=allowlist` |
@@ -1051,8 +1057,9 @@ page's layout width, the viewport height in CSS pixels once the terminal's
 cell geometry is known, and the preferred color scheme: `width`/`height`
 with `min-`/`max-` and range syntax, `prefers-color-scheme`, `orientation`,
 `hover`/`pointer` (hover, fine), `prefers-reduced-motion` (no preference),
-`resolution` (1dppx), `display-mode: browser`, `and`/`not`/`only` and comma
-lists. Unknown features and media types other than `screen`/`all` are false.
+`resolution` and `-webkit-device-pixel-ratio` (the device scale, also
+`window.devicePixelRatio`), `display-mode: browser`, `and`/`not`/`only` and
+comma lists. Unknown features and media types other than `screen`/`all` are false.
 `matches` is live, and lists fire `change` (also through `addListener`) when
 a resize or `--color-scheme` switch flips them, as one watchdog entry. At most
 256 lists live per page. Sites that pick their dark theme in script, as

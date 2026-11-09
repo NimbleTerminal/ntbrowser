@@ -74,7 +74,7 @@ func TestSearchFormEndToEnd(t *testing.T) {
 	}
 	isFrame := func(msg tea.Msg) bool {
 		f, ok := msg.(loop.FrameMsg)
-		return ok && f.Result != nil && f.Result.Bounds().Dx() == documentWidth(m.viewer) && m.frameInputReady()
+		return ok && f.Result != nil && f.Result.Bounds().Dx() == m.documentWidth() && m.frameInputReady()
 	}
 	pump("first frame", isFrame)
 
