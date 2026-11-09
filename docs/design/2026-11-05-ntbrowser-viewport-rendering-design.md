@@ -133,6 +133,19 @@ source band's scaled allocation by `Result.Paint`'s document pixel limit. Apply
 these caps before allocation, including rounding at the rectangle edges. Glyph
 transport uses the same bounded-source contract with its own raster geometry.
 
+**Host raster budget (2026-11-08).** `app` sets the picture's `MaxRasterPixels`
+to two screens of terminal pixels, one screen on viewports above 4 Mpx, never
+above `ntpicture.MaxImagePixels` (`rasterBudget`), and keeps it current on
+resize through `Model.Update`'s deferred viewport sync. The first band uses
+the cell size the terminal session has already probed instead of glyph
+geometry, which the transport would otherwise upscale tenfold. The local
+nthtml's `presentPainted` hands the picture a band of exactly the raster's
+size (`fitBand`: rounding excess cropped as a sub-image, a short last band
+stretched once bilinearly), because ntpicture copies an equal-sized opaque
+image but resamples any other size through a kernel scaler whose scratch is
+32 bytes per pixel. Measured on the fallthrough.fm front page: 366 → 122 MiB
+peak at 1800×1200, 1007 → 166 MiB at 3960×2520.
+
 Preserve the viewer's current zoom range. Clamp **paint scale**, not logical
 zoom, to `[1/16, 16]`; the transport performs the remaining resampling. At 64x
 zoom paint at 16x and upscale by four. For a 4096 px page fitted into 80 glyph

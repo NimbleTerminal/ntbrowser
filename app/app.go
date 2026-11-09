@@ -311,8 +311,14 @@ func (m *Model) admit(href string, form bool, script ...bool) tea.Cmd {
 	return m.navigate(href, pushNew, m.nav == NavFree)
 }
 
-func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	defer m.syncViewport()
+func (m *Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
+	// The loop's paint viewport follows every message; a raster-budget change
+	// on the viewer's picture rides along with the message's own commands.
+	defer func() {
+		if sync := m.syncViewport(); sync != nil {
+			cmd = tea.Batch(cmd, sync)
+		}
+	}()
 	// Ctrl+C belongs to the host, before search, editors, overlays or page
 	// dispatch. A second press bypasses pending graphics shutdown commands.
 	if key, ok := msg.(tea.KeyPressMsg); ok && key.String() == "ctrl+c" {

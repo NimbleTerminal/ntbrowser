@@ -317,7 +317,7 @@ func TestFrameKeepsScrollWithFocus(t *testing.T) {
 	m := newModel(t, NavFree)
 	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 2, Result: renderTall(t, `<p><input id=q></p>`)}))
 	m.Update(textFocus("q", "Search", false))
-	m.viewer.Pan(0, 800)
+	m.viewer.Pan(0, 300) // within the resident band (three screens), so the pan presents at once
 	before, ok := m.viewer.DocumentViewport()
 	if !ok || before.Min.Y == 0 {
 		t.Fatalf("viewport %v %v", before, ok)

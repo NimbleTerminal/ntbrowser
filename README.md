@@ -184,6 +184,15 @@ two-second deadline. Search, selection, focus and hit-testing retain global CSS
 coordinates. While painting is pending, the previous band stays visible; input
 against an outdated DOM is rejected. DOM/layout limits still apply, and TTY uses
 the whole text layout. See [the viewport design](docs/design/2026-11-05-ntbrowser-viewport-rendering-design.md).
+
+The resident band is bounded to two screens of terminal pixels, one screen on
+viewports above 4 Mpx, through the picture's raster cap; the first band is
+painted at the terminal's probed cell size rather than glyph resolution; and
+the band handed to the transport is exactly the raster's size, so no frame is
+resampled on its way to the terminal. Before these bounds a podcast front page
+peaked near 1 GiB of transient heap on a HiDPI full screen (a kernel scaler's
+scratch is 32 bytes per pixel) and tripped the heap guard; it now peaks under
+200 MiB.
 It requires a future nthtml viewer API; the `-chunked` flag does not enable it.
 
 ## Release binaries
@@ -427,9 +436,14 @@ reported as a page syntax error.
 
 The heap guard defaults to 512 MiB in glynx and 256 MiB in ntbrowser, measured
 as **process-wide Go heap**, including the renderer. Set `--heap-budget-mib=768`
-to override it (64–2048 MiB). It collects garbage and rechecks before disabling scripting, then
-reports the measured bytes and budget. This is not a per-script memory meter;
-the last rendered page remains available when scripting is disabled.
+to override it (64–2048 MiB). A sample above the budget is followed by a
+collection and a second sample; a heap still above the budget starts a
+one-second grace, reported as a `warn` status line, and the host rechecks when
+the grace ends. Scripting is disabled, with the measured bytes and budget, only
+if the heap is still above the budget then: a frame being encoded for the
+terminal cannot disable a healthy page, while a retained allocation bomb is
+still disabled one second later. This is not a per-script memory meter; the
+last rendered page remains available when scripting is disabled.
 
 
 | Threat | Control | Enforced in |

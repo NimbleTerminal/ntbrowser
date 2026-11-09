@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+- Fix a podcast front page (fallthrough.fm) disabling its own scripts with
+  "heap budget exceeded": the painted band was a pixel or two larger than the
+  Kitty raster, so ntpicture resampled every frame through a kernel scaler
+  whose scratch buffer is 32 bytes per pixel (hundreds of MiB on a HiDPI
+  screen), the first band was painted at glyph resolution and upscaled
+  tenfold, and the band was unbounded up to 283 rows. The band is now bounded
+  to two screens of terminal pixels (one above 4 Mpx viewports), the first
+  band is painted at the probed cell size, and the local nthtml hands the
+  transport an exact-size band. Replayed peaks fell from 366 MiB to 122 MiB
+  on a 1800×1200 terminal and from 1007 MiB to 166 MiB at 3960×2520.
+
+- Give the heap guard a one-second grace: a process heap still above the
+  budget after collection warns and schedules a host recheck instead of
+  disabling scripting at once, and only a heap still over budget at the
+  recheck disables the page. The host's own frame encoding can no longer
+  kill a healthy page; a retained allocation bomb is still dropped. The
+  sandbox host interface gains the private, page-bound `Later` hook.
+
 - Add user guides for both binaries, `docs/glynx-guide.md` and
   `docs/ntbrowser-guide.md` (keys, address entry, profiles, what is kept
   between runs and where, `--safe`, resetting state, diagnostics), linked from

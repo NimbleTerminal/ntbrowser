@@ -141,6 +141,21 @@ Concurrent renderer allocations can still contribute to that sample: this is a
 process-pressure guard, not allocation attribution or a hard memory cap. The Go
 code snapshots below predate this clarification.
 
+**Grace (2026-11-08).** A frame being encoded for the terminal (the Kitty
+raster, its retained copy and compressed frames, plus a kernel scaler's scratch
+when a band had to be resampled) kept the process heap above the budget for a
+few hundred milliseconds and disabled scripting on a healthy podcast page. A
+sample still above `HeapBudget` after the collection now starts `HeapGrace`
+(default 1 s, `Config.HeapGrace`), logs one `warn`, and schedules a recheck
+through a new host hook, `Host.Later(delay, fn)`: host-private, never visible
+or cancellable from the page, not counted against its timers, and discarded
+when the page is replaced or dropped. The page is disabled only when a check
+during or after the grace, including that recheck, still finds the heap over
+budget; a sample back under budget ends the grace. A retained allocation bomb
+is therefore disabled one grace later rather than immediately; the memory
+limit remains the soft last layer in between. The loop runs its usual
+post-task handling after the recheck so a page disabled there is dropped.
+
 ## 6. Deliverable 1 — the sandbox (`jsvm/sandbox.go`)
 
 What each hardening step defends against:
