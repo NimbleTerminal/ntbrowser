@@ -7,6 +7,7 @@ import (
 	"image"
 
 	"nimbleterminal.dev/nthtml"
+	"nimbleterminal.dev/nthtml/document"
 	"nimbleterminal.dev/ntpicture"
 )
 
@@ -20,8 +21,10 @@ func cellToDocument(m *nthtml.Model, p image.Point) (image.Rectangle, bool) {
 
 // documentWidth is the CSS-pixel width the loop should lay pages out at for
 // this viewer. It uses terminal cell metrics rather than a resident band's
-// raster dimensions, or ten pixels per column in glyph fallback,
-// clamped to [32, 4096].
+// raster dimensions, or ten pixels per column in glyph fallback, clamped to
+// nthtml's width bounds. The viewer's columns are already bounded by the
+// Kitty placeholder grid (pictureCols), so the layout width matches the
+// band the transport can show cell for cell.
 func documentWidth(m *nthtml.Model) int {
 	cols := m.Bounds().Dx()
 	w := cols * 10
@@ -31,5 +34,5 @@ func documentWidth(m *nthtml.Model) int {
 			w = cols * cw
 		}
 	}
-	return max(32, min(4096, w))
+	return max(document.MinWidth, min(document.MaxWidth, w))
 }

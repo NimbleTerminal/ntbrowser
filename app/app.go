@@ -516,7 +516,7 @@ func (m *Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 			opts.Session = m.session
 			m.viewer = nthtml.NewWithOptions(v.Result, opts)
 			m.resetView = false
-			cmd := tea.Batch(m.viewer.Init(), m.viewer.SetBounds(0, 0, m.cols, m.viewRows()))
+			cmd := tea.Batch(m.viewer.Init(), m.viewer.SetBounds(0, 0, m.pictureCols(), m.viewRows()))
 			m.loop.Resize(documentWidth(m.viewer))
 			return m, tea.Batch(cmd, m.finishChunk(), m.applyRing(false))
 		}
@@ -778,7 +778,7 @@ func (m *Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 			m.sendSize()
 		}
 		if m.viewer != nil {
-			cmd := tea.Batch(media, m.viewer.SetBounds(0, 0, v.Width, m.viewRows()), m.viewer.Update(msg))
+			cmd := tea.Batch(media, m.viewer.SetBounds(0, 0, m.pictureCols(), m.viewRows()), m.viewer.Update(msg))
 			m.loop.Resize(documentWidth(m.viewer)) // re-flow at the terminal's real pixel width
 			return m, cmd
 		}
@@ -854,6 +854,12 @@ func (m *Model) View() tea.View {
 		body = m.media.view()
 	} else if m.viewer != nil {
 		body = m.viewer.View()
+	}
+	// The body always spans the rows above the status lines, so they sit at
+	// the bottom of the terminal while a page loads, under a short page, or
+	// beside a picture narrower than the terminal.
+	if rows, have := m.viewRows(), strings.Count(body, "\n")+1; have < rows {
+		body += strings.Repeat("\n", rows-have)
 	}
 	// Everything on these two lines passed clean() when stored; truncation
 	// only measures width. No page text reaches here unfiltered.

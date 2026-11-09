@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Fill the terminal at every size. A terminal wider than the Kitty
+  placeholder grid (297 columns) showed no page at all, because the
+  transport refuses a placement it cannot address; the viewer now spans at
+  most `nthtml.MaxKittyPlaceholderCells` columns and the page is laid out at
+  exactly that width (the layout ceiling follows `document.MaxWidth`,
+  8192 px, so HiDPI cells fit). A page shorter than the terminal pulled the
+  status and help lines up under it, leaving the rest of the window empty;
+  the view now keeps the terminal's height, with the rows below a short page
+  in the page's canvas colour (`TestWideTerminalStaysWithinKittyPlaceholderGrid`,
+  `TestShortPageKeepsStatusLinesAtBottom`).
+
 - Add `getElementsByClassName` on documents and elements (every listed
   class must match; a static array). hn.js stopped at it once its top-level
   `onclick` declaration was accepted.

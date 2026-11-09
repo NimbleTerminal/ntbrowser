@@ -25,7 +25,10 @@ glynx --show-profile              # prints the effective permissions and exits
 Pages are drawn as images in a terminal that supports the Kitty graphics
 protocol (rex, kitty, Ghostty, WezTerm and others); elsewhere glynx falls back
 to text cells. The terminal's pixel geometry sets the page width once known,
-and `--width` sets the starting width.
+and `--width` sets the starting width. One Kitty image can span at most 297
+columns, so on a wider terminal the page uses the leftmost 297 and the rest
+stays blank; a page shorter than the window is followed by its own background
+colour.
 
 ## Keys
 

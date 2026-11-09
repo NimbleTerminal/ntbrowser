@@ -37,6 +37,25 @@ func rasterBudget(cols, rows, cellW, cellH int) int {
 	return int(min(budget, int64(ntpicture.MaxImagePixels)))
 }
 
+// pictureCols is the number of terminal columns the page picture may span:
+// every column in glyph fallback, and at most the Kitty placeholder grid when
+// the picture is (or the probed terminal will be) Kitty, where a wider
+// placement is refused by the transport and would leave the page blank. The
+// columns beyond it stay empty; the status lines still use the full width.
+func (m *Model) pictureCols() int {
+	cols := max(1, m.cols)
+	kitty := false
+	if m.viewer != nil {
+		kitty = m.viewer.Picture().Mode() == ntpicture.PictureKitty
+	} else if m.session != nil {
+		kitty = m.session.Snapshot().Kitty == ntpicture.KittyCapabilitySupported
+	}
+	if kitty {
+		cols = min(cols, nthtml.MaxKittyPlaceholderCells())
+	}
+	return cols
+}
+
 // cellSize is the terminal cell geometry the next paint should assume: the
 // viewer's picture once one exists, else the probed terminal session, so the
 // first band is painted at Kitty resolution instead of glyph resolution and
@@ -64,7 +83,7 @@ func (m *Model) syncViewport() tea.Cmd {
 		return nil
 	}
 	var cmd tea.Cmd
-	v := nthtml.PaintViewport{Cols: m.cols, Rows: m.viewRows()}
+	v := nthtml.PaintViewport{Cols: m.pictureCols(), Rows: m.viewRows()}
 	v.CellWidth, v.CellHeight = m.cellSize()
 	v.MaxRasterPixels = rasterBudget(v.Cols, v.Rows, v.CellWidth, v.CellHeight)
 	if m.viewer != nil && m.cssPainted {
@@ -106,11 +125,11 @@ func (m *Model) installCSSFrame(v loop.FrameMsg) tea.Cmd {
 		opts := viewerOptions
 		opts.Session = m.session
 		cw, ch := m.cellSize()
-		opts.Picture.Render.MaxRasterPixels = rasterBudget(m.cols, m.viewRows(), cw, ch)
+		opts.Picture.Render.MaxRasterPixels = rasterBudget(m.pictureCols(), m.viewRows(), cw, ch)
 		m.viewer = nthtml.NewWithOptions(nil, opts)
 		m.cssPainted = true
 		m.viewerInitialized = false
-		m.viewer.SetBounds(0, 0, m.cols, m.viewRows())
+		m.viewer.SetBounds(0, 0, m.pictureCols(), m.viewRows())
 	}
 	cmd, err := m.viewer.SetPaintedResult(*v.Painted, !m.resetView)
 	if err != nil {

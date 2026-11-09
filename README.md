@@ -189,7 +189,12 @@ The resident band is bounded to two screens of terminal pixels, one screen on
 viewports above 4 Mpx, through the picture's raster cap; the first band is
 painted at the terminal's probed cell size rather than glyph resolution; and
 the band handed to the transport is exactly the raster's size, so no frame is
-resampled on its way to the terminal. Before these bounds a podcast front page
+resampled on its way to the terminal. In Kitty mode the viewer spans at most
+the 297 columns one placeholder image can address and the layout width follows
+it (up to nthtml's 8192 px ceiling), so a wider terminal shows the page in its
+leftmost 297 columns instead of a refused, blank frame; the body of the view
+always fills the rows above the status lines, with a short page followed by
+its canvas colour. Before these bounds a podcast front page
 peaked near 1 GiB of transient heap on a HiDPI full screen (a kernel scaler's
 scratch is 32 bytes per pixel) and tripped the heap guard; it now peaks under
 200 MiB.

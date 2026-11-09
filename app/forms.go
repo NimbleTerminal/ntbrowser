@@ -100,7 +100,7 @@ func (m *Model) resizeIfPanel(before int) tea.Cmd {
 	if m.viewer == nil || before == m.panelRows() {
 		return nil
 	}
-	return m.viewer.SetBounds(0, 0, m.cols, m.viewRows())
+	return m.viewer.SetBounds(0, 0, m.pictureCols(), m.viewRows())
 }
 
 // startEdit opens the editor on the focused field, seeded with its current
