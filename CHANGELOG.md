@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Define the global object's event handler accessors (`onclick`, `onload`,
+  …) as configurable, so a page's top-level `function onclick() {}` (hn.js)
+  shadows the accessor as it does in a browser instead of throwing "Cannot
+  redefine global function".
+
 - Accept every JavaScript MIME type essence for scripts, including the
   legacy `application/x-javascript` that duckduckgo.com and Adobe Launch
   still serve; add `URL` and `URLSearchParams` (WHATWG parsing and

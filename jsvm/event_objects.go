@@ -211,8 +211,9 @@ func (s *Sandbox) createLegacyEvent(name string) goja.Value {
 	return event
 }
 func (s *Sandbox) bindEventHandlers(p *goja.Object) {
+	global := p == s.vm.GlobalObject()
 	for _, typ := range strings.Fields("abort click dblclick auxclick contextmenu keydown keyup keypress mousedown mouseup mousemove mouseover mouseout mouseenter mouseleave pointerdown pointerup pointermove pointercancel touchstart touchmove touchend wheel input beforeinput change submit reset focus blur focusin focusout load error resize scroll message messageerror online offline hashchange popstate visibilitychange readystatechange DOMContentLoaded pageshow pagehide beforeunload unload animationstart animationend transitionend unhandledrejection rejectionhandled") {
-		s.accessor(p, "on"+strings.ToLower(typ), func(t goja.Value) goja.Value {
+		s.accessorWith(p, "on"+strings.ToLower(typ), func(t goja.Value) goja.Value {
 			st := s.brand(t, "EventTarget")
 			bag := st.Get("handlers").(*goja.Object)
 			record, _ := bag.Get(typ).(*goja.Object)
@@ -267,6 +268,6 @@ func (s *Sandbox) bindEventHandlers(p *goja.Object) {
 			s.addEventListener(w, typ, listener, goja.Undefined())
 			_ = r.Set("listener", listener)
 			_ = bag.Set(typ, r)
-		})
+		}, global)
 	}
 }

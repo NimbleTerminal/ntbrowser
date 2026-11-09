@@ -222,12 +222,24 @@ func (s *Sandbox) method(obj *goja.Object, name string, fn func(call goja.Functi
 }
 
 func (s *Sandbox) accessor(obj *goja.Object, name string, get func(goja.Value) goja.Value, set func(goja.Value, goja.Value)) {
+	s.accessorWith(obj, name, get, set, false)
+}
+
+// accessorWith defines an accessor; configurable ones let page script
+// redefine the property, which a top-level `function onclick() {}` must be
+// able to do on the global object (hn.js declares one) just as it shadows
+// the inherited handler in a browser.
+func (s *Sandbox) accessorWith(obj *goja.Object, name string, get func(goja.Value) goja.Value, set func(goja.Value, goja.Value), configurable bool) {
 	var setter goja.Value
 	if set != nil {
 		setter = s.vm.ToValue(func(call goja.FunctionCall) goja.Value { set(call.This, call.Argument(0)); return goja.Undefined() })
 	}
 	getter := s.vm.ToValue(func(call goja.FunctionCall) goja.Value { return get(call.This) })
-	_ = obj.DefineAccessorProperty(name, getter, setter, goja.FLAG_FALSE, goja.FLAG_TRUE)
+	conf := goja.FLAG_FALSE
+	if configurable {
+		conf = goja.FLAG_TRUE
+	}
+	_ = obj.DefineAccessorProperty(name, getter, setter, conf, goja.FLAG_TRUE)
 }
 
 func (s *Sandbox) buildElementProto() *goja.Object {

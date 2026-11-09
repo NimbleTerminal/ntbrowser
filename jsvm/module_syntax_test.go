@@ -55,3 +55,18 @@ func TestUnsupportedSyntaxIsClassified(t *testing.T) {
 		t.Fatalf("a real syntax error must stay an error: %v", err)
 	}
 }
+
+// A page may declare a top-level function named like a global event handler
+// (hn.js has `function onclick`): the declaration shadows the accessor
+// instead of throwing.
+func TestGlobalFunctionMayShadowHandlerAccessor(t *testing.T) {
+	tree, _ := dom.Parse(strings.NewReader("<body></body>"), dom.Limits{})
+	s := New(Config{}, tree, &nopHost{})
+	t.Cleanup(s.Close)
+	if err := s.Eval("hn.js", "function onclick(e){ return 1 } function onload(){}"); err != nil {
+		t.Fatalf("global function declaration: %v", err)
+	}
+	if err := s.Eval("check.js", "if (typeof onclick !== 'function' || onclick() !== 1) throw new Error('shadow lost')"); err != nil {
+		t.Fatal(err)
+	}
+}
