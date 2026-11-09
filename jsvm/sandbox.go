@@ -61,6 +61,7 @@ type Config struct {
 	MaxTimers        int                           // live timers (default 256)
 	MaxListeners     int                           // total event listeners (default 1024)
 	HeapBudget       uint64                        // process heap bytes after GC above which this page is disabled (default 256 MiB)
+	HeapGrace        time.Duration                 // how long the heap may stay above HeapBudget before the page is disabled (default 1s)
 	ClockResolution  time.Duration                 // minimum clock resolution (default 10ms), shared by Date, performance and rAF
 	Clock            func() time.Time
 	Rand             func() float64
@@ -82,6 +83,10 @@ type Host interface {
 	// Fetch starts a request and later calls done exactly once on the VM goroutine.
 	Fetch(req FetchRequest, done func(FetchResponse, error)) error
 	Log(level string, line string)
+	// Later runs fn on the VM goroutine after delay, outside any entry, unless
+	// the page has been replaced or dropped. It is private to the host: pages
+	// cannot see or cancel it, and it is not counted against their timers.
+	Later(delay time.Duration, fn func())
 }
 
 type FetchRequest struct {
@@ -153,6 +158,7 @@ type Sandbox struct {
 	host              Host
 	tree              *dom.Tree
 	strikes           int
+	heapOver          time.Time // first over-budget sample after a collection; zero while under budget
 	disabled          bool
 	running           bool
 
@@ -267,6 +273,9 @@ func New(cfg Config, tree *dom.Tree, host Host) *Sandbox {
 	}
 	if cfg.HeapBudget == 0 {
 		cfg.HeapBudget = 256 << 20
+	}
+	if cfg.HeapGrace <= 0 {
+		cfg.HeapGrace = time.Second
 	}
 	origin, now := prepareClocks(&cfg)
 	if cfg.Rand == nil {
@@ -742,15 +751,48 @@ func processHeapBytes() uint64 {
 	return 0
 }
 
+// checkHeap disables the page when the process heap stays above HeapBudget
+// for HeapGrace. The metric is process-wide: the host's own frame encoding
+// (a terminal raster, its retained copy and compressed frames, alive for a
+// few hundred milliseconds while the next frame starts) can push one sample
+// over the budget, so one high sample only starts the grace and schedules a
+// recheck through the host. A retained allocation bomb is still over budget at
+// that recheck and is disabled then; a sample back under budget ends the grace.
 func (s *Sandbox) checkHeap() {
+	if s.disabled || s.vm == nil {
+		return
+	}
 	if processHeapBytes() <= s.cfg.HeapBudget {
+		s.heapOver = time.Time{}
 		return
 	}
 	runtime.GC()
-	if used := processHeapBytes(); used > s.cfg.HeapBudget {
-		s.disabled = true
-		s.host.Log("error", fmt.Sprintf("scripting disabled: heap budget exceeded (process heap %d bytes after GC; budget %d bytes)", used, s.cfg.HeapBudget))
+	used := processHeapBytes()
+	if used <= s.cfg.HeapBudget {
+		s.heapOver = time.Time{}
+		return
 	}
+	now := time.Now()
+	if s.heapOver.IsZero() {
+		s.heapOver = now
+		s.host.Log("warn", fmt.Sprintf("heap budget exceeded (process heap %d bytes after GC; budget %d bytes); scripting is disabled if it stays above the budget for %v", used, s.cfg.HeapBudget, s.cfg.HeapGrace))
+		s.host.Later(s.cfg.HeapGrace, s.recheckHeap)
+		return
+	}
+	if now.Sub(s.heapOver) < s.cfg.HeapGrace {
+		return
+	}
+	s.disabled = true
+	s.host.Log("error", fmt.Sprintf("scripting disabled: heap budget exceeded for %v (process heap %d bytes after GC; budget %d bytes)", s.cfg.HeapGrace, used, s.cfg.HeapBudget))
+}
+
+// recheckHeap is the host-scheduled end of a heap grace. Inside an entry the
+// entry's own check follows; a closed or disabled runtime has nothing to check.
+func (s *Sandbox) recheckHeap() {
+	if s.running {
+		return
+	}
+	s.checkHeap()
 }
 
 // sandboxParserOptions is the single definition of how page source is parsed.

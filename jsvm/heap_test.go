@@ -14,32 +14,90 @@ import (
 	"nimbleterminal.dev/ntbrowser/dom"
 )
 
-// Crossing HeapBudget inside one slice disables the page and says why.
-func TestHeapBudgetDisablesPage(t *testing.T) {
+// heapBomb is a sandbox 24 MiB below a budget the page can cross with retained
+// objects, with a short grace so tests can wait it out.
+func heapBomb(t *testing.T, grace time.Duration) (*Sandbox, *nopHost) {
+	t.Helper()
 	runtime.GC() // a previous iteration's runtime is garbage; measure after it is gone
 	sample := []metrics.Sample{{Name: "/memory/classes/heap/objects:bytes"}}
 	metrics.Read(sample)
 	budget := sample[0].Value.Uint64() + 24<<20 // 24 MiB above where we stand
 	tree, _ := dom.Parse(strings.NewReader("<body></body>"), dom.Limits{})
 	host := &nopHost{}
-	s := New(Config{HeapBudget: budget, Slice: 30 * time.Second}, tree, host) // the race detector makes the bomb ~10× slower; the slice is not under test
+	s := New(Config{HeapBudget: budget, HeapGrace: grace, Slice: 30 * time.Second}, tree, host) // the race detector makes the bomb ~10× slower; the slice is not under test
 	// The heap metric is process-wide (that is the spec's design: one budget
 	// per process, checked per page), so this runtime's garbage must be gone
 	// before the next test measures anything: close it and collect.
 	t.Cleanup(func() { s.Close(); runtime.GC() })
 	// Well over 24 MiB of live objects, kept reachable so the GC cannot help.
-	err := s.Eval("bomb.js", `globalThis.keep = []; for (let i = 0; i < 1<<15; i++) keep.push(new Array(64).fill(i));`)
-	if err != nil {
+	if err := s.Eval("bomb.js", `globalThis.keep = []; for (let i = 0; i < 1<<15; i++) keep.push(new Array(64).fill(i));`); err != nil {
 		t.Fatalf("the slice itself must finish: %v", err)
 	}
+	return s, host
+}
+
+// Crossing HeapBudget starts a grace: the page is warned, the host is asked to
+// recheck after HeapGrace, and a page still over budget then is disabled and
+// says why. Nothing is disabled on the first high sample alone.
+func TestHeapBudgetDisablesPageAfterGrace(t *testing.T) {
+	const grace = 20 * time.Millisecond
+	s, host := heapBomb(t, grace)
+	if s.Disabled() {
+		t.Fatal("page disabled on the first over-budget sample")
+	}
+	if host.later == nil || host.laterDelay != grace {
+		t.Fatalf("no host recheck scheduled for the grace: delay=%v", host.laterDelay)
+	}
+	if line := strings.Join(host.lines, "\n"); !strings.Contains(line, "warn: heap budget exceeded") || !strings.Contains(line, "stays above the budget for 20ms") {
+		t.Fatalf("no warning: %v", host.lines)
+	}
+	// Still over budget inside the grace: another entry does not disable yet.
+	if err := s.Eval("during.js", `1`); err != nil || s.Disabled() {
+		t.Fatalf("disabled inside the grace: err=%v disabled=%v", err, s.Disabled())
+	}
+	time.Sleep(grace + 5*time.Millisecond)
+	host.later()
 	if !s.Disabled() {
-		t.Fatal("heap budget exceeded but page not disabled")
+		t.Fatal("heap budget exceeded for the whole grace but page not disabled")
 	}
 	if err := s.Eval("after.js", `1`); err != ErrDisabled {
 		t.Fatalf("Eval after heap disable: %v", err)
 	}
-	if line := strings.Join(host.lines, "\n"); !strings.Contains(line, "heap budget exceeded") || !strings.Contains(line, "process heap") || !strings.Contains(line, "after GC; budget") {
+	if line := strings.Join(host.lines, "\n"); !strings.Contains(line, "error: scripting disabled: heap budget exceeded for 20ms") || !strings.Contains(line, "process heap") || !strings.Contains(line, "after GC; budget") {
 		t.Fatalf("no log line: %v", host.lines)
+	}
+}
+
+// A sample back under budget before the grace ends is forgiven: the host's own
+// frame encoding inflates the process heap for a few hundred milliseconds and
+// must not disable a healthy page. The recheck then finds nothing to do, and a
+// later overrun starts a fresh grace instead of inheriting the old start.
+func TestHeapBudgetTransientOverrunIsForgiven(t *testing.T) {
+	const grace = 20 * time.Millisecond
+	s, host := heapBomb(t, grace)
+	if err := s.Eval("release.js", `globalThis.keep = null`); err != nil {
+		t.Fatal(err)
+	}
+	if s.Disabled() || !s.heapOver.IsZero() {
+		t.Fatalf("heap back under budget but grace still running: disabled=%v", s.Disabled())
+	}
+	time.Sleep(grace + 5*time.Millisecond)
+	host.later()
+	if s.Disabled() {
+		t.Fatalf("recheck disabled a page that was back under budget: %v", host.lines)
+	}
+	for _, line := range host.lines {
+		if strings.HasPrefix(line, "error:") {
+			t.Fatalf("error reported for a transient overrun: %v", host.lines)
+		}
+	}
+	// A new overrun long after the first starts its own grace.
+	host.later = nil
+	if err := s.Eval("bomb2.js", `globalThis.keep = []; for (let i = 0; i < 1<<15; i++) keep.push(new Array(64).fill(i));`); err != nil {
+		t.Fatal(err)
+	}
+	if s.Disabled() || host.later == nil {
+		t.Fatalf("second overrun: disabled=%v rescheduled=%v", s.Disabled(), host.later != nil)
 	}
 }
 

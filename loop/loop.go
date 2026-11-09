@@ -1352,6 +1352,26 @@ func (h *host) ClearTask(id int) {
 	}
 }
 
+// Later runs fn on the VM goroutine after delay for the current page only: a
+// replaced or dropped page's callback is discarded. The sandbox uses it to end
+// a heap grace; the usual post-task handling then drops a page it disabled.
+func (h *host) Later(delay time.Duration, fn func()) {
+	l := (*Loop)(h)
+	page := l.page
+	if page == nil {
+		return
+	}
+	time.AfterFunc(delay, func() {
+		l.tryPost(func() {
+			if l.page != page || page.killed {
+				return
+			}
+			fn()
+			l.afterTask()
+		})
+	})
+}
+
 // RequestFrame schedules a frame even when the tree is clean, so a page that
 // only animates through rAF (reading state, drawing later) still gets its
 // callback at the frame cadence.

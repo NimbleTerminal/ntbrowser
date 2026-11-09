@@ -39,6 +39,9 @@ type nopHost struct {
 	lines    []string
 	fetchErr error  // when set, Fetch fails with it once the test calls pending()
 	pending  func() // the deferred completion, as the loop would deliver it later on the VM goroutine
+
+	laterDelay time.Duration // the host-private delay the sandbox asked for
+	later      func()        // its callback, run by the test when the delay would have elapsed
 }
 
 func (h *nopHost) SetTimer(time.Duration, bool, goja.Callable, []goja.Value) (int, bool) {
@@ -56,6 +59,9 @@ func (h *nopHost) Fetch(_ FetchRequest, done func(FetchResponse, error)) error {
 	return nil
 }
 func (h *nopHost) Log(level, line string) { h.lines = append(h.lines, level+": "+line) }
+func (h *nopHost) Later(delay time.Duration, fn func()) {
+	h.laterDelay, h.later = delay, fn
+}
 
 // TestGlobalSurface snapshots every global name scripts can see. A new name
 // here is a review event: it means the boundary grew.
