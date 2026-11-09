@@ -70,3 +70,18 @@ func TestGlobalFunctionMayShadowHandlerAccessor(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// getElementsByClassName matches every listed class on descendants only.
+func TestGetElementsByClassName(t *testing.T) {
+	tree, _ := dom.Parse(strings.NewReader(`<body class="a"><div class="a b" id="x"><span class="b a c" id="y"></span></div><p class="a" id="z"></p></body>`), dom.Limits{})
+	s := New(Config{}, tree, &nopHost{})
+	t.Cleanup(s.Close)
+	if err := s.Eval("cls.js", `
+		const ids = l => Array.from(l).map(e => e.id).join(',');
+		globalThis.out = [ids(document.getElementsByClassName('a')), ids(document.getElementsByClassName('a b')), ids(document.getElementById('x').getElementsByClassName('a')), document.getElementsByClassName('').length, document.getElementsByClassName('a').length].join('|')`); err != nil {
+		t.Fatal(err)
+	}
+	if got := s.vm.Get("out").String(); got != ",x,y,z|x,y|y|0|4" { // the body carries class a too
+		t.Fatalf("got %s", got)
+	}
+}

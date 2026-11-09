@@ -363,6 +363,9 @@ func (s *Sandbox) buildElementProto() *goja.Object {
 		}
 		return s.tagCollection(c.This, s.node(c.This), c.Argument(0).String())
 	})
+	s.method(p, "getElementsByClassName", func(c goja.FunctionCall) goja.Value {
+		return s.classCollection(s.node(c.This), c.Argument(0).String())
+	})
 	s.method(p, "querySelector", func(c goja.FunctionCall) goja.Value { return s.query(s.node(c.This), c.Argument(0).String(), false) })
 	s.method(p, "querySelectorAll", func(c goja.FunctionCall) goja.Value { return s.query(s.node(c.This), c.Argument(0).String(), true) })
 	s.bindEventTarget(p)
@@ -535,6 +538,9 @@ func (s *Sandbox) documentObject() *goja.Object {
 	_ = d.DefineDataPropertySymbol(s.nodeSym, vm.ToValue(int(s.tree.Root().ID())), goja.FLAG_FALSE, goja.FLAG_FALSE, goja.FLAG_FALSE)
 	s.strong[s.tree.Root().ID()] = d
 	s.weakW[s.tree.Root().ID()] = weak.Make(d)
+	s.method(d, "getElementsByClassName", func(c goja.FunctionCall) goja.Value {
+		return s.classCollection(s.tree.Root(), c.Argument(0).String())
+	})
 	s.method(d, "getElementsByTagName", func(c goja.FunctionCall) goja.Value {
 		if c.This != d {
 			panic(vm.NewTypeError("not a Document"))
@@ -640,3 +646,35 @@ func (s *Sandbox) SetFocus(id dom.NodeID) error {
 }
 
 func focusable(n *dom.Node) bool { return dom.Focusable(n) }
+
+// classCollection returns the descendants of root carrying every class in
+// the whitespace-separated list, as a static array (hn.js and most pages
+// only index or iterate the result). An empty list matches nothing.
+func (s *Sandbox) classCollection(root *dom.Node, classes string) goja.Value {
+	want := strings.Fields(classes)
+	if len(want) == 0 {
+		return s.vm.NewArray()
+	}
+	var out []any
+	dom.Walk(root, func(n *dom.Node) {
+		if n == root || n.Tag() == "" {
+			return
+		}
+		attr, _ := n.Attr("class")
+		have := strings.Fields(attr)
+		for _, w := range want {
+			found := false
+			for _, h := range have {
+				if h == w {
+					found = true
+					break
+				}
+			}
+			if !found {
+				return
+			}
+		}
+		out = append(out, s.wrap(n))
+	})
+	return s.vm.NewArray(out...)
+}

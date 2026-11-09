@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add `getElementsByClassName` on documents and elements (every listed
+  class must match; a static array). hn.js stopped at it once its top-level
+  `onclick` declaration was accepted.
+
 - Define the global object's event handler accessors (`onclick`, `onload`,
   …) as configurable, so a page's top-level `function onclick() {}` (hn.js)
   shadows the accessor as it does in a browser instead of throwing "Cannot
