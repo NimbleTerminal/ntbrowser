@@ -36,6 +36,7 @@ import (
 	"nimbleterminal.dev/ntbrowser/dom"
 	"nimbleterminal.dev/ntbrowser/jsvm"
 	"nimbleterminal.dev/ntbrowser/loop"
+	"nimbleterminal.dev/ntbrowser/netpolicy"
 	"nimbleterminal.dev/ntbrowser/profile"
 	"nimbleterminal.dev/ntbrowser/sandbox"
 	"nimbleterminal.dev/ntbrowser/subres"
@@ -497,7 +498,13 @@ func Run(command string) int {
 	subresCfg := subres.Config{Mode: mode, MaxSheetBytes: c.StylesheetBytes, MaxStylesheets: c.Stylesheets, MaxImageBytes: c.ImageBytes, MaxImages: c.Images}
 	cookieStore, cookieSaver := openCookieStore(c.Profile, cookieFile)
 	defer cookieSaver.Close() // the final snapshot, after the program has stopped
+	// One connection pool for the session: navigations, pages, subresources
+	// and derived script/frame fetchers reuse connections; admission stays
+	// per request (netpolicy.Pool).
+	pool := netpolicy.NewPool()
+	defer pool.Close()
 	policy := app.PolicyFor(c.Profile)
+	policy.Pool = pool
 	policy.Cookies = cookieStore
 	policy.Trace = trace
 	localStore, localSink := openLocalStore(c.Profile, storeFile)
@@ -515,6 +522,7 @@ func Run(command string) int {
 	m.SetDevTools(inspector)
 	m.SetDiagnostics(trace)
 	m.SetCookies(cookieStore)
+	m.SetPool(pool)
 	defer m.Cleanup()
 	program = tea.NewProgram(m)
 	m.SetEnforced(strengths["files"] == profile.StrengthOS)

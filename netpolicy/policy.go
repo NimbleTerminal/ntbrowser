@@ -28,6 +28,10 @@ import (
 // Policy is fixed per page load. The zero value denies everything, so a
 // misconfigured host fails closed.
 type Policy struct {
+	// Pool is the connection pool the fetcher dials through; the host shares
+	// one per session. nil gives the fetcher (and everything derived from it)
+	// a pool of its own. A pool confers no authority: see Pool.
+	Pool    *Pool
 	Cookies *cookies.Store
 	// Trace is a host-only observer, installed only when diagnostics is enabled.
 	Trace *diagnostics.Recorder
@@ -116,34 +120,11 @@ func New(p Policy) *Fetcher {
 	if p.MaxRedirects <= 0 {
 		p.MaxRedirects = 3
 	}
-	f := &Fetcher{p: p, sem: make(chan struct{}, p.MaxInFlight)}
-	dialer := &net.Dialer{Timeout: 5 * time.Second}
-	transport := &http.Transport{
-		Proxy:                 nil, // never consult HTTP_PROXY from the page's requests
-		ForceAttemptHTTP2:     true,
-		MaxIdleConns:          8,
-		IdleConnTimeout:       30 * time.Second,
-		TLSHandshakeTimeout:   5 * time.Second,
-		ResponseHeaderTimeout: p.Timeout,
-		// Resolve, vet every address, then dial the vetted IP. Vetting the
-		// hostname alone would allow DNS rebinding between check and connect.
-		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			host, port, err := net.SplitHostPort(addr)
-			if err != nil {
-				return nil, err
-			}
-			ips, err := net.DefaultResolver.LookupNetIP(ctx, "ip", host)
-			if err != nil {
-				return nil, err
-			}
-			for _, ip := range ips {
-				if !f.p.AllowPrivate && isForbiddenIP(net.IP(ip.Unmap().AsSlice())) {
-					return nil, fmt.Errorf("%w: %s resolves to %s", ErrDenied, host, ip)
-				}
-			}
-			return dialVetted(ctx, dialer.DialContext, network, ips, port)
-		},
+	if p.Pool == nil {
+		p.Pool = NewPool()
 	}
+	f := &Fetcher{p: p, sem: make(chan struct{}, p.MaxInFlight)}
+	transport := p.Pool.transport(p.AllowPrivate)
 	f.client = &http.Client{
 		Transport: cookies.Transport{Base: transport, Store: p.Cookies, Origin: p.Origin, Omit: func(r *http.Request) bool {
 			v, _ := r.Context().Value(cookieKindKey{}).(cookieRequestContext)
@@ -176,38 +157,43 @@ func New(p Policy) *Fetcher {
 }
 
 // Allowed is the single admission rule, shared by fetch() and navigation.
-func (f *Fetcher) Allowed(u *url.URL) error {
+func (f *Fetcher) Allowed(u *url.URL) error { return f.p.Allowed(u) }
+
+// Allowed is the admission rule itself: a pure function of the policy and
+// the URL. It opens nothing, so the host asks it directly when it only needs
+// the answer.
+func (p Policy) Allowed(u *url.URL) error {
 	if u.Scheme != "https" && u.Scheme != "http" {
 		return fmt.Errorf("%w: scheme %q", ErrDenied, u.Scheme)
 	}
 	if u.User != nil {
 		return fmt.Errorf("%w: credentials in URL", ErrDenied)
 	}
-	if f.p.NoDowngradeFrom == "https" && u.Scheme == "http" {
+	if p.NoDowngradeFrom == "https" && u.Scheme == "http" {
 		return fmt.Errorf("%w: mixed content %s", ErrDenied, u)
 	}
 	host := strings.ToLower(u.Hostname())
 	if host == "" || host == "localhost" || strings.HasSuffix(host, ".local") || strings.HasSuffix(host, ".internal") {
-		if !f.p.AllowPrivate {
+		if !p.AllowPrivate {
 			return fmt.Errorf("%w: host %q", ErrDenied, host)
 		}
 	}
-	if ip := net.ParseIP(host); ip != nil && !f.p.AllowPrivate && isForbiddenIP(ip) {
+	if ip := net.ParseIP(host); ip != nil && !p.AllowPrivate && isForbiddenIP(ip) {
 		return fmt.Errorf("%w: literal address %s", ErrDenied, host)
 	}
-	if f.p.AnyOrigin {
+	if p.AnyOrigin {
 		return nil
 	}
 	// Same origin means scheme + host + port, as in browsers.
-	if f.p.Origin != nil && f.p.Origin.Scheme == u.Scheme && strings.EqualFold(hostPort(f.p.Origin), hostPort(u)) {
+	if p.Origin != nil && p.Origin.Scheme == u.Scheme && strings.EqualFold(hostPort(p.Origin), hostPort(u)) {
 		return nil
 	}
-	for _, allowed := range f.p.AllowOrigins {
+	for _, allowed := range p.AllowOrigins {
 		if canonical, err := origin.Of(u.String()); err == nil && canonical == allowed {
 			return nil
 		}
 	}
-	for _, a := range f.p.AllowHosts {
+	for _, a := range p.AllowHosts {
 		a = strings.ToLower(a)
 		if a == host || (strings.HasPrefix(a, ".") && strings.HasSuffix(host, a)) {
 			return nil
@@ -591,17 +577,7 @@ func (f *Fetcher) ForScriptSources(base string, origins []string, any bool) *Fet
 		p.NoDowngradeFrom = u.Scheme
 	}
 
-	derived := New(p)
+	derived := New(p) // p carries the parent's Pool: derived fetchers reuse its connections
 	derived.sem = f.sem
 	return derived
-}
-
-// CloseScriptConnections releases idle connections of a per-request derived
-// script fetcher; active request and shared semaphore ownership are unchanged.
-func (f *Fetcher) CloseScriptConnections() {
-	if transport, ok := f.client.Transport.(cookies.Transport); ok {
-		if idle, ok := transport.Base.(interface{ CloseIdleConnections() }); ok {
-			idle.CloseIdleConnections()
-		}
-	}
 }

@@ -42,7 +42,6 @@ func (l *Loop) fetchScript(page *Page, generation uint64, src, integrity, cors s
 	}
 	run := func(fetcher *netpolicy.Fetcher) {
 		go func() {
-			defer fetcher.CloseScriptConnections()
 			response, err := fetcher.Script(page.ctx, src, integrity, cors)
 			l.post(func() {
 				if l.page != page || page.killed || l.navGen.Load() != generation {

@@ -222,14 +222,8 @@ func (l *Loop) ensureChildFrame(page *Page, spec jsvm.FrameSpec) (uint64, error)
 	l.cfg.frameHub.bind(f.id, nil, "null")
 	go func() {
 		body, base, opaque, scripts, fetcher, err := l.fetchFrame(ctx, page, spec)
-		if fetcher != nil {
-			fetcher.CloseScriptConnections()
-		}
 		l.post(func() {
 			if ctx.Err() != nil || l.page != page || page.killed || page.frames[spec.Node] != f || f.revision != revision {
-				if fetcher != nil {
-					fetcher.CloseScriptConnections()
-				}
 				return
 			}
 			if err != nil {
@@ -279,12 +273,7 @@ func (l *Loop) ensureChildFrame(page *Page, spec jsvm.FrameSpec) (uint64, error)
 			child := New(ctx, cfg, frameSink{parent: l, page: page, frame: f, revision: revision})
 			f.child = child
 			pageFetcher := fetcher.ForFramePage(base, cfg.Profile.Hosts, false)
-			go func() {
-				defer fetcher.CloseScriptConnections()
-				defer pageFetcher.CloseScriptConnections()
-				defer subFetcher.CloseScriptConnections()
-				child.Run()
-			}()
+			go child.Run()
 			child.LoadPage(body, base, pageFetcher)
 		})
 	}()

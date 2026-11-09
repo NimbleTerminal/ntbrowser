@@ -48,6 +48,7 @@ func policyFor(policy netpolicy.Policy, cfg subres.Config, base string) (netpoli
 		origin, downgrade = nil, ""
 	}
 	p := netpolicy.Policy{
+		Pool:            policy.Pool,
 		Trace:           policy.Trace,
 		Cookies:         policy.Cookies,
 		Origin:          origin,

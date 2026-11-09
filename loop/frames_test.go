@@ -105,10 +105,7 @@ func TestFrameEmbeddingPolicy(t *testing.T) {
 			p := externalProfile
 			p.Frames = profile.FramesOrigin
 			l, _, f := scriptTestLoop(t, p, server.URL)
-			_, _, _, _, derived, err := l.fetchFrame(context.Background(), &Page{Base: server.URL, Fetcher: f}, jsvm.FrameSpec{Src: "/child"})
-			if derived != nil {
-				derived.CloseScriptConnections()
-			}
+			_, _, _, _, _, err := l.fetchFrame(context.Background(), &Page{Base: server.URL, Fetcher: f}, jsvm.FrameSpec{Src: "/child"})
 			if (err == nil) != (header == "SAMEORIGIN") {
 				t.Fatalf("policy %s: %v", header, err)
 			}

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Reuse connections across a session. Every fetcher used to build its own
+  HTTP transport: the navigation, the page, its subresources and each
+  external script or frame dialed and handshook separately, so a page with
+  thirty scripts on one CDN made thirty TLS handshakes. Fetchers now dial
+  through one `netpolicy.Pool`; admission is unchanged and still evaluated
+  per request, and policies with and without `--allow-private` keep separate
+  transports so an unvetted connection is never handed to a vetted policy.
+  `Policy.Allowed` answers admission without building a fetcher
+  (`TestDerivedScriptFetchersReuseConnection`, `TestPoolSharedAcrossFetchers`,
+  `TestPoolSeparatesPrivateConnections`, `TestSessionPoolSharedByNavigationAndSubresources`).
+
 - Add a device scale (`--scale auto|1..4`). A HiDPI terminal reports cells
   twice as large as a 1x display, and glynx laid pages out at one CSS pixel
   per device pixel, so on a retina terminal every page was twice as wide and

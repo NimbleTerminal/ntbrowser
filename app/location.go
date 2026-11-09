@@ -8,7 +8,6 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"nimbleterminal.dev/ntbrowser/loop"
-	"nimbleterminal.dev/ntbrowser/netpolicy"
 	"nimbleterminal.dev/ntbrowser/profile"
 )
 
@@ -84,7 +83,7 @@ func (m *Model) scriptNavigate(v loop.ScriptNavigateMsg) tea.Cmd {
 	default:
 		return m.blockScriptNavigation("unknown gate")
 	}
-	if err := netpolicy.New(p).Allowed(u); err != nil {
+	if err := p.Allowed(u); err != nil {
 		return m.blockScriptNavigation(err.Error())
 	}
 	m.scriptNavCount++

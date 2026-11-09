@@ -321,7 +321,7 @@ func (m *Model) admit(href string, form bool, script ...bool) tea.Cmd {
 	case NavAllowlist:
 		p := m.policy
 		p.Origin = m.current
-		if err := netpolicy.New(p).Allowed(u); err != nil {
+		if err := p.Allowed(u); err != nil {
 			m.status = clean("blocked: " + err.Error())
 			return nil
 		}
@@ -980,6 +980,10 @@ func (m *Model) SetDiagnostics(r *diagnostics.Recorder) {
 		m.policy.Trace = r
 	}
 }
+
+// SetPool makes every fetcher the model builds (navigations and each page's
+// own) dial through the session's connection pool.
+func (m *Model) SetPool(p *netpolicy.Pool) { m.policy.Pool = p }
 
 func (m *Model) SetCookies(s *cookies.Store) {
 	if m.profile.Cookies == profile.CookiesSession {
