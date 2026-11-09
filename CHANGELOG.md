@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add `--page-bytes` (glynx 4 MiB, ntbrowser 1 MiB, 64 KiB to 8 MiB) for a
+  page's HTML body and the DOM built from it; the loop raises nthtml's input
+  cap to DOM plus host CSS within its 16 MiB ceiling. yahoo.com's front page
+  is over 1 MiB of HTML and was refused with "response too large".
+
 - Follow the terminal's background for the page's color scheme:
   `--color-scheme auto` (the default) asks the terminal for its background
   and lays the page out with `prefers-color-scheme: dark` and the dark branch

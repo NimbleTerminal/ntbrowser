@@ -23,6 +23,10 @@ import (
 // MaxExternalStyleBytes caps optional host-only stylesheet storage.
 const MaxExternalStyleBytes = 4 << 20
 
+// MaxTotalBytes is the most a host may raise TotalBytes to: nthtml's own
+// input ceiling, which the serialized tree must still fit.
+const MaxTotalBytes = 16 << 20
+
 // Limits bound what scripts can grow the tree into. Zero fields use defaults.
 // They are deliberately at or below nthtml's document.DefaultLimits so a
 // serialized tree can never exceed the renderer's own budget: Nodes and Depth
@@ -178,10 +182,12 @@ func limits(l Limits) Limits {
 	if l.Attrs > 0 && l.Attrs < d.Attrs {
 		d.Attrs = l.Attrs
 	}
-	if l.TotalBytes > 0 && l.TotalBytes < d.TotalBytes {
-		d.TotalBytes = l.TotalBytes
+	if l.TotalBytes > 0 {
+		// The byte budget alone may be raised, up to nthtml's input ceiling:
+		// a host that admits a larger page body sets it to match.
+		d.TotalBytes = min(l.TotalBytes, MaxTotalBytes)
 	}
-	return d // values above defaults are ignored, mirroring nthtml's policy
+	return d // other values above defaults are ignored, mirroring nthtml's policy
 }
 
 // Parse builds a Tree from HTML using golang.org/x/net/html (already a

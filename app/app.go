@@ -71,6 +71,7 @@ type Model struct {
 	debug             debugPanel
 	glynx             bool
 	autoScheme        bool // --color-scheme auto: follow the terminal's reported background
+	pageBytes         int  // top-level document body cap (default 1 MiB)
 	scriptPermissions []loop.ScriptPermissionMsg
 
 	loop              *loop.Loop
@@ -183,6 +184,17 @@ func (m *Model) Init() tea.Cmd {
 // reported background: a dark terminal gets the page's dark theme.
 func (m *Model) SetColorSchemeAuto(on bool) { m.autoScheme = on }
 
+// SetPageBytes caps a top-level document's body; the loop's DOM budget is
+// configured to match. Zero keeps the 1 MiB default.
+func (m *Model) SetPageBytes(n int) { m.pageBytes = n }
+
+func (m *Model) pageBodyLimit() int {
+	if m.pageBytes > 0 {
+		return m.pageBytes
+	}
+	return 1 << 20
+}
+
 // holdFrames reports whether the first frame should wait for the terminal's
 // probe reply. A terminal that identifies itself as Kitty-capable (rex, kitty,
 // ghostty, …) normally answers within milliseconds; painting glyphs first and
@@ -229,7 +241,7 @@ func (m *Model) navigate(href string, hist int, anyOrigin bool, originOnly ...bo
 	if len(originOnly) > 0 && originOnly[0] {
 		policy.AllowHosts = nil
 	}
-	policy.Origin, policy.AnyOrigin, policy.MaxBody = m.current, anyOrigin, 1<<20
+	policy.Origin, policy.AnyOrigin, policy.MaxBody = m.current, anyOrigin, int64(m.pageBodyLimit())
 	policy.Timeout = navTimeout
 	gates := m.profile
 	if m.navCancel != nil {
@@ -262,7 +274,7 @@ func (m *Model) navigate(href string, hist int, anyOrigin bool, originOnly ...bo
 		}
 		f := netpolicy.New(policy)
 		defer cancel()
-		msg := load(ctx, cancel, f, u.String(), gates, video, pageLoadedMsg{seq: seq, hist: hist})
+		msg := load(ctx, cancel, f, u.String(), gates, int64(m.pageBodyLimit()), video, pageLoadedMsg{seq: seq, hist: hist})
 		msg.base, _ = url.Parse(msg.finalURL)
 		return msg
 	}

@@ -202,3 +202,30 @@ func TestColorSchemeFlag(t *testing.T) {
 		t.Fatal("sepia accepted")
 	}
 }
+
+// --page-bytes bounds a document's HTML and DOM: 4 MiB in glynx, 1 MiB in
+// ntbrowser, 64 KiB to 8 MiB when set.
+func TestPageBudget(t *testing.T) {
+	for _, command := range []string{"glynx", "ntbrowser"} {
+		c, err := parseCommandArgs(command, nil)
+		if err != nil {
+			t.Fatal(command, err)
+		}
+		want := 1 << 20
+		if command == "glynx" {
+			want = 4 << 20
+		}
+		if c.PageBytes != want {
+			t.Fatalf("%s default page bytes %d, want %d", command, c.PageBytes, want)
+		}
+		c, err = parseCommandArgs(command, []string{"--page-bytes=8388608"})
+		if err != nil || c.PageBytes != 8<<20 {
+			t.Fatalf("%s override: %d %v", command, c.PageBytes, err)
+		}
+		for _, bad := range []string{"--page-bytes=1024", "--page-bytes=8388609"} {
+			if _, err := parseCommandArgs(command, []string{bad}); err == nil {
+				t.Fatalf("%s accepted %s", command, bad)
+			}
+		}
+	}
+}

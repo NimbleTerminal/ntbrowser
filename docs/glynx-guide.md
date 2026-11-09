@@ -173,7 +173,7 @@ it does hold page content, so treat it as private. See
   touches one stops with a warning; the rest of the page keeps working.
 - **No downloads, popups or new windows.** Links open in the current view;
   non-displayable responses report their type and size and stay put.
-- **Budgets.** Each page image is capped at 8 MiB encoded, each script entry
+- **Budgets.** A page's HTML is capped at 4 MiB, each page image at 8 MiB encoded, each script entry
   at 50 ms of CPU, and the whole page at a bounded heap. A page that keeps
   overrunning its slices has its scripts disabled, with a message.
 - **Google and reCAPTCHA** may still refuse the browser; permissive defaults

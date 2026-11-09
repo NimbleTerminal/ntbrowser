@@ -83,7 +83,7 @@ func humanSize(n int64) string {
 
 // load fetches u and turns the response into a pageLoadedMsg: classified from
 // its headers, checked against the profile, and only then read, by kind.
-func load(ctx context.Context, stop context.CancelFunc, f *netpolicy.Fetcher, u string, p profile.Profile, video *videoTarget, msg pageLoadedMsg) pageLoadedMsg {
+func load(ctx context.Context, stop context.CancelFunc, f *netpolicy.Fetcher, u string, p profile.Profile, pageLimit int64, video *videoTarget, msg pageLoadedMsg) pageLoadedMsg {
 	o, err := f.Open(ctx, netpolicy.Request{Method: "GET", URL: u, Kind: netpolicy.KindNavigate})
 	if err != nil {
 		msg.err = err
@@ -105,7 +105,7 @@ func load(ctx context.Context, stop context.CancelFunc, f *netpolicy.Fetcher, u 
 	case content.PresentPage:
 		timer := time.AfterFunc(pageReadTimeout, func() { o.Body.Close() })
 		defer timer.Stop()
-		page, err := readCapped(body, 1<<20)
+		page, err := readCapped(body, pageLimit)
 		if err != nil {
 			var limitErr *netpolicy.BodyLimitError
 			if errors.As(err, &limitErr) {

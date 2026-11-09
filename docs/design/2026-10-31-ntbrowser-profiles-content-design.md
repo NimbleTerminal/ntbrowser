@@ -42,7 +42,7 @@ Click-to-play video is the first feature that needs both.
 ## 3. What recon established
 
 - **Flags today** (`cmd/ntbrowser/main.go`): `-nav`, `-allow`, `-allow-private`, `-subresources`, `-external-scripts`, `-width`, `-slice`, `-seed`. Defaults: `-nav free`, `-subresources any`, inline scripts on.
-- **Navigation** runs `netpolicy.Fetcher.Do` with `KindDocument`. `acceptableContentType` admits only text-like types, and the whole body is read under `MaxBody` (1 MiB for navigation).
+- **Navigation** runs `netpolicy.Fetcher.Do` with `KindDocument`. `acceptableContentType` admits only text-like types, and the whole body is read under `MaxBody` (`--page-bytes`: 1 MiB for ntbrowser, 4 MiB for glynx, at most 8 MiB, since 2026-11-09; the same figure bounds `dom.Limits.TotalBytes` and nthtml's input cap is raised to match).
 - **The only `os.Open`** in the program is `cmd/ntbrowser`'s `app.SetLocalReader`, for the `file:` start page. `jsvm` and `dom` import no system packages (enforced by test).
 - **The script clock** is already coarsened (`jsvm/sandbox.go`), and there is no JIT.
 - **ntpicture** plays GIF and animated WebP in pure Go (`animation`, `playback`).

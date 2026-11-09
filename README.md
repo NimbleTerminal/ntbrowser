@@ -331,6 +331,7 @@ supported.
 | `--slice d` | JavaScript time budget per entry (50ms); three overruns disable the page |
 | `--seed n` | Seed for `Math.random` and `crypto`, for reproducible runs (0 = a fresh unpredictable generator per page) |
 | `--image-bytes n` | Maximum encoded bytes per page image (1024..16777216; glynx defaults to 8 MiB, ntbrowser to 1 MiB) |
+| `--page-bytes n` | Maximum bytes of a page's HTML body and the DOM built from it (65536..8388608; glynx defaults to 4 MiB, ntbrowser to 1 MiB) |
 
 ## What a response becomes
 
@@ -989,8 +990,11 @@ cancels queued deliveries instead of forwarding them into the new document.
 ### Response-size failures
 
 `netpolicy: response too large` means a response crossed its byte cap, not that
-JavaScript called a missing API. Page/text navigation is capped at 1 MiB;
-generic fetchers default to 2 MiB, and resource policies may set smaller limits.
+JavaScript called a missing API. Page/text navigation is capped at `--page-bytes`
+(glynx 4 MiB, ntbrowser 1 MiB, at most 8 MiB; yahoo.com's front page is over
+1 MiB of HTML), which also bounds the DOM built from the page and raises
+nthtml's input cap with it; generic fetchers default to 2 MiB, and resource
+policies may set smaller limits.
 The cap applies to the decoded HTTP response (after gzip decompression).
 Errors identify the resource, limit, observed lower bound and final URL path;
 query strings and fragments are omitted from the displayed URL. Diagnostic

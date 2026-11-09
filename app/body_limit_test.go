@@ -27,7 +27,7 @@ func TestPageBodyLimitDiagnostic(t *testing.T) {
 	f := netpolicy.New(netpolicy.Policy{AnyOrigin: true, AllowPrivate: true})
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	result := load(ctx, cancel, f, srv.URL+"/search?q=private", p, nil, pageLoadedMsg{})
+	result := load(ctx, cancel, f, srv.URL+"/search?q=private", p, 1<<20, nil, pageLoadedMsg{})
 	var detail *netpolicy.BodyLimitError
 	if !errors.Is(result.err, netpolicy.ErrTooLarge) || !errors.As(result.err, &detail) {
 		t.Fatalf("error %v", result.err)

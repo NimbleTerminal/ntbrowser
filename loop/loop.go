@@ -260,14 +260,18 @@ func New(ctx context.Context, cfg Config, sink Sink) *Loop {
 	// Host-only styles have their own allowance; script-mutable DOM ceilings
 	// stay unchanged. The serialized CSS twin must also fit nthtml's input cap.
 	cfg.DOMLimits.ExternalStyleBytes = max(0, min(cfg.DOMLimits.ExternalStyleBytes, dom.MaxExternalStyleBytes))
+	// The page's DOM budget (default 1 MiB, raised by the host's page-bytes
+	// flag) plus the host stylesheet allowance must fit nthtml's input cap;
+	// the DOM keeps precedence and the stylesheet allowance gives way.
+	content := dom.DefaultLimits.TotalBytes
+	if cfg.DOMLimits.TotalBytes > 0 {
+		content = min(cfg.DOMLimits.TotalBytes, document.MaxLimits.Bytes)
+	}
+	cfg.DOMLimits.TotalBytes = content
+	if cfg.RenderLimit.Bytes == 0 {
+		cfg.RenderLimit.Bytes = min(document.MaxLimits.Bytes, content+cfg.DOMLimits.ExternalStyleBytes)
+	}
 	if cfg.DOMLimits.ExternalStyleBytes > 0 {
-		content := dom.DefaultLimits.TotalBytes
-		if cfg.DOMLimits.TotalBytes > 0 {
-			content = min(content, cfg.DOMLimits.TotalBytes)
-		}
-		if cfg.RenderLimit.Bytes == 0 {
-			cfg.RenderLimit.Bytes = content + cfg.DOMLimits.ExternalStyleBytes
-		}
 		cfg.DOMLimits.ExternalStyleBytes = min(cfg.DOMLimits.ExternalStyleBytes, max(0, min(cfg.RenderLimit.Bytes, document.MaxLimits.Bytes)-content))
 	}
 	cfg.Subresources = cfg.Subresources.WithDefaults()
