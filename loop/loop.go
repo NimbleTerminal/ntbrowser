@@ -321,10 +321,18 @@ func (l *Loop) Run() {
 					l.pendingFrame = true
 					l.scheduleFrame()
 				}
+				changed := false
 				if scheme := schemeName(l.resizeScheme.Load()); scheme != "" && scheme != l.cfg.ColorScheme {
 					l.cfg.ColorScheme = scheme
 					l.pendingFrame = true
 					l.scheduleFrame()
+					changed = true
+				}
+				if (changed || l.pendingFrame) && l.page != nil && !l.page.killed && l.page.Sandbox != nil {
+					// matchMedia lists follow the new width or scheme; their
+					// change events run as one watchdog entry.
+					l.report(l.page.Sandbox.MediaChanged())
+					l.afterTask()
 				}
 			}
 		case <-l.timerT.C:
@@ -493,6 +501,7 @@ func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) ui
 		}
 		l.setupFrameRealm(page, &cfg)
 		l.installFrameScroll(page, &cfg)
+		cfg.Media = l.mediaState
 		page.Sandbox = jsvm.New(cfg, tree, (*host)(l))
 		page.Sandbox.SetFormHooks(l.formHooks(page))
 		l.page = page
@@ -843,6 +852,18 @@ func (l *Loop) Resize(widthPx int) {
 	case l.resizeWake <- struct{}{}:
 	default:
 	}
+}
+
+// mediaState is what window.matchMedia sees: the layout width, the viewport
+// height in CSS pixels when the host has reported cell geometry, and the
+// preferred color scheme. All of it is already visible to the page through
+// its own layout; nothing here is host authority.
+func (l *Loop) mediaState() jsvm.MediaState {
+	st := jsvm.MediaState{Width: l.cfg.Width, Height: 600, ColorScheme: l.cfg.ColorScheme}
+	if v := l.viewport(); v.Rows > 0 && v.CellHeight > 0 {
+		st.Height = v.Rows * v.CellHeight
+	}
+	return st
 }
 
 // SetColorScheme switches the page's preferred color scheme ("light" or

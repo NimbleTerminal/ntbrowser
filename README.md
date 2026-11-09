@@ -1022,6 +1022,20 @@ other rendering/resource warnings as `[page warning]`. These warnings do not
 replace a load failure, script error, policy-blocked navigation, or pending
 navigation confirmation. Full resource errors remain in diagnostic captures.
 
+### Media queries from script
+
+`window.matchMedia(query)` returns a `MediaQueryList` evaluated against the
+page's layout width, the viewport height in CSS pixels once the terminal's
+cell geometry is known, and the preferred color scheme: `width`/`height`
+with `min-`/`max-` and range syntax, `prefers-color-scheme`, `orientation`,
+`hover`/`pointer` (hover, fine), `prefers-reduced-motion` (no preference),
+`resolution` (1dppx), `display-mode: browser`, `and`/`not`/`only` and comma
+lists. Unknown features and media types other than `screen`/`all` are false.
+`matches` is live, and lists fire `change` (also through `addListener`) when
+a resize or `--color-scheme` switch flips them, as one watchdog entry. At most
+256 lists live per page. Sites that pick their dark theme in script, as
+yahoo.com does, now follow the terminal's background.
+
 ### Address entry
 
 Run `ntbrowser` without a URL to open the address prompt, or press **Ctrl+L**

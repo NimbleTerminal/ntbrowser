@@ -55,3 +55,20 @@ func TestSetColorSchemeReflows(t *testing.T) {
 		t.Fatal("unknown scheme accepted")
 	}
 }
+
+// A scheme switch reaches page script: matchMedia lists flip and fire change.
+func TestSetColorSchemeFiresMatchMediaChange(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	sink := make(chanSink, 256)
+	l := New(ctx, Config{Profile: testProfile, Width: 400, MinFrame: time.Millisecond}, sink)
+	go l.Run()
+	l.LoadPage(`<script>
+		const mq = matchMedia('(prefers-color-scheme: dark)');
+		console.log('initial ' + mq.matches);
+		mq.addEventListener('change', e => { document.documentElement.classList.toggle('dark', e.matches); console.log('changed ' + e.matches + ' ' + document.documentElement.className) });
+	</script>`, "https://example.test/", nil)
+	waitFor(t, sink, func(m tea.Msg) bool { lm, ok := m.(LogMsg); return ok && lm.Line == "initial false" })
+	l.SetColorScheme("dark")
+	waitFor(t, sink, func(m tea.Msg) bool { lm, ok := m.(LogMsg); return ok && lm.Line == "changed true dark" })
+}

@@ -447,6 +447,15 @@ StorageEvents, frames/opener cloning and localStorage are outside this scope.
 No contents are emitted through diagnostics by the host. Source:
 [HTML Web Storage](https://html.spec.whatwg.org/multipage/webstorage.html).
 
+### matchMedia (2026-11-09)
+
+`window.matchMedia` reads `jsvm.Config.Media`, a host closure returning the
+loop's layout width, viewport height and preferred color scheme. These are
+already observable through layout, so no gate is involved and no authority is
+conferred; the loop calls `Sandbox.MediaChanged` after a width or scheme
+change and the resulting `change` events run as one watchdog entry. Lists are
+bounded (256 per page) and weakly held.
+
 ### Local storage and persistence extension (2026-11-08)
 
 Two gates. `local-storage` (`off`, `on`; on only in glynx) binds

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add `window.matchMedia` with live `matches`, `change` events on resize or
+  color-scheme switch, width/height, `prefers-color-scheme`, orientation,
+  hover/pointer, reduced-motion and resolution features, and a 256-list cap.
+  yahoo.com picks its dark theme in script through
+  `matchMedia('(prefers-color-scheme: dark)')` and stayed light without it.
+  With the local nthtml applying CSS `fill` to inline SVG roots, its search
+  button's magnifier paints too.
+
 - Add `--images` (glynx 256, ntbrowser 64, up to 1024) for distinct images
   per page; the per-page pixel budget is unchanged. Skip a script whose
   syntax Goja has not implemented ("Async generators are not supported

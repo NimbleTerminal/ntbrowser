@@ -62,6 +62,7 @@ type Config struct {
 	MaxListeners     int                           // total event listeners (default 1024)
 	HeapBudget       uint64                        // process heap bytes after GC above which this page is disabled (default 256 MiB)
 	HeapGrace        time.Duration                 // how long the heap may stay above HeapBudget before the page is disabled (default 1s)
+	Media            func() MediaState             // layout width, viewport height and color scheme for window.matchMedia (default 800×600 light)
 	ClockResolution  time.Duration                 // minimum clock resolution (default 10ms), shared by Date, performance and rAF
 	Clock            func() time.Time
 	Rand             func() float64
@@ -159,6 +160,7 @@ type Sandbox struct {
 	tree              *dom.Tree
 	strikes           int
 	heapOver          time.Time // first over-budget sample after a collection; zero while under budget
+	mediaLists        []*mediaList
 	disabled          bool
 	running           bool
 
@@ -372,6 +374,7 @@ func (s *Sandbox) installGlobals() {
 	defineFrozen(global, "fetch", vm.ToValue(s.fetch))
 	s.installLocation()
 	s.installHistory()
+	s.installMatchMedia()
 	navigator := vm.NewObject()
 	defineFrozen(navigator, "cookieEnabled", vm.ToValue(s.cfg.CookieRead != nil && s.cfg.CookieWrite != nil))
 	defineFrozen(navigator, "userAgent", vm.ToValue("ntbrowser"))
