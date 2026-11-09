@@ -4,6 +4,12 @@ A secure, non-JIT terminal web runtime: a hardened pure-Go JavaScript interprete
 
 `ntbrowser` is a terminal reader mode and small-application runtime. It takes an HTML page that may carry JavaScript, runs that JavaScript inside a pure-Go bytecode interpreter with no path to the operating system, lets the script change the page through a narrow proxy API, and shows the result through `nthtml`'s Bubble Tea viewer. The point is a "cognitive shield": the user gets the page's content and legitimate interactivity, and nothing the page does can reach files, sockets, the environment, or the terminal's escape-sequence surface.
 
+New here? The [glynx guide](docs/glynx-guide.md) covers everyday browsing:
+keys, address and search entry, what is saved between runs and where, private
+runs with `--safe`, and resetting saved state. The
+[ntbrowser guide](docs/ntbrowser-guide.md) covers launching one page under an
+explicit security profile. The rest of this README is the reference.
+
 ## Two applications, one engine
 
 `ntbrowser` launches a page under a controlled sandbox policy. **glynx** is the
@@ -16,8 +22,8 @@ networking, renderer and confinement code; compatibility fixes benefit both.
 | Purpose | Launch a page under an explicit security profile | Browse from site to site |
 | Default profile | `browse`: inline scripts, explicit extra permissions | `glynx`: external scripts, dynamic code, frames and session state enabled |
 | Interface | Runtime and policy controls | Lynx-style navigation, address/search input |
-| State today | Explicit, limited session features | Memory-only cookies, session storage and navigation history |
-| Persistence | No automatic persistence | Bookmarks and persistent browsing state are future work |
+| State today | Explicit, limited session features, memory-only | Cookies, session storage, `localStorage` and navigation history |
+| Persistence | None: every run starts clean | Cookies with an expiry and `localStorage` survive restarts (`persist=file`); `--safe` runs memory-only; bookmarks are future work |
 | Implementation | Shared browser engine | Separate executable using the same engine |
 
 Build both with `task build`, then run:
@@ -59,8 +65,9 @@ This is a supported `cmd/glynx` application in this repository, not a fork or
 a separate browser engine. Startup and sandbox re-exec live in
 `internal/browsercmd`. More permissive defaults remove setup friction; they do
 not supply missing browser APIs or guarantee that Google/reCAPTCHA accepts the
-browser. Persistent bookmarks, cookies, and downloads are not added by this
-initial separation.
+browser. Bookmarks and downloads are not added by this separation; the only
+state glynx keeps across runs is cookies with an expiry and `localStorage`
+(see [Local storage and persistence](#local-storage-and-persistence)).
 
 Status and error messages can be copied with **Alt+C** in either application.
 This copies the full message, including text clipped off-screen, using the
@@ -549,8 +556,11 @@ jq -c 'select(.kind != "document" and .kind != "snapshot")' /tmp/ntbrowser-debug
 `--cookies=session` (or `"cookies":"session"` in a profile) enables
 `document.cookie`, `navigator.cookieEnabled`, and HTTP cookie exchange using one in-memory store across
 navigation. All built-ins default to off: reads return an empty string, writes
-are ignored, and HTTP requests remain cookieless. Exiting discards every cookie,
-even cookies with a future expiry. No disk persistence or cookie import exists.
+are ignored, and HTTP requests remain cookieless. With `persist=off`, exiting
+discards every cookie, even cookies with a future expiry. Under `persist=file`
+(glynx's default) cookies with an expiry are written to `cookies.dat` and
+reloaded at the next start; session cookies are never written. There is no
+cookie import. See [Local storage and persistence](#local-storage-and-persistence).
 
 The store implements host/domain and path matching, default paths, expiry and
 Max-Age deletion, Secure and HttpOnly, public-suffix rejection, secure cookie

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add user guides for both binaries, `docs/glynx-guide.md` and
+  `docs/ntbrowser-guide.md` (keys, address entry, profiles, what is kept
+  between runs and where, `--safe`, resetting state, diagnostics), linked from
+  the top of the README. Correct the README passages that still described
+  glynx as memory-only after persistence landed.
+
 - Render GitHub's header buttons at full width with the local nthtml
   renderer, which now sizes grid tracks from their items: Notifications, Fork,
   Star and the branch selector no longer clip or overlap their labels.
