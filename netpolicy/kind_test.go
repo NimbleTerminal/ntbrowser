@@ -176,7 +176,7 @@ func TestNoDowngradeFromHTTPS(t *testing.T) {
 }
 
 func TestScriptResponseKind(t *testing.T) {
-	for _, ct := range []string{"text/javascript", "application/javascript; charset=utf-8", "text/ecmascript", "application/ecmascript"} {
+	for _, ct := range []string{"text/javascript", "application/javascript; charset=utf-8", "text/ecmascript", "application/ecmascript", "application/x-javascript", "text/x-javascript", "text/jscript", "application/x-ecmascript; charset=utf-8"} {
 		if err := acceptableFor(KindScript, "/script", ct); err != nil {
 			t.Fatal(ct, err)
 		}

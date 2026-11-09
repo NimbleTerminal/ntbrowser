@@ -161,6 +161,10 @@ type Sandbox struct {
 	strikes           int
 	heapOver          time.Time // first over-budget sample after a collection; zero while under budget
 	mediaLists        []*mediaList
+	urlSym, paramsSym *goja.Symbol
+	writeScriptWarned bool
+	writeScript       dom.NodeID // script whose document.write insertion point writeCursor follows
+	writeCursor       dom.NodeID
 	disabled          bool
 	running           bool
 
@@ -375,6 +379,7 @@ func (s *Sandbox) installGlobals() {
 	s.installLocation()
 	s.installHistory()
 	s.installMatchMedia()
+	s.installURL()
 	navigator := vm.NewObject()
 	defineFrozen(navigator, "cookieEnabled", vm.ToValue(s.cfg.CookieRead != nil && s.cfg.CookieWrite != nil))
 	defineFrozen(navigator, "userAgent", vm.ToValue("ntbrowser"))
@@ -588,6 +593,15 @@ var ErrModuleSyntax = errors.New("ES modules are not supported")
 // language feature it has not implemented (Goja reports these as "… not
 // supported yet"), as opposed to a syntax error in the page's own code.
 var ErrUnsupportedSyntax = errors.New("syntax this engine does not support")
+
+// EvalScript runs a parser-inserted script with document.currentScript set
+// to its element for the duration, as browsers do for classic scripts.
+func (s *Sandbox) EvalScript(name, src string, script dom.NodeID) error {
+	previous := s.currentScript
+	s.currentScript = script
+	defer func() { s.currentScript = previous }()
+	return s.Eval(name, src)
+}
 
 func (s *Sandbox) Eval(name, src string) error {
 	if len(src) > maxScriptBytes {

@@ -161,6 +161,7 @@ type Tree struct {
 }
 
 type Script struct {
+	ID                     NodeID // the script element, for document.currentScript
 	Integrity, CrossOrigin string
 
 	Inline string // inline source; empty when Src is set
@@ -292,7 +293,7 @@ func (t *Tree) ingest(parent *Node, src *html.Node, depth int) error {
 					} else if !strings.EqualFold(cors, "use-credentials") {
 						cors = "anonymous"
 					}
-					sc := Script{Src: src, Integrity: integrity, CrossOrigin: cors}
+					sc := Script{ID: n.ID(), Src: src, Integrity: integrity, CrossOrigin: cors}
 					if src == "" {
 						sc.Inline = TextContent(n)
 					}

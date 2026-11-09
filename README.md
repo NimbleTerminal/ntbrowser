@@ -1022,6 +1022,23 @@ other rendering/resource warnings as `[page warning]`. These warnings do not
 replace a load failure, script error, policy-blocked navigation, or pending
 navigation confirmation. Full resource errors remain in diagnostic captures.
 
+### URL, URLSearchParams and document.write
+
+`URL` and `URLSearchParams` are the WHATWG parser behind `HTMLAnchorElement`:
+`new URL(url, base)`, every component getter and setter, `origin`,
+`searchParams` kept in sync with `search`, `toJSON`, `URL.canParse` and
+`URL.parse`; `URLSearchParams` parses and serialises
+application/x-www-form-urlencoded with `append`, `delete`, `get`, `getAll`,
+`has` (including the value forms), `set`, `sort`, `size`, `forEach` and
+iteration, bounded to 4096 pairs and 1 MiB. Parsing grants nothing; fetch and
+navigation keep their gates. `document.currentScript` names a
+parser-inserted script while it runs. `document.write` and `writeln` insert
+their markup through the bounded innerHTML fragment parser after the running
+script (at the end of the body otherwise), never clearing the document; written
+scripts stay inert and are reported once. `document.open` returns the document
+and `close` does nothing. Script responses are accepted under every JavaScript
+MIME type essence, including the legacy `application/x-javascript`.
+
 ### Media queries from script
 
 `window.matchMedia(query)` returns a `MediaQueryList` evaluated against the

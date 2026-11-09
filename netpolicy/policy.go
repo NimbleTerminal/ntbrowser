@@ -432,6 +432,20 @@ func acceptFor(k Kind) string {
 	return "text/*, application/json;q=0.9"
 }
 
+// javaScriptMIME is the MIME Sniffing standard's JavaScript MIME type essence
+// list, which browsers accept for classic scripts. Servers still send the
+// legacy application/x-javascript (duckduckgo.com, Adobe Launch).
+func javaScriptMIME(essence string) bool {
+	switch essence {
+	case "text/javascript", "application/javascript", "text/ecmascript", "application/ecmascript",
+		"application/x-ecmascript", "application/x-javascript", "text/javascript1.0", "text/javascript1.1",
+		"text/javascript1.2", "text/javascript1.3", "text/javascript1.4", "text/javascript1.5",
+		"text/jscript", "text/livescript", "text/x-ecmascript", "text/x-javascript":
+		return true
+	}
+	return false
+}
+
 // acceptableFor gates the response content type per kind. Every branch
 // parses the header with mime.ParseMediaType, so parameters such as
 // "charset=utf-8" never take part in the comparison.
@@ -439,11 +453,8 @@ func acceptableFor(k Kind, path, ct string) error {
 	switch k {
 	case KindScript:
 		mt, _, err := mime.ParseMediaType(ct)
-		if err == nil {
-			switch mt {
-			case "text/javascript", "application/javascript", "text/ecmascript", "application/ecmascript":
-				return nil
-			}
+		if err == nil && javaScriptMIME(mt) {
+			return nil
 		}
 		return fmt.Errorf("%w: content type %q is not JavaScript", ErrDenied, ct)
 	case KindFrame:

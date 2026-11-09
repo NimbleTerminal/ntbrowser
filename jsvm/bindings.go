@@ -550,6 +550,10 @@ func (s *Sandbox) documentObject() *goja.Object {
 	s.bindEventHandlers(d)
 
 	s.accessor(d, "currentScript", func(goja.Value) goja.Value { return s.wrap(s.tree.Node(s.currentScript)) }, nil)
+	s.method(d, "write", func(c goja.FunctionCall) goja.Value { s.documentWrite(c.Arguments, false); return goja.Undefined() })
+	s.method(d, "writeln", func(c goja.FunctionCall) goja.Value { s.documentWrite(c.Arguments, true); return goja.Undefined() })
+	s.method(d, "open", func(c goja.FunctionCall) goja.Value { return d })
+	s.method(d, "close", func(c goja.FunctionCall) goja.Value { return goja.Undefined() })
 	s.accessor(d, "head", func(goja.Value) goja.Value { return s.query(s.tree.Root(), "head", false) }, nil)
 	s.accessor(d, "body", func(goja.Value) goja.Value { return s.wrap(s.tree.Body()) }, nil)
 	s.accessor(d, "documentElement", func(goja.Value) goja.Value {

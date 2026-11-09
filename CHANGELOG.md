@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Accept every JavaScript MIME type essence for scripts, including the
+  legacy `application/x-javascript` that duckduckgo.com and Adobe Launch
+  still serve; add `URL` and `URLSearchParams` (WHATWG parsing and
+  form-urlencoded serialisation, linked `searchParams`, 4096 pairs / 1 MiB
+  bounds, no network); set `document.currentScript` while a parser-inserted
+  script runs; and add `document.write`/`writeln` as a bounded fragment
+  insertion after the running script (scripts inert, one warning), with
+  inert `open`/`close`. duckduckgo.com's home page threw three TypeErrors
+  and loaded none of its chunks.
+
 - Add `window.matchMedia` with live `matches`, `change` events on resize or
   color-scheme switch, width/height, `prefers-color-scheme`, orientation,
   hover/pointer, reduced-motion and resolution features, and a 256-list cap.

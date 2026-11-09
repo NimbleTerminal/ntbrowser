@@ -563,7 +563,7 @@ func (l *Loop) runScripts(page *Page, i int) {
 		l.cfg.Trace.Record("script", map[string]any{"page": page.Base, "index": i, "src": sc.Src, "inline_bytes": len(sc.Inline), "external_allowed": l.cfg.Profile.Scripts == profile.ScriptsExternal})
 		switch {
 		case sc.Inline != "":
-			l.evalScript(page, fmt.Sprintf("%s#inline-%d", page.Base, i), sc.Inline)
+			l.evalScript(page, fmt.Sprintf("%s#inline-%d", page.Base, i), sc.Inline, sc.ID)
 		case sc.Src != "" && l.cfg.Profile.Scripts == profile.ScriptsExternal:
 			next := i + 1
 			generation := l.navGen.Load()
@@ -571,7 +571,7 @@ func (l *Loop) runScripts(page *Page, i int) {
 				if err != nil {
 					l.report(err)
 				} else {
-					l.evalScript(page, sc.Src, resp.Body)
+					l.evalScript(page, sc.Src, resp.Body, sc.ID)
 				}
 				l.runScripts(page, next)
 			})
@@ -1510,8 +1510,8 @@ func (h *host) Fetch(req jsvm.FetchRequest, done func(jsvm.FetchResponse, error)
 
 func (h *host) Log(level, line string) { (*Loop)(h).send(LogMsg{Level: level, Line: line}) }
 
-func (l *Loop) evalScript(page *Page, name, source string) {
-	err := page.Sandbox.Eval(name, source)
+func (l *Loop) evalScript(page *Page, name, source string, script dom.NodeID) {
+	err := page.Sandbox.EvalScript(name, source, script)
 	result := "ok"
 	if err != nil {
 		result = err.Error()
