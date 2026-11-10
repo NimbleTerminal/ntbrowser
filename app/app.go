@@ -438,52 +438,7 @@ func (m *Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		m.scriptPermission(v)
 		return m, nil
 	case pageLoadedMsg:
-		if v.seq != m.navSeq {
-			return m, nil // superseded by a later navigation
-		}
-		if errors.Is(v.err, context.Canceled) {
-			return m, nil // cancelled by the reader
-		}
-		if v.err != nil {
-			m.policy.Trace.Record("navigation_error", map[string]any{"url": v.finalURL, "error": v.err.Error()})
-			m.documentSeq = m.navSeq
-			m.setStatus(statusFailure, "load failed: "+v.err.Error()) // errors echo page-controlled input
-			return m, nil
-		}
-		if v.line != "" {
-			m.setStatus(statusPlain, v.line) // not presented; the current page stays
-			return m, nil
-		}
-		if v.video != "" {
-			return m, m.startPlayer(v.video) // an overlay: history and the page stay
-		}
-		m.current = v.base
-		m.resetView = true
-		// History moves only now, on success, so Back/Forward always name
-		// the page on screen.
-		if v.hist == pushNew {
-			m.history = append(m.history[:m.hIndex+1], v.base.String())
-			m.hIndex = len(m.history) - 1
-		} else if v.hist >= 0 && v.hist < len(m.history) {
-			m.hIndex = v.hist
-			m.history[v.hist] = v.base.String() // a redirect may have moved it
-		}
-		cmds := []tea.Cmd{m.closeMedia(), m.leaveForms()}
-		if v.img != nil {
-			view, cmd := newMediaView(v.img, v.player, m.pictureOptions(), m.cols, m.viewRows())
-			m.media = view
-			m.clearStatus()
-			return m, tea.Batch(append(cmds, cmd)...)
-		}
-		p := m.policy
-		p.Origin = v.base
-		if m.profile.Fetch != profile.FetchAllowlist {
-			p.AllowHosts = nil // the page's own fetch(): the hosts are for allowlist only
-		}
-		m.documentNav = m.loop.LoadPage(v.html, v.base.String(), netpolicy.New(p))
-		m.documentSeq = m.navSeq
-		m.setStatus(statusPlain, "loading "+v.base.String())
-		return m, tea.Batch(cmds...)
+		return m, m.onPageLoaded(v)
 
 	case nthtml.PaintRequest:
 		if v.Owner == m.viewer && m.cssPainted && v.Revision == m.gen {
@@ -507,95 +462,7 @@ func (m *Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		}
 		return m, nil
 	case loop.FrameMsg:
-		if v.Navigation != 0 && !m.loop.NavigationCurrent(v.Navigation) {
-			return m, nil
-		}
-		if m.holdFrames() {
-			held := v // the newest frame wins; it is replayed when the terminal answers
-			m.heldFrame = &held
-			return m, nil
-		}
-		// Frames arrive from the render worker; drop anything older than
-		// what is on screen so a slow render cannot regress the view.
-		if v.Gen <= m.lastFrame {
-			return m, nil
-		}
-		if m.resetView {
-			m.embeddedFocus = false
-		}
-		m.lastFrame = v.Gen
-		if v.Err == nil || v.Chunk.Count > 0 {
-			m.gen = v.Gen
-		}
-		if v.Err == nil {
-			m.frameRegions = v.FrameRegions
-		}
-		oldChunk := m.chunk
-		m.chunk, m.chunkFailed = v.Chunk, v.Err != nil && v.Chunk.Count > 0
-		if v.Err != nil {
-			m.setStatus(statusRender, "render: "+v.Err.Error())
-			if m.chunkFailed {
-				return m, m.leaveForms()
-			}
-			return m, nil
-		}
-		warnings := append(statusWarnings(v.Result.Warnings), v.Warnings...) // nthtml's, then the loader's
-		switch {
-		case m.status.sticky() || m.pendingNav != "":
-			// Reflow and resource warnings do not resolve a page/script failure
-			// or answer a pending navigation confirmation.
-		case len(warnings) > 0:
-			m.setStatus(statusWarning, "[page warning] "+strings.Join(warnings, "; "))
-			if len(warnings) == 1 && strings.HasPrefix(warnings[0], "image ") {
-				m.setStatus(statusWarning, "[image warning] "+warnings[0])
-			}
-		case m.status.kind == statusRender || m.status.kind == statusPaint:
-			m.clearStatus()
-		case m.resetView && m.status.kind != statusFocus:
-			m.clearStatus() // the page's first frame: "loading …" is over (a focus line set by the page stays)
-		}
-		if v.Painted != nil {
-			return m, m.installCSSFrame(v)
-		}
-		if v.Chunk.Count == 0 {
-			m.setStatus(statusRender, "render: missing initial CSS band")
-			return m, nil
-		}
-		if m.viewer == nil {
-			// viewerOptions leaves ReflowTypeset off, which is what the host
-			// wants: the loop re-flows on Resize, at its own width, off the
-			// UI goroutine; the viewer must never re-render on its own.
-			opts := viewerOptions
-			opts.HostPainted = false
-			opts.Session = m.session
-			m.viewer = nthtml.NewWithOptions(v.Result, opts)
-			m.resetView = false
-			cmd := tea.Batch(m.viewer.Init(), m.viewer.SetBounds(0, 0, m.pictureCols(), m.viewRows()))
-			m.loop.Resize(m.documentWidth())
-			return m, tea.Batch(cmd, m.finishChunk(), m.applyRing(false))
-		}
-		// Re-flow in place (nthtml v0.1.0 Model.SetResult). SetResult resets
-		// scroll, zoom, search and the focused link; the host puts the scroll
-		// offset back from the previous crop so a page that re-flows
-		// continuously stays where the reader left it. Pan clamps to the new
-		// page, so a shorter page simply ends at its bottom. Zoom is not
-		// recoverable through the public API (design §11).
-		crop := m.viewer.Picture().Crop()
-		if oldChunk.Count > 0 {
-			if viewport, ok := m.viewer.DocumentViewport(); ok {
-				crop = viewport
-			}
-		}
-		cmd := m.viewer.SetResult(v.Result)
-		m.loop.Resize(m.documentWidth()) // no-op unless the terminal's pixel geometry changed
-		if m.resetView || crop.Empty() || v.Chunk.Count > 0 && (oldChunk.Index != v.Chunk.Index || v.Chunk.Anchor != "" || v.Chunk.Bottom) {
-			scroll := m.resetView // a new page's script focus scrolls into view, as in browsers
-			m.resetView = false
-			return m, tea.Batch(cmd, m.finishChunk(), m.applyRing(scroll))
-		}
-		// Pan first: it is relative to the origin SetResult just reset to.
-		pan := m.viewer.Pan(crop.Min.X, crop.Min.Y)
-		return m, tea.Batch(cmd, pan, m.applyRing(false))
+		return m, m.onFrame(v)
 
 	case loop.ScriptNavigateMsg:
 		return m, m.scriptNavigate(v)
@@ -655,172 +522,19 @@ func (m *Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		m.pressGen = m.gen
 		m.pressCell = image.Pt(v.X, v.Y)
 	case tea.MouseReleaseMsg:
-		if m.overlay() {
-			return m, nil
+		if cmd, handled := m.onMouseRelease(v); handled {
+			return m, cmd
 		}
-		p := image.Pt(v.X, v.Y)
-		click := m.pressed && p == m.pressCell
-		if m.cssPainted && (!m.frameInputReady() || m.pressGen != m.gen) {
-			m.pressed = false
-			v.Button = tea.MouseRight
-			return m, m.viewer.Update(v)
-		}
-		m.pressed = false
-		if click && m.viewer != nil {
-			if m.pressGen == m.gen && m.frameInputReady() {
-				if link, ok := m.viewer.LinkAtCell(p); ok {
-					m.loop.LinkActivatedAt(m.gen, link)
-				} else if area, ok := m.viewer.CellToDocument(p); ok {
-					m.loop.ClickAtFrame(m.gen, area)
-				}
-			}
-			// Finish selection without a second activation. The host owns link
-			// dispatch so scripts can preventDefault before fragment navigation.
-			release := v
-			release.Button = tea.MouseRight
-			return m, m.viewer.Update(release)
-		}
-
 	case tea.MouseWheelMsg:
-		if !m.overlay() && m.viewer != nil {
-			if area, ok := m.viewer.CellToDocument(image.Pt(v.X, v.Y)); ok {
-				delta := image.Point{}
-				switch v.Button {
-				case tea.MouseWheelDown:
-					delta.Y = 40
-				case tea.MouseWheelUp:
-					delta.Y = -40
-				case tea.MouseWheelRight:
-					delta.X = 40
-				case tea.MouseWheelLeft:
-					delta.X = -40
-				}
-				for _, region := range m.frameRegions {
-					if region.Overlaps(area) && delta != (image.Point{}) {
-						if m.frameInputReady() {
-							m.loop.ScrollFrameAt(m.gen, area, delta)
-						}
-						return m, nil
-					}
-				}
-			}
-		}
-		if !m.overlay() && m.chunk.Count > 0 {
-			key := ""
-			if v.Button == tea.MouseWheelDown {
-				key = "down"
-			}
-			if v.Button == tea.MouseWheelUp {
-				key = "up"
-			}
-			if key != "" && m.chunkKey(key) {
-				return m, nil
-			}
+		if cmd, handled := m.onMouseWheel(v); handled {
+			return m, cmd
 		}
 	case tea.KeyPressMsg:
-		if m.downloading.Load() && v.String() == "esc" {
-			m.navCancel()
-			m.setStatus(statusPlain, "download cancelled")
-			return m, nil
+		next, cmd, handled := m.onKey(v)
+		if handled {
+			return m, cmd
 		}
-		if m.player != nil {
-			if handled, cmd := m.playerKey(v); handled {
-				return m, cmd
-			}
-		}
-		if m.scriptPermissionKey(v.String()) {
-			return m, nil
-		}
-		searching := m.viewer != nil && m.viewer.SearchInputActive()
-		if m.pendingNav != "" && !searching {
-			switch v.String() {
-			case "enter":
-				href := m.pendingNav
-				plan := m.pendingScript
-				m.pendingScript = nil
-				m.pendingNav = ""
-				if plan != nil {
-					m.scriptNavCount = 0
-					return m, m.executeScriptNavigation(*plan)
-				}
-				return m, m.navigate(href, pushNew, reachAny) // the reader confirmed: any origin
-			case "esc":
-				m.pendingScript = nil
-				m.pendingNav = ""
-				m.setStatus(statusPlain, "stayed on "+m.current.String())
-				return m, nil
-			}
-		}
-		if !searching {
-			if m.glynx && m.mode == modeBrowse && !m.overlay() && !m.embeddedFocus && m.pendingNav == "" {
-				switch v.String() {
-				case "g":
-					return m, m.openAddress()
-				case "left":
-					return m, m.step(-1)
-				case "f":
-					return m, m.step(1)
-				case "right":
-					v = tea.KeyPressMsg{Code: tea.KeyEnter}
-				case "down":
-					v = tea.KeyPressMsg{Code: tea.KeyTab}
-				case "up":
-					v = tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
-				}
-				msg = v
-			}
-			if m.media != nil {
-				switch v.String() {
-				case "esc":
-					return m, m.step(-1)
-				case "q", "ctrl+c", "backspace", "alt+left", "alt+right":
-				default:
-					return m, nil
-				}
-			} else if handled, cmd := m.formKey(v); handled {
-				return m, cmd
-			}
-			switch v.String() {
-			case "q", "ctrl+c":
-				return m, m.quit()
-			case "backspace", "alt+left":
-				return m, m.step(-1)
-			case "alt+right":
-				return m, m.step(+1)
-			case "ctrl+r":
-				m.scriptNavCount = 0
-				if m.current != nil {
-					return m, m.navigate(m.current.String(), m.hIndex, m.admittedReach())
-				}
-				return m, nil
-			}
-			if m.overlay() {
-				return m, nil
-			}
-			// The terminal keeps its own navigation keys; the page gets a copy
-			// as keydown and cannot swallow them. Text typed into the viewer's
-			// / search box never reaches the page.
-			if m.embeddedFocus {
-				switch v.String() {
-				case "esc":
-					m.embeddedFocus = false
-					m.loop.LeaveFrameFocus(m.gen)
-					return m, nil
-				case "up", "down", "left", "right", "pgup", "pgdown", "home", "end":
-					if m.frameInputReady() {
-						m.loop.ScrollFocusedFrameAt(m.gen, v.String())
-					}
-					return m, nil
-				}
-			}
-			if m.frameInputReady() {
-				m.loop.InputAt(m.gen, v)
-			}
-			if m.chunkKey(v.String()) {
-				return m, nil
-			}
-		}
-
+		msg = next
 	case tea.WindowSizeMsg:
 		m.cols, m.rows = v.Width, v.Height
 		var media tea.Cmd
@@ -865,6 +579,331 @@ func (m *Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		return m, tea.Batch(overlay, m.viewer.Update(msg))
 	}
 	return m, overlay
+}
+
+// onPageLoaded presents a finished navigation: an error or a note in the
+// status line, a video or picture overlay, or a new document for the loop.
+func (m *Model) onPageLoaded(v pageLoadedMsg) tea.Cmd {
+	if v.seq != m.navSeq {
+		return nil // superseded by a later navigation
+	}
+	if errors.Is(v.err, context.Canceled) {
+		return nil // cancelled by the reader
+	}
+	if v.err != nil {
+		m.policy.Trace.Record("navigation_error", map[string]any{"url": v.finalURL, "error": v.err.Error()})
+		m.documentSeq = m.navSeq
+		m.setStatus(statusFailure, "load failed: "+v.err.Error()) // errors echo page-controlled input
+		return nil
+	}
+	if v.line != "" {
+		m.setStatus(statusPlain, v.line) // not presented; the current page stays
+		return nil
+	}
+	if v.video != "" {
+		return m.startPlayer(v.video) // an overlay: history and the page stay
+	}
+	m.current = v.base
+	m.resetView = true
+	// History moves only now, on success, so Back/Forward always name
+	// the page on screen.
+	if v.hist == pushNew {
+		m.history = append(m.history[:m.hIndex+1], v.base.String())
+		m.hIndex = len(m.history) - 1
+	} else if v.hist >= 0 && v.hist < len(m.history) {
+		m.hIndex = v.hist
+		m.history[v.hist] = v.base.String() // a redirect may have moved it
+	}
+	cmds := []tea.Cmd{m.closeMedia(), m.leaveForms()}
+	if v.img != nil {
+		view, cmd := newMediaView(v.img, v.player, m.pictureOptions(), m.cols, m.viewRows())
+		m.media = view
+		m.clearStatus()
+		return tea.Batch(append(cmds, cmd)...)
+	}
+	p := m.policy
+	p.Origin = v.base
+	if m.profile.Fetch != profile.FetchAllowlist {
+		p.AllowHosts = nil // the page's own fetch(): the hosts are for allowlist only
+	}
+	m.documentNav = m.loop.LoadPage(v.html, v.base.String(), netpolicy.New(p))
+	m.documentSeq = m.navSeq
+	m.setStatus(statusPlain, "loading "+v.base.String())
+	return tea.Batch(cmds...)
+}
+
+// onFrame installs a rendered frame from the loop, newest first, and settles
+// what the status line says about it.
+func (m *Model) onFrame(v loop.FrameMsg) tea.Cmd {
+	if v.Navigation != 0 && !m.loop.NavigationCurrent(v.Navigation) {
+		return nil
+	}
+	if m.holdFrames() {
+		held := v // the newest frame wins; it is replayed when the terminal answers
+		m.heldFrame = &held
+		return nil
+	}
+	// Frames arrive from the render worker; drop anything older than
+	// what is on screen so a slow render cannot regress the view.
+	if v.Gen <= m.lastFrame {
+		return nil
+	}
+	if m.resetView {
+		m.embeddedFocus = false
+	}
+	m.lastFrame = v.Gen
+	if v.Err == nil || v.Chunk.Count > 0 {
+		m.gen = v.Gen
+	}
+	if v.Err == nil {
+		m.frameRegions = v.FrameRegions
+	}
+	oldChunk := m.chunk
+	m.chunk, m.chunkFailed = v.Chunk, v.Err != nil && v.Chunk.Count > 0
+	if v.Err != nil {
+		m.setStatus(statusRender, "render: "+v.Err.Error())
+		if m.chunkFailed {
+			return m.leaveForms()
+		}
+		return nil
+	}
+	warnings := append(statusWarnings(v.Result.Warnings), v.Warnings...) // nthtml's, then the loader's
+	switch {
+	case m.status.sticky() || m.pendingNav != "":
+		// Reflow and resource warnings do not resolve a page/script failure
+		// or answer a pending navigation confirmation.
+	case len(warnings) > 0:
+		m.setStatus(statusWarning, "[page warning] "+strings.Join(warnings, "; "))
+		if len(warnings) == 1 && strings.HasPrefix(warnings[0], "image ") {
+			m.setStatus(statusWarning, "[image warning] "+warnings[0])
+		}
+	case m.status.kind == statusRender || m.status.kind == statusPaint:
+		m.clearStatus()
+	case m.resetView && m.status.kind != statusFocus:
+		m.clearStatus() // the page's first frame: "loading …" is over (a focus line set by the page stays)
+	}
+	if v.Painted != nil {
+		return m.installCSSFrame(v)
+	}
+	if v.Chunk.Count == 0 {
+		m.setStatus(statusRender, "render: missing initial CSS band")
+		return nil
+	}
+	if m.viewer == nil {
+		// viewerOptions leaves ReflowTypeset off, which is what the host
+		// wants: the loop re-flows on Resize, at its own width, off the
+		// UI goroutine; the viewer must never re-render on its own.
+		opts := viewerOptions
+		opts.HostPainted = false
+		opts.Session = m.session
+		m.viewer = nthtml.NewWithOptions(v.Result, opts)
+		m.resetView = false
+		cmd := tea.Batch(m.viewer.Init(), m.viewer.SetBounds(0, 0, m.pictureCols(), m.viewRows()))
+		m.loop.Resize(m.documentWidth())
+		return tea.Batch(cmd, m.finishChunk(), m.applyRing(false))
+	}
+	// Re-flow in place (nthtml v0.1.0 Model.SetResult). SetResult resets
+	// scroll, zoom, search and the focused link; the host puts the scroll
+	// offset back from the previous crop so a page that re-flows
+	// continuously stays where the reader left it. Pan clamps to the new
+	// page, so a shorter page simply ends at its bottom. Zoom is not
+	// recoverable through the public API (design §11).
+	crop := m.viewer.Picture().Crop()
+	if oldChunk.Count > 0 {
+		if viewport, ok := m.viewer.DocumentViewport(); ok {
+			crop = viewport
+		}
+	}
+	cmd := m.viewer.SetResult(v.Result)
+	m.loop.Resize(m.documentWidth()) // no-op unless the terminal's pixel geometry changed
+	if m.resetView || crop.Empty() || v.Chunk.Count > 0 && (oldChunk.Index != v.Chunk.Index || v.Chunk.Anchor != "" || v.Chunk.Bottom) {
+		scroll := m.resetView // a new page's script focus scrolls into view, as in browsers
+		m.resetView = false
+		return tea.Batch(cmd, m.finishChunk(), m.applyRing(scroll))
+	}
+	// Pan first: it is relative to the origin SetResult just reset to.
+	pan := m.viewer.Pan(crop.Min.X, crop.Min.Y)
+	return tea.Batch(cmd, pan, m.applyRing(false))
+}
+
+// onMouseRelease turns a press and release on one cell into a click the page
+// sees first. handled is false when the viewer should see the release too.
+func (m *Model) onMouseRelease(v tea.MouseReleaseMsg) (cmd tea.Cmd, handled bool) {
+	if m.overlay() {
+		return nil, true
+	}
+	p := image.Pt(v.X, v.Y)
+	click := m.pressed && p == m.pressCell
+	if m.cssPainted && (!m.frameInputReady() || m.pressGen != m.gen) {
+		m.pressed = false
+		v.Button = tea.MouseRight
+		return m.viewer.Update(v), true
+	}
+	m.pressed = false
+	if click && m.viewer != nil {
+		if m.pressGen == m.gen && m.frameInputReady() {
+			if link, ok := m.viewer.LinkAtCell(p); ok {
+				m.loop.LinkActivatedAt(m.gen, link)
+			} else if area, ok := m.viewer.CellToDocument(p); ok {
+				m.loop.ClickAtFrame(m.gen, area)
+			}
+		}
+		// Finish selection without a second activation. The host owns link
+		// dispatch so scripts can preventDefault before fragment navigation.
+		release := v
+		release.Button = tea.MouseRight
+		return m.viewer.Update(release), true
+	}
+	return nil, false
+}
+
+// onMouseWheel scrolls an embedded frame or pages a chunked document.
+// handled is false when the viewer should scroll.
+func (m *Model) onMouseWheel(v tea.MouseWheelMsg) (cmd tea.Cmd, handled bool) {
+	if !m.overlay() && m.viewer != nil {
+		if area, ok := m.viewer.CellToDocument(image.Pt(v.X, v.Y)); ok {
+			delta := image.Point{}
+			switch v.Button {
+			case tea.MouseWheelDown:
+				delta.Y = 40
+			case tea.MouseWheelUp:
+				delta.Y = -40
+			case tea.MouseWheelRight:
+				delta.X = 40
+			case tea.MouseWheelLeft:
+				delta.X = -40
+			}
+			for _, region := range m.frameRegions {
+				if region.Overlaps(area) && delta != (image.Point{}) {
+					if m.frameInputReady() {
+						m.loop.ScrollFrameAt(m.gen, area, delta)
+					}
+					return nil, true
+				}
+			}
+		}
+	}
+	if !m.overlay() && m.chunk.Count > 0 {
+		key := ""
+		if v.Button == tea.MouseWheelDown {
+			key = "down"
+		}
+		if v.Button == tea.MouseWheelUp {
+			key = "up"
+		}
+		if key != "" && m.chunkKey(key) {
+			return nil, true
+		}
+	}
+	return nil, false
+}
+
+// onKey routes a key press: overlays, prompts and form editing first, then
+// the browser's own keys. handled is false when the viewer should see next,
+// which is the key itself or the one a glynx browsing key stands for.
+func (m *Model) onKey(v tea.KeyPressMsg) (next tea.KeyPressMsg, cmd tea.Cmd, handled bool) {
+	if m.downloading.Load() && v.String() == "esc" {
+		m.navCancel()
+		m.setStatus(statusPlain, "download cancelled")
+		return v, nil, true
+	}
+	if m.player != nil {
+		if handled, cmd := m.playerKey(v); handled {
+			return v, cmd, true
+		}
+	}
+	if m.scriptPermissionKey(v.String()) {
+		return v, nil, true
+	}
+	searching := m.viewer != nil && m.viewer.SearchInputActive()
+	if m.pendingNav != "" && !searching {
+		switch v.String() {
+		case "enter":
+			href := m.pendingNav
+			plan := m.pendingScript
+			m.pendingScript = nil
+			m.pendingNav = ""
+			if plan != nil {
+				m.scriptNavCount = 0
+				return v, m.executeScriptNavigation(*plan), true
+			}
+			return v, m.navigate(href, pushNew, reachAny), true // the reader confirmed: any origin
+		case "esc":
+			m.pendingScript = nil
+			m.pendingNav = ""
+			m.setStatus(statusPlain, "stayed on "+m.current.String())
+			return v, nil, true
+		}
+	}
+	if !searching {
+		if m.glynx && m.mode == modeBrowse && !m.overlay() && !m.embeddedFocus && m.pendingNav == "" {
+			switch v.String() {
+			case "g":
+				return v, m.openAddress(), true
+			case "left":
+				return v, m.step(-1), true
+			case "f":
+				return v, m.step(1), true
+			case "right":
+				v = tea.KeyPressMsg{Code: tea.KeyEnter}
+			case "down":
+				v = tea.KeyPressMsg{Code: tea.KeyTab}
+			case "up":
+				v = tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
+			}
+		}
+		if m.media != nil {
+			switch v.String() {
+			case "esc":
+				return v, m.step(-1), true
+			case "q", "ctrl+c", "backspace", "alt+left", "alt+right":
+			default:
+				return v, nil, true
+			}
+		} else if handled, cmd := m.formKey(v); handled {
+			return v, cmd, true
+		}
+		switch v.String() {
+		case "q", "ctrl+c":
+			return v, m.quit(), true
+		case "backspace", "alt+left":
+			return v, m.step(-1), true
+		case "alt+right":
+			return v, m.step(+1), true
+		case "ctrl+r":
+			m.scriptNavCount = 0
+			if m.current != nil {
+				return v, m.navigate(m.current.String(), m.hIndex, m.admittedReach()), true
+			}
+			return v, nil, true
+		}
+		if m.overlay() {
+			return v, nil, true
+		}
+		// The terminal keeps its own navigation keys; the page gets a copy
+		// as keydown and cannot swallow them. Text typed into the viewer's
+		// / search box never reaches the page.
+		if m.embeddedFocus {
+			switch v.String() {
+			case "esc":
+				m.embeddedFocus = false
+				m.loop.LeaveFrameFocus(m.gen)
+				return v, nil, true
+			case "up", "down", "left", "right", "pgup", "pgdown", "home", "end":
+				if m.frameInputReady() {
+					m.loop.ScrollFocusedFrameAt(m.gen, v.String())
+				}
+				return v, nil, true
+			}
+		}
+		if m.frameInputReady() {
+			m.loop.InputAt(m.gen, v)
+		}
+		if m.chunkKey(v.String()) {
+			return v, nil, true
+		}
+	}
+	return v, nil, false
 }
 
 // overlay reports a picture or video in the page's place.
