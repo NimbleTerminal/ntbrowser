@@ -141,7 +141,7 @@ func New(p Policy) *Fetcher {
 			}
 			if state, ok := req.Context().Value(scriptIntegrityKey{}).(*scriptIntegrityContext); ok {
 				previous := via[len(via)-1].URL
-				if !sameOrigin(previous, req.URL) {
+				if !origin.Same(previous, req.URL) {
 					return fmt.Errorf("%w: cross-origin integrity redirects unsupported", ErrDenied)
 				}
 				if req.Response != nil {
@@ -185,7 +185,7 @@ func (p Policy) Allowed(u *url.URL) error {
 		return nil
 	}
 	// Same origin means scheme + host + port, as in browsers.
-	if p.Origin != nil && p.Origin.Scheme == u.Scheme && strings.EqualFold(hostPort(p.Origin), hostPort(u)) {
+	if origin.Same(p.Origin, u) {
 		return nil
 	}
 	for _, allowed := range p.AllowOrigins {
@@ -329,7 +329,11 @@ func (f *Fetcher) Open(ctx context.Context, r Request) (result *OpenResponse, re
 		}
 	}
 	if state, ok := ctx.Value(scriptIntegrityKey{}).(*scriptIntegrityContext); ok && state.cors {
-		req.Header.Set("Origin", serializedOrigin(state.origin))
+		own, ok := origin.OfURL(state.origin)
+		if !ok {
+			own = "null" // an opaque origin, which no Access-Control-Allow-Origin but * admits
+		}
+		req.Header.Set("Origin", own)
 	}
 	resp, err := f.client.Do(req)
 	if err != nil {
@@ -534,18 +538,6 @@ func forbiddenAddr(a netip.Addr, depth int) bool {
 		return forbiddenAddr(netip.AddrFrom4([4]byte{b[2], b[3], b[4], b[5]}), depth+1)
 	}
 	return false
-}
-
-func hostPort(u *url.URL) string {
-	port := u.Port()
-	if port == "" {
-		if u.Scheme == "https" {
-			port = "443"
-		} else {
-			port = "80"
-		}
-	}
-	return u.Hostname() + ":" + port
 }
 
 // Cookie access is bound to the current document URL by the loop, never by JS.

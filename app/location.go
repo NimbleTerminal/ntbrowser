@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"nimbleterminal.dev/ntbrowser/loop"
+	"nimbleterminal.dev/ntbrowser/origin"
 	"nimbleterminal.dev/ntbrowser/profile"
 )
 
@@ -17,21 +18,6 @@ type scriptPlan struct {
 	anyOrigin, originOnly bool
 }
 
-func sameLocationOrigin(a, b *url.URL) bool {
-	if a == nil || b == nil || a.Scheme != b.Scheme || !strings.EqualFold(a.Hostname(), b.Hostname()) {
-		return false
-	}
-	port := func(u *url.URL) string {
-		if u.Port() != "" {
-			return u.Port()
-		}
-		if u.Scheme == "https" {
-			return "443"
-		}
-		return "80"
-	}
-	return port(a) == port(b)
-}
 func (m *Model) blockScriptNavigation(reason string) tea.Cmd {
 	m.setStatus(statusError, "blocked script navigation: "+reason)
 	m.policy.Trace.Record("script_navigation_denied", reason)
@@ -61,7 +47,7 @@ func (m *Model) scriptNavigate(v loop.ScriptNavigateMsg) tea.Cmd {
 	if v.Mode == "reload" && v.Href != m.current.String() {
 		return m.blockScriptNavigation("reload destination differs from document")
 	}
-	same := sameLocationOrigin(m.current, u)
+	same := origin.Same(m.current, u)
 	plan := scriptPlan{request: v, hist: pushNew}
 	if v.Mode == "replace" || v.Mode == "reload" {
 		plan.hist = m.hIndex

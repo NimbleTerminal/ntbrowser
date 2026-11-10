@@ -15,6 +15,7 @@ import (
 
 	"golang.org/x/net/idna"
 	"golang.org/x/net/publicsuffix"
+	"nimbleterminal.dev/ntbrowser/origin"
 )
 
 const MaxCookieBytes = 4096
@@ -247,23 +248,6 @@ func SameSite(a, b *url.URL) bool {
 	return site(x) == site(y)
 }
 
-// sameOrigin treats omitted default ports as their explicit equivalents.
-func sameOrigin(a, b *url.URL) bool {
-	if host(a) == "" || host(b) == "" || host(a) != host(b) || a.Scheme != b.Scheme {
-		return false
-	}
-	port := func(u *url.URL) string {
-		if p := u.Port(); p != "" {
-			return p
-		}
-		if u.Scheme == "https" {
-			return "443"
-		}
-		return "80"
-	}
-	return port(a) == port(b)
-}
-
 // Transport adds cookies only to vetted requests. Subrequests must be exactly
 // same-origin with the document. Navigation may use destination cookies, with
 // SameSite restrictions relative to the initiating page and redirect chain.
@@ -280,7 +264,7 @@ func (t Transport) RoundTrip(req *http.Request) (*http.Response, error) {
 		return t.Base.RoundTrip(req)
 	}
 	nav := t.Navigation != nil && t.Navigation(req)
-	allowed := nav || sameOrigin(req.URL, t.Origin)
+	allowed := nav || origin.Same(req.URL, t.Origin)
 	if !allowed || t.Store == nil {
 		return t.Base.RoundTrip(req)
 	}

@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"nimbleterminal.dev/ntbrowser/origin"
 )
 
 type integrityMetadata struct {
@@ -103,26 +105,13 @@ type scriptIntegrityContext struct {
 	cors   bool
 }
 
-func sameOrigin(a, b *url.URL) bool {
-	return a != nil && b != nil && a.Scheme == b.Scheme && strings.EqualFold(hostPort(a), hostPort(b))
-}
-func serializedOrigin(u *url.URL) string {
-	host := strings.ToLower(u.Hostname())
-	if strings.Contains(host, ":") {
-		host = "[" + host + "]"
-	}
-	port := u.Port()
-	if port != "" && !(u.Scheme == "https" && port == "443") && !(u.Scheme == "http" && port == "80") {
-		host += ":" + port
-	}
-	return u.Scheme + "://" + host
-}
 func (s *scriptIntegrityContext) checkResponse(u *url.URL, h http.Header) error {
-	if sameOrigin(s.origin, u) {
+	if origin.Same(s.origin, u) {
 		return nil
 	}
 	values := h.Values("Access-Control-Allow-Origin")
-	if !s.cors || len(values) != 1 || (values[0] != "*" && values[0] != serializedOrigin(s.origin)) {
+	own, ok := origin.OfURL(s.origin)
+	if !s.cors || len(values) != 1 || (values[0] != "*" && !(ok && values[0] == own)) {
 		return fmt.Errorf("%w: integrity script requires an anonymous CORS response", ErrDenied)
 	}
 	return nil
@@ -148,7 +137,7 @@ func (f *Fetcher) Script(ctx context.Context, src, integrity, corsMode string) (
 		if err != nil {
 			return Response{}, err
 		}
-		if !sameOrigin(f.p.Origin, target) && !state.cors {
+		if !origin.Same(f.p.Origin, target) && !state.cors {
 			return Response{}, fmt.Errorf("%w: cross-origin integrity script requires crossorigin", ErrDenied)
 		}
 		ctx = context.WithValue(ctx, scriptIntegrityKey{}, state)

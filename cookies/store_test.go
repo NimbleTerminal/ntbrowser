@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"nimbleterminal.dev/ntbrowser/origin"
 )
 
 func uri(s string) *url.URL { u, _ := url.Parse(s); return u }
@@ -130,7 +132,7 @@ func TestIDNAAndSecureCookiePathOverlay(t *testing.T) {
 }
 
 func TestSameOriginDefaultPorts(t *testing.T) {
-	if !sameOrigin(uri("https://EXAMPLE.com/"), uri("https://example.com:443/")) || sameOrigin(uri("https://example.com/"), uri("https://example.com:444/")) {
+	if !origin.Same(uri("https://EXAMPLE.com/"), uri("https://example.com:443/")) || origin.Same(uri("https://example.com/"), uri("https://example.com:444/")) {
 		t.Fatal("origin port mismatch")
 	}
 }

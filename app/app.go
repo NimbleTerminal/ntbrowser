@@ -30,6 +30,7 @@ import (
 	"nimbleterminal.dev/ntbrowser/diagnostics"
 	"nimbleterminal.dev/ntbrowser/loop"
 	"nimbleterminal.dev/ntbrowser/netpolicy"
+	"nimbleterminal.dev/ntbrowser/origin"
 	"nimbleterminal.dev/ntbrowser/profile"
 )
 
@@ -315,7 +316,7 @@ func (m *Model) admit(href string, form bool, script ...bool) tea.Cmd {
 		m.setStatus(statusError, "bad link: "+err.Error())
 		return nil
 	}
-	sameOrigin := m.current != nil && m.current.Scheme == u.Scheme && strings.EqualFold(m.current.Host, u.Host)
+	sameOrigin := origin.Same(m.current, u)
 	switch m.nav {
 	case NavFree:
 	case NavAllowlist:

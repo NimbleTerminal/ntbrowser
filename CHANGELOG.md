@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- One same-origin predicate. `origin.Same` (scheme, host, effective port;
+  `origin.OfURL` serializes it) replaces five separate implementations in
+  `app`, `netpolicy` and `cookies` that disagreed on default ports and host
+  forms. Under `navigate=confirm` a link to `https://host:443/` from
+  `https://host/` no longer asks as if it left the site. URLs that are not
+  HTTP(S), carry credentials or have no host are same-origin with nothing
+  (`TestSame`, `TestConfirmTreatsDefaultPortAsSameOrigin`).
 - The status line carries a kind with its text (`app.status`). Which message
   a frame may replace and how a line is coloured used to be decided by
   matching the text's prefix (`[error] `, `load failed:`, `render:` …) in
