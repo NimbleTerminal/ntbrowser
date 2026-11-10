@@ -84,7 +84,24 @@ type (
 
 // Page is one navigation: tree + sandbox + policy. Replacing it discards the
 // whole JS heap, which is how cross-page isolation is achieved.
+// scheduled is what a page's script asked to run later. It belongs to the
+// page: a new page starts with none, and dropPage discards it in one place.
+type scheduled struct {
+	timers    timerHeap
+	animation []frameCB // requestAnimationFrame callbacks waiting for the next frame
+	animating []frameCB // the batch being run; a cancelled entry has a nil fn
+}
+
+// sched is the current page's scheduled work, or nil without a page.
+func (l *Loop) sched() *scheduled {
+	if l.page == nil {
+		return nil
+	}
+	return &l.page.scheduled
+}
+
 type Page struct {
+	scheduled
 	diagramsDisabled               bool
 	debugNavigation, debugRevision uint64
 	domPins                        map[jsvm.DOMRef]bool
@@ -216,11 +233,8 @@ type Loop struct {
 	outbox          chan tea.Msg
 	ctx             context.Context
 
-	page         *Page
-	timers       timerHeap
-	nextID       int
-	frames       []frameCB
-	activeFrames []frameCB
+	page   *Page
+	nextID int // timer and animation-callback handles; never reused across pages
 
 	currentFrame   atomic.Uint64
 	renderJobs     chan func(*paintWorker)
@@ -417,10 +431,11 @@ func stoppedTimer() *time.Timer {
 // armTimer points the single OS timer at the earliest JS deadline.
 func (l *Loop) armTimer() {
 	l.timerT.Stop()
-	if len(l.timers) == 0 {
+	sc := l.sched()
+	if sc == nil || len(sc.timers) == 0 {
 		return
 	}
-	l.timerT.Reset(max(0, time.Until(l.timers[0].when)))
+	l.timerT.Reset(max(0, time.Until(sc.timers[0].when)))
 }
 
 // post queues work for the VM goroutine and blocks if the inbox is full. Use
@@ -465,9 +480,6 @@ func (l *Loop) LoadPage(html string, base string, fetcher *netpolicy.Fetcher) ui
 			l.page.paintCancel()
 			l.dropPage(l.page)
 		}
-		l.timers = nil
-		l.frames = nil
-		l.activeFrames = nil
 		l.cfg.Trace.Record("document", map[string]any{"url": base, "navigation": gen, "html": html})
 		tree, err := dom.Parse(strings.NewReader(html), l.cfg.DOMLimits)
 		if err != nil {
@@ -550,9 +562,7 @@ func (l *Loop) dropPage(page *Page) {
 	if page.cancel != nil {
 		page.cancel()
 	}
-	l.timers = nil
-	l.frames = nil
-	l.activeFrames = nil
+	page.scheduled = scheduled{}
 	runtime.GC()
 }
 
@@ -1059,12 +1069,12 @@ func (l *Loop) startRender() {
 		html = page.Tree.SerializeFrames(frameHTML) // immutable snapshot after injection
 	}
 	page.Tree.ClearDirty()
-	l.pendingFrame = len(l.frames) > 0
+	l.pendingFrame = len(page.animation) > 0
 	l.renderInFlight = true
 	l.lastFrame = time.Now()
 	gen := l.gen.Add(1)
 	navigation := l.navGen.Load()
-	l.cfg.Trace.Record("snapshot", map[string]any{"url": page.Base, "navigation": navigation, "frame": gen, "html": html, "scripts": len(page.Tree.Scripts), "loaded": page.loaded, "disabled": page.killed, "timers": len(l.timers), "animation_frames": len(l.frames), "dropped": l.dropped.Load()})
+	l.cfg.Trace.Record("snapshot", map[string]any{"url": page.Base, "navigation": navigation, "frame": gen, "html": html, "scripts": len(page.Tree.Scripts), "loaded": page.loaded, "disabled": page.killed, "timers": len(page.timers), "animation_frames": len(page.animation), "dropped": l.dropped.Load()})
 	viewport := l.viewport()
 	if page.firstFrame {
 		viewport.Origin = image.Point{}
@@ -1325,16 +1335,17 @@ type frameCB struct {
 // callbacks wait for another frame; cancellation can still remove a callback
 // from the active batch. Unstarted callbacks survive budget exhaustion.
 func (l *Loop) runFrameCallbacks() {
-	if len(l.frames) == 0 || l.page == nil || l.page.killed {
+	page := l.page
+	if page == nil || len(page.animation) == 0 || page.killed {
 		return
 	}
-	l.activeFrames = l.frames
-	l.frames = nil
-	sb := l.page.Sandbox
+	page.animating = page.animation
+	page.animation = nil
+	sb := page.Sandbox
 	ts := sb.PerformanceNow()
 	deadline := time.Now().Add(time.Duration(l.cfg.Profile.FrameBudget()) * time.Millisecond)
-	for i := range l.activeFrames {
-		cb := l.activeFrames[i]
+	for i := range page.animating {
+		cb := page.animating[i]
 		if cb.fn == nil {
 			continue
 		}
@@ -1342,23 +1353,23 @@ func (l *Loop) runFrameCallbacks() {
 		if remaining <= 0 {
 			break
 		}
-		l.activeFrames[i].fn = nil
+		page.animating[i].fn = nil
 		l.report(sb.CallWithinBudget(remaining, cb.fn, goja.Undefined(), sb.ToValue(ts)))
 		if sb.Disabled() {
 			break
 		}
 	}
-	pending := make([]frameCB, 0, len(l.activeFrames)+len(l.frames))
+	pending := make([]frameCB, 0, len(page.animating)+len(page.animation))
 	if !sb.Disabled() {
-		for _, cb := range l.activeFrames {
+		for _, cb := range page.animating {
 			if cb.fn != nil {
 				pending = append(pending, cb)
 			}
 		}
-		pending = append(pending, l.frames...)
+		pending = append(pending, page.animation...)
 	}
-	l.activeFrames = nil
-	l.frames = pending
+	page.animating = nil
+	page.animation = pending
 }
 
 // ---- timers ----
@@ -1393,19 +1404,20 @@ func (h timerHeap) find(id int) *timer {
 // fireTimers runs every due timer, each in its own watchdog slice, so one
 // slow callback cannot starve the others or the frame.
 func (l *Loop) fireTimers() {
+	page := l.page
+	if page == nil {
+		return
+	}
 	now := time.Now()
-	for len(l.timers) > 0 && !l.timers[0].when.After(now) {
-		t := heap.Pop(&l.timers).(*timer)
+	for len(page.timers) > 0 && !page.timers[0].when.After(now) {
+		t := heap.Pop(&page.timers).(*timer)
 		if t.repeat {
 			t.when = now.Add(t.interval)
-			heap.Push(&l.timers, t)
+			heap.Push(&page.timers, t)
 		}
-		if l.page == nil {
-			continue
-		}
-		err := l.page.Sandbox.Call(t.fn, goja.Undefined(), t.args...)
+		err := page.Sandbox.Call(t.fn, goja.Undefined(), t.args...)
 		if errors.Is(err, jsvm.ErrDisabled) {
-			l.timers = nil
+			page.timers = nil
 			return
 		}
 		l.report(err)
@@ -1422,18 +1434,20 @@ func (h *host) SetTimer(delay time.Duration, repeat bool, fn goja.Callable, args
 	if limit <= 0 {
 		limit = 256
 	}
-	if len(l.timers) >= limit {
+	sc := l.sched()
+	if sc == nil || len(sc.timers) >= limit {
 		return 0, false
 	}
 	l.nextID++
-	heap.Push(&l.timers, &timer{id: l.nextID, when: time.Now().Add(delay), interval: delay, repeat: repeat, fn: fn, args: args})
+	heap.Push(&sc.timers, &timer{id: l.nextID, when: time.Now().Add(delay), interval: delay, repeat: repeat, fn: fn, args: args})
 	return l.nextID, true
 }
 
 func (h *host) ClearTimer(id int) {
-	l := (*Loop)(h)
-	if t := l.timers.find(id); t != nil && !t.internal {
-		heap.Remove(&l.timers, t.index)
+	if sc := (*Loop)(h).sched(); sc != nil {
+		if t := sc.timers.find(id); t != nil && !t.internal {
+			heap.Remove(&sc.timers, t.index)
+		}
 	}
 }
 
@@ -1442,14 +1456,15 @@ func (h *host) ClearTimer(id int) {
 func (h *host) QueueTask(fn goja.Callable) (int, bool) {
 	id, ok := h.SetTimer(0, false, fn, nil)
 	if ok {
-		(*Loop)(h).timers.find(id).internal = true
+		(*Loop)(h).sched().timers.find(id).internal = true
 	}
 	return id, ok
 }
 func (h *host) ClearTask(id int) {
-	l := (*Loop)(h)
-	if t := l.timers.find(id); t != nil && t.internal {
-		heap.Remove(&l.timers, t.index)
+	if sc := (*Loop)(h).sched(); sc != nil {
+		if t := sc.timers.find(id); t != nil && t.internal {
+			heap.Remove(&sc.timers, t.index)
+		}
 	}
 }
 
@@ -1478,8 +1493,12 @@ func (h *host) Later(delay time.Duration, fn func()) {
 // callback at the frame cadence.
 func (h *host) RequestFrame(fn goja.Callable) int {
 	l := (*Loop)(h)
-	count := len(l.frames)
-	for _, cb := range l.activeFrames {
+	sc := l.sched()
+	if sc == nil {
+		return 0
+	}
+	count := len(sc.animation)
+	for _, cb := range sc.animating {
 		if cb.fn != nil {
 			count++
 		}
@@ -1488,22 +1507,25 @@ func (h *host) RequestFrame(fn goja.Callable) int {
 		return 0
 	}
 	l.nextID++
-	l.frames = append(l.frames, frameCB{id: l.nextID, fn: fn})
+	sc.animation = append(sc.animation, frameCB{id: l.nextID, fn: fn})
 	l.pendingFrame = true
 	return l.nextID
 }
 
 func (h *host) CancelFrame(id int) {
-	l := (*Loop)(h)
-	for i, cb := range l.activeFrames {
+	sc := (*Loop)(h).sched()
+	if sc == nil {
+		return
+	}
+	for i, cb := range sc.animating {
 		if cb.id == id {
-			l.activeFrames[i].fn = nil
+			sc.animating[i].fn = nil
 			return
 		}
 	}
-	for i, f := range l.frames {
+	for i, f := range sc.animation {
 		if f.id == id {
-			l.frames = append(l.frames[:i], l.frames[i+1:]...)
+			sc.animation = append(sc.animation[:i], sc.animation[i+1:]...)
 			return
 		}
 	}

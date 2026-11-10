@@ -75,8 +75,8 @@ func TestAnimationCancellationAndRegistrationDuringBatch(t *testing.T) {
 		t.Fatal("callback cap bypassed")
 	}
 	l.runFrameCallbacks()
-	if strings.Join(ran, ",") != "a" || len(l.frames) != 1 || firstTS < 0 {
-		t.Fatal(ran, l.frames)
+	if strings.Join(ran, ",") != "a" || len(l.page.animation) != 1 || firstTS < 0 {
+		t.Fatal(ran, l.page.animation)
 	}
 	l.runFrameCallbacks()
 	if strings.Join(ran, ",") != "a,next" {
@@ -94,7 +94,7 @@ func TestAnimationSharedBudgetDefersUnstartedCallbacks(t *testing.T) {
 	h.RequestFrame(func(goja.Value, ...goja.Value) (goja.Value, error) { time.Sleep(5 * time.Millisecond); return nil, nil })
 	h.RequestFrame(func(goja.Value, ...goja.Value) (goja.Value, error) { ran++; return nil, nil })
 	l.runFrameCallbacks()
-	if ran != 0 || len(l.frames) != 1 {
+	if ran != 0 || len(l.page.animation) != 1 {
 		t.Fatal("batch budget ignored")
 	}
 	l.runFrameCallbacks()

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- A page's timers and animation callbacks belong to its `loop.Page`
+  (`scheduled`) instead of the `Loop`: a new page starts with none and
+  `dropPage` discards them in one place, where three sites used to reset
+  them. No behaviour change.
 - `jsvm.Sandbox` state is grouped per feature (mutations, frames, messages,
   events, resources, bindings) in embedded structs, and `Close` releases a
   group with one assignment instead of clearing some fifty fields by hand.

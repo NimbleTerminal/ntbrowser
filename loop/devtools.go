@@ -64,7 +64,7 @@ func (l *Loop) inspectOwned(r devtools.Request) devtools.Response {
 			if owner == l || parent == l.page.frameID {
 				parent = 0
 			}
-			snap.Frames = append(snap.Frames, devtools.Frame{ID: id, Revision: p.debugRevision, Parent: parent, URL: devtools.URL(p.Base), Nodes: p.Tree.Live(), DOMBytes: p.Tree.Bytes(), Scripts: len(p.Tree.Scripts), Timers: len(owner.timers), AnimationCallbacks: len(owner.frames), PendingScripts: p.dynamicPending, Loaded: p.loadComplete, Disabled: p.killed})
+			snap.Frames = append(snap.Frames, devtools.Frame{ID: id, Revision: p.debugRevision, Parent: parent, URL: devtools.URL(p.Base), Nodes: p.Tree.Live(), DOMBytes: p.Tree.Bytes(), Scripts: len(p.Tree.Scripts), Timers: len(p.timers), AnimationCallbacks: len(p.animation), PendingScripts: p.dynamicPending, Loaded: p.loadComplete, Disabled: p.killed})
 		}
 		sort.Slice(snap.Frames, func(i, j int) bool { return snap.Frames[i].ID < snap.Frames[j].ID })
 		return devtools.Response{Snapshot: snap}
