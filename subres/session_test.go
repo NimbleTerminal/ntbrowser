@@ -15,6 +15,7 @@ import (
 	"image/png"
 	"net/url"
 	"os"
+	"runtime"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -513,7 +514,12 @@ func TestMaxInFlightQueue(t *testing.T) {
 	cfg.MaxInFlight = 2
 	s, r := newTestSession(t, cfg, ft)
 	s.Discover(nil, []string{"1.png", "2.png", "3.png", "4.png", "5.png"}, nil)
-	time.Sleep(50 * time.Millisecond)
+	// Hold every fetch until the cap is reached, so the cap is exercised.
+	for deadline := time.Now().Add(2 * time.Second); high.Load() < 2; runtime.Gosched() {
+		if time.Now().After(deadline) {
+			t.Fatalf("only %d fetches in flight, want 2", high.Load())
+		}
+	}
 	close(release)
 	r.settle(t, func() bool { return len(s.Images()) == 5 })
 	if high.Load() > 2 {

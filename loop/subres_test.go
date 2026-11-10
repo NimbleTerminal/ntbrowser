@@ -192,21 +192,25 @@ func TestStyledFirstFrame(t *testing.T) {
 }
 
 func TestStyleTimeoutUnstyledThenStyled(t *testing.T) {
+	// The sheet is held back until the first frame has arrived, so that
+	// frame can only be the StyleTimeout's: no wall-clock bound to race.
+	release := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(600 * time.Millisecond)
+		select {
+		case <-release:
+		case <-r.Context().Done():
+			return
+		}
 		serve("text/css", []byte("h1{color:#ff0000}"))(w, r)
 	}))
 	defer srv.Close()
-	l, sink := newSubresLoop(t, subres.Config{StyleTimeout: 200 * time.Millisecond})
-	start := time.Now()
+	l, sink := newSubresLoop(t, subres.Config{StyleTimeout: 50 * time.Millisecond})
 	l.LoadPage(`<link rel="stylesheet" href="/slow.css"><h1>Hi</h1>`, srv.URL+"/", nil)
 	first := nextFrame(t, sink)
-	if d := time.Since(start); d > 500*time.Millisecond {
-		t.Fatalf("first frame took %v, StyleTimeout is 200ms", d)
-	}
 	if c := boxColor(first.Result, "h1"); isRed(c) {
 		t.Fatal("first frame should be unstyled")
 	}
+	close(release)
 	frameWhere(t, sink, 5*time.Second, func(f FrameMsg) bool { return isRed(boxColor(f.Result, "h1")) })
 }
 
@@ -497,13 +501,20 @@ func TestRuleBudgetDropsBigSheet(t *testing.T) {
 }
 
 func TestRuleBudgetIsDocumentOrder(t *testing.T) {
+	bServed := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/a.css":
-			time.Sleep(150 * time.Millisecond) // b.css finishes first
+			select { // b.css finishes first
+			case <-bServed:
+			case <-r.Context().Done():
+				return
+			}
 			serve("text/css", []byte(selectors(2999, "margin:0")+" h1{color:#ff0000}"))(w, r)
 		case "/b.css":
 			serve("text/css", []byte(selectors(1999, "margin:0")+" h2{color:#0000ff}"))(w, r)
+			w.(http.Flusher).Flush()
+			close(bServed)
 		}
 	}))
 	defer srv.Close()

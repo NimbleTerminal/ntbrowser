@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Four tests no longer depend on a fixed sleep being long enough: the style
+  timeout, rule-budget document order, in-flight cap and localStorage sink
+  failure tests now wait on the event they are about.
 - Six more fuzz targets beside the DOM round trip, all run by `task fuzz`:
   `Set-Cookie`/`document.cookie` parsing, cookie and localStorage snapshot
   files, profile JSON, the state-file reader and the CSS rule counter

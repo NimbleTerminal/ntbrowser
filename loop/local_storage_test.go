@@ -4,6 +4,7 @@ package loop
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -74,7 +75,19 @@ func TestLocalStorageSinkFailureIsReportedOnce(t *testing.T) {
 	defer cancel()
 	sink := make(chanSink, 256)
 	store := sessionstorage.New(0, 0)
-	l := New(ctx, Config{Profile: p, Width: 400, LocalStorage: store, LocalStorageSink: func([]byte) error { return errors.New("disk full") }}, sink)
+	writes := make(chan int, 16) // how many entries each failed write carried
+	l := New(ctx, Config{Profile: p, Width: 400, LocalStorage: store, LocalStorageSink: func(data []byte) error {
+		var snap struct {
+			Origins []struct{ Entries [][2]string }
+		}
+		_ = json.Unmarshal(data, &snap)
+		n := 0
+		for _, o := range snap.Origins {
+			n += len(o.Entries)
+		}
+		writes <- n
+		return errors.New("disk full")
+	}}, sink)
 	go l.Run()
 	l.LoadPage(`<script>localStorage.setItem('a','1');setTimeout(()=>{localStorage.setItem('b','2');console.log('second')},40)</script>`, "https://example.test/", nil)
 	warnings := 0
@@ -85,7 +98,16 @@ func TestLocalStorageSinkFailureIsReportedOnce(t *testing.T) {
 		}
 		return ok && lm.Line == "second"
 	})
-	time.Sleep(50 * time.Millisecond)
+	// The sink runs on the loop goroutine, so once the write carrying both
+	// entries has failed and the loop answers, any warning for it was sent.
+	for entries := 0; entries < 2; {
+		select {
+		case entries = <-writes:
+		case <-time.After(5 * time.Second):
+			t.Fatal("the second entry was never flushed")
+		}
+	}
+	pageState(t, l)
 	for len(sink) > 0 {
 		if lm, ok := (<-sink).(LogMsg); ok && lm.Level == "warn" {
 			warnings++
