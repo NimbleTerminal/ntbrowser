@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Six more fuzz targets beside the DOM round trip, all run by `task fuzz`:
+  `Set-Cookie`/`document.cookie` parsing, cookie and localStorage snapshot
+  files, profile JSON, the state-file reader and the CSS rule counter
+  (checked against nthtml so it never under-counts). The cookie target found
+  that a restored cookie file rewrote an unset SameSite as Default; a
+  snapshot now restores to itself, and a file can no longer restore a
+  `SameSite=None` cookie without `Secure`, which `Set` already refused
+  (`TestRestoreRefusesSameSiteNoneWithoutSecure`).
 - `task lint` (golangci-lint, `.golangci.yml`) and `task vuln` (govulncheck)
   run in both modules and are part of `task ci`. The tree is clean under
   both on macOS and Linux; the findings fixed on the way were style only,

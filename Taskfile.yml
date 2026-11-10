@@ -73,13 +73,22 @@ tasks:
       - go -C cmd/ntbrowser-media run {{.GOVULNCHECK}} ./...
 
   fuzz:
-    desc: 'Fuzz DOM parsing and serialization (DURATION=30s)'
+    desc: 'Fuzz every parser of untrusted input, DURATION each (default 15s)'
     vars:
-      DURATION: '{{default "30s" .DURATION}}'
+      DURATION: '{{default "15s" .DURATION}}'
+      TARGETS: >-
+        ./dom:FuzzParseSerializeRoundTrip
+        ./cookies:FuzzSetCookie
+        ./cookies:FuzzRestore
+        ./profile:FuzzParse
+        ./sessionstorage:FuzzRestore
+        ./subres:FuzzCountRules
+        ./internal/browsercmd:FuzzLoadState
     env:
       NTBROWSER_FUZZ_DURATION: '{{.DURATION}}'
     cmds:
-      - go test -mod=readonly -run='^$' -fuzz=FuzzParseSerializeRoundTrip -fuzztime="$NTBROWSER_FUZZ_DURATION" -parallel=2 ./dom/
+      - for: { var: TARGETS }
+        cmd: go test -mod=readonly -run='^$' -fuzz='^{{index (splitList ":" .ITEM) 1}}$' -fuzztime="$NTBROWSER_FUZZ_DURATION" -parallel=2 {{index (splitList ":" .ITEM) 0}}
 
   build:
     desc: Build everything and the binary into bin/

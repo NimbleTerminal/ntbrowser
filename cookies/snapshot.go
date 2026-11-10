@@ -102,8 +102,11 @@ func (s *Store) Restore(data []byte) error {
 		if c.Name == "" || c.Domain == "" || c.Path == "" || c.Expires.IsZero() || !now.Before(c.Expires) || len(c.Name)+len(c.Value) > MaxCookieBytes {
 			continue
 		}
-		if c.SameSite < int(http.SameSiteDefaultMode) || c.SameSite > int(http.SameSiteNoneMode) {
-			c.SameSite = int(http.SameSiteDefaultMode)
+		if c.SameSite < 0 || c.SameSite > int(http.SameSiteNoneMode) {
+			c.SameSite = 0 // unset, as Set stores a cookie without the attribute
+		}
+		if c.SameSite == int(http.SameSiteNoneMode) && !c.Secure {
+			continue // Set refuses it; a file must not bring it back
 		}
 		if len(s.entries) >= MaxCookies || perDomain[c.Domain] >= MaxDomainCookies {
 			break
