@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `loop.Config.PaintDeadline` (default 2 s, unchanged) bounds a layout or
+  band paint. The HiDPI and wide-terminal tests paint rasters large enough
+  to miss two seconds under the race detector on a loaded machine; they now
+  set a generous deadline.
 - More tests around the process boundary: inside the sandbox, state and
   diagnostics files come only from inherited descriptors; state files are
   owner-only regular files (no symlink, no directory); the cookie persister

@@ -12,6 +12,8 @@ import (
 	"nimbleterminal.dev/nthtml/document"
 )
 
+// paintDeadline bounds one layout or band paint (Config.PaintDeadline
+// overrides it for hosts that paint on slower machines, and for tests).
 const paintDeadline = 2 * time.Second
 
 // paintQueue holds one latest request. It never grows with scroll input.
@@ -74,7 +76,7 @@ func (l *Loop) runRenderer() {
 			if w.painter == nil || w.result != req.Result || w.revision != req.Revision || w.ctx.Err() != nil {
 				ready.Err = context.Canceled
 			} else {
-				ctx, cancel := context.WithTimeout(req.Context, paintDeadline)
+				ctx, cancel := context.WithTimeout(req.Context, l.cfg.PaintDeadline)
 				stop := context.AfterFunc(w.ctx, cancel)
 				ready.Image, ready.Err = w.painter.Paint(ctx, req.Plan.Area, req.Plan.Scale)
 				stop()

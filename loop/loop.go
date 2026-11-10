@@ -168,11 +168,13 @@ type Config struct {
 	Width       int           // document pixel width handed to nthtml (default 800)
 	ColorScheme string        // "light" (default) or "dark": prefers-color-scheme and light-dark() for the page
 	MinFrame    time.Duration // minimum spacing between re-flows (default 33ms)
-	RenderLimit document.Limits
-	Fonts       document.FaceSource
-	Inbox       int // buffered tasks (default 256)
-	Outbox      int // buffered messages to the UI (default 1024)
-	Script      jsvm.Config
+	// PaintDeadline bounds one layout or band paint (default 2s).
+	PaintDeadline time.Duration
+	RenderLimit   document.Limits
+	Fonts         document.FaceSource
+	Inbox         int // buffered tasks (default 256)
+	Outbox        int // buffered messages to the UI (default 1024)
+	Script        jsvm.Config
 	// Profile is the frozen security profile. Its zero value has every gate
 	// closed: no script runs and fetch() is refused.
 	Profile profile.Profile
@@ -246,6 +248,9 @@ func New(ctx context.Context, cfg Config, sink Sink) *Loop {
 	}
 	if cfg.Profile.FrameMillis > 0 {
 		cfg.MinFrame = time.Duration(cfg.Profile.FrameInterval()) * time.Millisecond
+	}
+	if cfg.PaintDeadline <= 0 {
+		cfg.PaintDeadline = paintDeadline
 	}
 	if cfg.MinFrame <= 0 {
 		cfg.MinFrame = 33 * time.Millisecond
@@ -1066,7 +1071,7 @@ func (l *Loop) startRender() {
 		viewport.ZoomSteps = 0
 	}
 	l.renderJobs <- func(worker *paintWorker) {
-		ctx, cancel := context.WithTimeout(page.paintCtx, paintDeadline)
+		ctx, cancel := context.WithTimeout(page.paintCtx, l.cfg.PaintDeadline)
 		defer cancel()
 		// Parse and Render enforce nthtml's own byte/node/pixel budgets; a
 		// hostile tree fails here with document.ErrLimit instead of

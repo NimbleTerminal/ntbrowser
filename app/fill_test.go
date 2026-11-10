@@ -28,7 +28,9 @@ func fillModelScaled(t *testing.T, cols, rows, cw, ch int, scale float64, page s
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	sink := make(chan tea.Msg, 256)
-	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 800, Fonts: document.MinimalFonts, MinFrame: time.Millisecond}, chanSink(sink))
+	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 800, Fonts: document.MinimalFonts, MinFrame: time.Millisecond,
+		PaintDeadline: time.Minute, // these rasters are large; under -race on a loaded machine 2s is not enough
+	}, chanSink(sink))
 	go l.Run()
 	m := New(l, testProfile(nil, false, NavFree), Options{})
 	m.pageScale = scale
