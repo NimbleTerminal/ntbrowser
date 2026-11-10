@@ -71,6 +71,9 @@ func stateFiles(st *state, sandboxed bool) (local, jar *os.File, err error) {
 		}
 		if p.Cookies == profile.CookiesSession {
 			if jar, err = inheritedFile(st.CookieFD, "cookies"); err != nil {
+				if local != nil {
+					local.Close()
+				}
 				return nil, nil, err
 			}
 		}

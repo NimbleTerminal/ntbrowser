@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- More tests around the process boundary: inside the sandbox, state and
+  diagnostics files come only from inherited descriptors; state files are
+  owner-only regular files (no symlink, no directory); the cookie persister
+  coalesces writes and survives a failing disk; `Run`'s exits before the
+  terminal; and the macOS path when `sandbox-exec` is unavailable. A
+  sandboxed start that lacked the cookie descriptor leaked the storage
+  descriptor it had already wrapped; it is now closed.
 - Four tests no longer depend on a fixed sleep being long enough: the style
   timeout, rule-budget document order, in-flight cap and localStorage sink
   failure tests now wait on the event they are about.
