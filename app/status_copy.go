@@ -13,7 +13,7 @@ func (m *Model) copyStatus() tea.Cmd {
 	if m.profile.Clipboard != profile.ClipboardCopy {
 		return nil
 	}
-	text := m.status
+	text := m.status.text
 	if m.addressOpen && m.addressError != "" {
 		text = m.addressError
 	}

@@ -52,7 +52,7 @@ func TestSearchFormEndToEnd(t *testing.T) {
 		for {
 			select {
 			case <-deadline:
-				t.Fatalf("timed out waiting for %s (status %q, mode %v)", what, m.status, m.mode)
+				t.Fatalf("timed out waiting for %s (status %q, mode %v)", what, m.status.text, m.mode)
 			case msg := <-sink:
 				_, cmd := m.Update(msg)
 				if _, nav := msg.(loop.NavigateMsg); nav && cmd != nil {

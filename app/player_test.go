@@ -144,7 +144,7 @@ func TestVideoLinkPlays(t *testing.T) {
 	r := videoModel(t, srv.URL)
 	run(t, r.m, srv.URL+"/v.mp4")
 	if r.m.player == nil {
-		t.Fatalf("no player; status %q", r.m.status)
+		t.Fatalf("no player; status %q", r.m.status.text)
 	}
 	if len(r.m.history) != 0 {
 		t.Fatalf("a video is not a history entry: %v", r.m.history)
@@ -163,8 +163,8 @@ func TestVideoOffRefuses(t *testing.T) {
 	srv := videoServer(t)
 	m := contentModel(t, openProfile(profile.MediaAnimation), srv.URL)
 	run(t, m, srv.URL+"/v.mp4")
-	if m.player != nil || m.status != "video is off in this profile" {
-		t.Fatalf("status %q", m.status)
+	if m.player != nil || m.status.text != "video is off in this profile" {
+		t.Fatalf("status %q", m.status.text)
 	}
 }
 
@@ -222,8 +222,8 @@ func TestVideoOverCapRemovesFile(t *testing.T) {
 	r := videoModel(t, srv.URL)
 	r.m.profile.MaxMediaBytes = 100
 	run(t, r.m, srv.URL+"/v.mp4")
-	if r.m.player != nil || !strings.Contains(r.m.status, "over the media limit") || dirEntries(t, r.dir) != 0 {
-		t.Fatalf("player %v status %q files %d", r.m.player, r.m.status, dirEntries(t, r.dir))
+	if r.m.player != nil || !strings.Contains(r.m.status.text, "over the media limit") || dirEntries(t, r.dir) != 0 {
+		t.Fatalf("player %v status %q files %d", r.m.player, r.m.status.text, dirEntries(t, r.dir))
 	}
 }
 
@@ -305,8 +305,8 @@ func TestHelperDeathDuringPlay(t *testing.T) {
 		t.Fatalf("player %v files %d", r.m.player, dirEntries(t, r.dir))
 	}
 	run(t, r.m, srv.URL+"/v.mp4")
-	if r.m.player != nil || !strings.Contains(r.m.status, "media helper stopped") {
-		t.Fatalf("after death: %q", r.m.status)
+	if r.m.player != nil || !strings.Contains(r.m.status.text, "media helper stopped") {
+		t.Fatalf("after death: %q", r.m.status.text)
 	}
 }
 
@@ -315,8 +315,8 @@ func TestNoHelperMeansLine(t *testing.T) {
 	p := openProfile(profile.MediaVideo)
 	m := contentModel(t, p, srv.URL)
 	run(t, m, srv.URL+"/v.mp4")
-	if m.player != nil || !strings.Contains(m.status, "can't display") {
-		t.Fatalf("%q", m.status)
+	if m.player != nil || !strings.Contains(m.status.text, "can't display") {
+		t.Fatalf("%q", m.status.text)
 	}
 }
 

@@ -23,17 +23,9 @@ func chromeLine(line string, width int, style ansi.Style) string {
 	return style.Styled(line)
 }
 
-func statusLine(line string, width int) string {
-	lower := strings.ToLower(line)
-	for _, prefix := range []string{"[error]", "error:", "load failed:", "render:", "paint:", "blocked", "bad link:"} {
-		if strings.HasPrefix(lower, prefix) {
-			return chromeLine(line, width, errorLineStyle)
-		}
+func statusLine(s status, width int) string {
+	if style, ok := s.style(); ok {
+		return chromeLine(s.text, width, style)
 	}
-	for _, prefix := range []string{"[warn]", "[warning]", "[image warning]", "[page warning]"} {
-		if strings.HasPrefix(lower, prefix) {
-			return chromeLine(line, width, warningLineStyle)
-		}
-	}
-	return ansi.Truncate(clean(line), max(1, width), "…")
+	return ansi.Truncate(clean(s.text), max(1, width), "…")
 }

@@ -65,6 +65,6 @@ func (m *Model) scriptPermissionKey(key string) bool {
 		decision = "deny"
 	}
 	m.loop.DecideScriptPermission(request.ID, request.Navigation, decision)
-	m.status = clean("script permission: " + decision)
+	m.setStatus(statusPlain, "script permission: "+decision)
 	return true
 }

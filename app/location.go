@@ -33,7 +33,7 @@ func sameLocationOrigin(a, b *url.URL) bool {
 	return port(a) == port(b)
 }
 func (m *Model) blockScriptNavigation(reason string) tea.Cmd {
-	m.status = clean("blocked script navigation: " + reason)
+	m.setStatus(statusError, "blocked script navigation: "+reason)
 	m.policy.Trace.Record("script_navigation_denied", reason)
 	return nil
 }
@@ -91,7 +91,7 @@ func (m *Model) scriptNavigate(v loop.ScriptNavigateMsg) tea.Cmd {
 	if gate == profile.ScriptNavConfirm || m.nav == NavConfirm && !same {
 		m.pendingNav = v.Href
 		m.pendingScript = &plan
-		m.status = clean("Script requests " + v.Mode + " to " + v.Href + "? Enter to allow · Esc to stay")
+		m.setStatus(statusPlain, "Script requests "+v.Mode+" to "+v.Href+"? Enter to allow · Esc to stay")
 		return nil
 	}
 	if m.nav == NavConfirm && same {

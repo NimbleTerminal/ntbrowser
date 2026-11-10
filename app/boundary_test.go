@@ -40,7 +40,7 @@ func TestViewNeverCarriesTerminalEscapes(t *testing.T) {
 	m.Update(loop.TitleMsg{Title: "Owned" + osc52 + "\x9d title   line"})
 	m.Update(loop.LogMsg{Level: "error", Line: "x\x1b[31mred"})
 	m.Update(pageLoadedMsg{seq: m.navSeq, err: errors.New("parse \"" + osc52 + "\": bad")})
-	for _, probe := range []string{m.title, m.status} {
+	for _, probe := range []string{m.title, m.status.text} {
 		if hasTerminalControls(probe) {
 			t.Fatalf("stored unsanitized: %q", probe)
 		}
@@ -52,13 +52,13 @@ func TestViewNeverCarriesTerminalEscapes(t *testing.T) {
 	// A link whose href carries controls is refused by url.Parse; the error
 	// quotes the input, and the quoted form must still be free of controls.
 	m.Update(loop.NavigateMsg{Href: "https://evil.test/" + osc52})
-	if hasTerminalControls(m.status) || !strings.HasPrefix(m.status, "bad link:") {
-		t.Fatalf("bad-link status: %q", m.status)
+	if hasTerminalControls(m.status.text) || !strings.HasPrefix(m.status.text, "bad link:") {
+		t.Fatalf("bad-link status: %q", m.status.text)
 	}
 	// A parseable off-origin link is shown in the confirm prompt, cleaned.
 	m.Update(loop.NavigateMsg{Href: "https://evil.test/\u0085path"})
-	if hasTerminalControls(m.status) || !strings.Contains(m.status, "Open https://evil.test/") {
-		t.Fatalf("confirm prompt: %q", m.status)
+	if hasTerminalControls(m.status.text) || !strings.Contains(m.status.text, "Open https://evil.test/") {
+		t.Fatalf("confirm prompt: %q", m.status.text)
 	}
 }
 
@@ -157,8 +157,8 @@ func TestFrameWithoutWarningsKeepsStatus(t *testing.T) {
 	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 1, Result: renderTall(t, `<p>x</p>`)}))
 	m.Update(loop.LogMsg{Level: "log", Line: "hello from the page"})
 	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 2, Result: renderTall(t, `<p>y</p>`)}))
-	if !strings.Contains(m.status, "hello from the page") {
-		t.Fatalf("frame wiped the status line: %q", m.status)
+	if !strings.Contains(m.status.text, "hello from the page") {
+		t.Fatalf("frame wiped the status line: %q", m.status.text)
 	}
 }
 
@@ -172,12 +172,12 @@ func TestFirstFrameClearsLoadingStatus(t *testing.T) {
 	m := New(l, testProfile(nil, false, NavFree), "")
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m.Update(pageLoadedMsg{html: "<p>x</p>", base: mustURL(t, "https://example.test/"), seq: m.navSeq, hist: pushNew})
-	if !strings.HasPrefix(m.status, "loading ") {
-		t.Fatalf("status after load: %q", m.status)
+	if !strings.HasPrefix(m.status.text, "loading ") {
+		t.Fatalf("status after load: %q", m.status.text)
 	}
 	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 1, Result: renderTall(t, `<p>x</p>`)}))
-	if strings.HasPrefix(m.status, "loading ") {
-		t.Fatalf("first frame left the loading status: %q", m.status)
+	if strings.HasPrefix(m.status.text, "loading ") {
+		t.Fatalf("first frame left the loading status: %q", m.status.text)
 	}
 }
 
@@ -190,20 +190,20 @@ func TestScriptErrorSurvivesFirstFrameAndResize(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m.Update(pageLoadedMsg{html: "<p>x</p>", base: mustURL(t, "https://example.test/"), seq: m.navSeq, hist: pushNew})
 	m.Update(loop.LogMsg{Level: "error", Line: "ReferenceError: Image is not defined at page.js:2:1"})
-	want := m.status
+	want := m.status.text
 	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 1, Result: renderTall(t, `<p>x</p>`)}))
-	if m.status != want {
-		t.Fatalf("first frame erased error: %q", m.status)
+	if m.status.text != want {
+		t.Fatalf("first frame erased error: %q", m.status.text)
 	}
 	m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 2, Result: renderTall(t, `<p>x</p>`), Warnings: []string{"stylesheet unavailable"}}))
-	if m.status != want {
-		t.Fatalf("resize reflow replaced error: %q", m.status)
+	if m.status.text != want {
+		t.Fatalf("resize reflow replaced error: %q", m.status.text)
 	}
 	m.Update(pageLoadedMsg{html: "<p>next</p>", base: mustURL(t, "https://example.test/next"), seq: m.navSeq, hist: pushNew})
 	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 3, Result: renderTall(t, `<p>next</p>`)}))
-	if strings.Contains(m.status, "ReferenceError") {
-		t.Fatalf("error survived navigation: %q", m.status)
+	if strings.Contains(m.status.text, "ReferenceError") {
+		t.Fatalf("error survived navigation: %q", m.status.text)
 	}
 }
 
@@ -220,27 +220,27 @@ func TestImageWarningDoesNotReplaceNavigationFailureOrPrompt(t *testing.T) {
 		m.Update(cssFrame(t, m, loop.FrameMsg{Gen: gen, Result: res, Warnings: []string{warning}}))
 	}
 	frame(1)
-	if m.status != "[image warning] "+warning {
-		t.Fatalf("unlabelled warning: %q", m.status)
+	if m.status.text != "[image warning] "+warning {
+		t.Fatalf("unlabelled warning: %q", m.status.text)
 	}
 	m.Update(pageLoadedMsg{seq: m.navSeq, err: errors.New("response too large")})
-	want := m.status
+	want := m.status.text
 	frame(2)
-	if m.status != want {
-		t.Fatalf("image masked page failure: %q", m.status)
+	if m.status.text != want {
+		t.Fatalf("image masked page failure: %q", m.status.text)
 	}
 	m.pendingNav = "https://example.test/next"
-	m.status = "Open https://example.test/next? Enter to open · Esc to stay"
-	want = m.status
+	m.setStatus(statusPlain, "Open https://example.test/next? Enter to open · Esc to stay")
+	want = m.status.text
 	frame(3)
-	if m.status != want {
-		t.Fatalf("image masked confirmation: %q", m.status)
+	if m.status.text != want {
+		t.Fatalf("image masked confirmation: %q", m.status.text)
 	}
 	m.pendingNav = ""
 	m.Update(pageLoadedMsg{html: "<p>next</p>", base: mustURL(t, "https://example.test/next"), seq: m.navSeq, hist: pushNew})
 	frame(4)
-	if m.status != "[image warning] "+warning {
-		t.Fatalf("old failure survived new page: %q", m.status)
+	if m.status.text != "[image warning] "+warning {
+		t.Fatalf("old failure survived new page: %q", m.status.text)
 	}
 }
 

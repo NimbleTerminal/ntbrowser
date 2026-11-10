@@ -34,7 +34,7 @@ func TestWheelAndKeyboardStayInsideFrame(t *testing.T) {
 		for {
 			select {
 			case <-deadline:
-				t.Fatalf("waiting for %q, status %q, regions %v, focus %v", want, m.status, m.frameRegions, m.embeddedFocus)
+				t.Fatalf("waiting for %q, status %q, regions %v, focus %v", want, m.status.text, m.frameRegions, m.embeddedFocus)
 			case msg := <-sink:
 				if log, ok := msg.(loop.LogMsg); ok {
 					if log.Level == "error" {

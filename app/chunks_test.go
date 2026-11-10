@@ -132,8 +132,8 @@ func TestChunkAppSkipsOversizedUnit(t *testing.T) {
 	if !strings.Contains(text, "last") {
 		t.Fatal("last chunk not readable")
 	}
-	if strings.HasPrefix(m.status, "render:") {
-		t.Fatalf("stale render error: %s", m.status)
+	if strings.HasPrefix(m.status.text, "render:") {
+		t.Fatalf("stale render error: %s", m.status.text)
 	}
 }
 

@@ -47,8 +47,8 @@ func TestScriptFocusStaysInBrowseMode(t *testing.T) {
 	if m.mode != modeBrowse {
 		t.Fatalf("mode %v", m.mode)
 	}
-	if !strings.Contains(m.status, "focus: Search") {
-		t.Fatalf("status %q", m.status)
+	if !strings.Contains(m.status.text, "focus: Search") {
+		t.Fatalf("status %q", m.status.text)
 	}
 	m.Update(tea.KeyPressMsg{Code: 'q', Text: "q"})
 	if !m.closing {
@@ -89,8 +89,8 @@ func TestFirstFrameKeepsFocusLine(t *testing.T) {
 	m.Update(pageLoadedMsg{html: "<p>x</p>", base: mustURL(t, "https://page.test/b"), seq: m.navSeq, hist: pushNew})
 	m.Update(textFocus("q", "Search", false))
 	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 2, Result: renderTall(t, `<p>y</p>`)}))
-	if m.status != "focus: Search" {
-		t.Fatalf("status %q", m.status)
+	if m.status.text != "focus: Search" {
+		t.Fatalf("status %q", m.status.text)
 	}
 }
 
@@ -153,8 +153,8 @@ func TestLabelsAreCleaned(t *testing.T) {
 func TestFormSubmitConfirmWording(t *testing.T) {
 	m := newModel(t, NavConfirm)
 	m.Update(loop.NavigateMsg{Href: "https://other.test/s?q=secret", Form: true})
-	if m.status != "Submit form to other.test? Enter to send · Esc to stay" {
-		t.Fatalf("status %q", m.status)
+	if m.status.text != "Submit form to other.test? Enter to send · Esc to stay" {
+		t.Fatalf("status %q", m.status.text)
 	}
 }
 
@@ -162,7 +162,7 @@ func TestPasswordNeverShown(t *testing.T) {
 	m := newModel(t, NavFree)
 	m.Update(loop.FocusMsg{Source: "p", User: true, Control: loop.ControlInfo{Kind: "password", Label: "Password"}})
 	typeText(m, "secret")
-	if strings.Contains(m.View().Content, "secret") || strings.Contains(m.status, "secret") {
+	if strings.Contains(m.View().Content, "secret") || strings.Contains(m.status.text, "secret") {
 		t.Fatal("typed password shown")
 	}
 	m2 := newModel(t, NavFree)
@@ -174,7 +174,7 @@ func TestPasswordNeverShown(t *testing.T) {
 	if m2.input.Value() != "hunter2x" {
 		t.Fatalf("typing did not append: %q", m2.input.Value())
 	}
-	if strings.Contains(m2.View().Content, "hunter2") || strings.Contains(m2.status, "hunter2") {
+	if strings.Contains(m2.View().Content, "hunter2") || strings.Contains(m2.status.text, "hunter2") {
 		t.Fatal("pre-filled password shown")
 	}
 }
@@ -207,8 +207,8 @@ func TestConfirmPromptWinsOverEditMode(t *testing.T) {
 	m.Update(loop.NavigateMsg{Href: "https://other.test/s?q=1", Form: true})
 	seq = m.navSeq
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	if m.navSeq != seq || m.pendingNav != "" || !strings.HasPrefix(m.status, "stayed on") {
-		t.Fatalf("esc: seq %d→%d status %q", seq, m.navSeq, m.status)
+	if m.navSeq != seq || m.pendingNav != "" || !strings.HasPrefix(m.status.text, "stayed on") {
+		t.Fatalf("esc: seq %d→%d status %q", seq, m.navSeq, m.status.text)
 	}
 
 	m = newModel(t, NavConfirm)
@@ -222,8 +222,8 @@ func TestAllowlistBlocksFormSubmission(t *testing.T) {
 	m := newModel(t, NavAllowlist)
 	seq := m.navSeq
 	m.Update(loop.NavigateMsg{Href: "https://evil.test/s?q=1", Form: true})
-	if m.navSeq != seq || !strings.HasPrefix(m.status, "blocked: ") {
-		t.Fatalf("seq %d→%d status %q", seq, m.navSeq, m.status)
+	if m.navSeq != seq || !strings.HasPrefix(m.status.text, "blocked: ") {
+		t.Fatalf("seq %d→%d status %q", seq, m.navSeq, m.status.text)
 	}
 }
 

@@ -97,7 +97,7 @@ type Model struct {
 	addressError      string
 	addressOpen       bool
 	address           textinput.Model
-	status            string
+	status            status
 	closing           bool
 	start             string
 
@@ -312,7 +312,7 @@ func (m *Model) admit(href string, form bool, script ...bool) tea.Cmd {
 	}
 	u, err := url.Parse(href)
 	if err != nil {
-		m.status = clean("bad link: " + err.Error())
+		m.setStatus(statusError, "bad link: "+err.Error())
 		return nil
 	}
 	sameOrigin := m.current != nil && m.current.Scheme == u.Scheme && strings.EqualFold(m.current.Host, u.Host)
@@ -322,19 +322,19 @@ func (m *Model) admit(href string, form bool, script ...bool) tea.Cmd {
 		p := m.policy
 		p.Origin = m.current
 		if err := p.Allowed(u); err != nil {
-			m.status = clean("blocked: " + err.Error())
+			m.setStatus(statusFailure, "blocked: "+err.Error())
 			return nil
 		}
 	default:
-		m.status = "blocked: navigation is off in this profile"
+		m.setStatus(statusFailure, "blocked: navigation is off in this profile")
 		return nil
 	case NavConfirm:
 		if !sameOrigin {
 			m.pendingNav = href
 			if form {
-				m.status = clean("Submit form to " + u.Host + "? Enter to send · Esc to stay") // the host, not the values in the URL
+				m.setStatus(statusPlain, "Submit form to "+u.Host+"? Enter to send · Esc to stay") // the host, not the values in the URL
 			} else {
-				m.status = clean("Open " + href + "? Enter to open · Esc to stay")
+				m.setStatus(statusPlain, "Open "+href+"? Enter to open · Esc to stay")
 			}
 			return nil
 		}
@@ -404,11 +404,11 @@ func (m *Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		if v.err != nil {
 			m.policy.Trace.Record("navigation_error", map[string]any{"url": v.finalURL, "error": v.err.Error()})
 			m.documentSeq = m.navSeq
-			m.status = clean("load failed: " + v.err.Error()) // errors echo page-controlled input
+			m.setStatus(statusFailure, "load failed: "+v.err.Error()) // errors echo page-controlled input
 			return m, nil
 		}
 		if v.line != "" {
-			m.status = clean(v.line) // not presented; the current page stays
+			m.setStatus(statusPlain, v.line) // not presented; the current page stays
 			return m, nil
 		}
 		if v.video != "" {
@@ -429,7 +429,7 @@ func (m *Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		if v.img != nil {
 			view, cmd := newMediaView(v.img, v.player, m.pictureOptions(), m.cols, m.viewRows())
 			m.media = view
-			m.status = ""
+			m.clearStatus()
 			return m, tea.Batch(append(cmds, cmd)...)
 		}
 		p := m.policy
@@ -439,7 +439,7 @@ func (m *Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		}
 		m.documentNav = m.loop.LoadPage(v.html, v.base.String(), netpolicy.New(p))
 		m.documentSeq = m.navSeq
-		m.status = clean("loading " + v.base.String())
+		m.setStatus(statusPlain, "loading "+v.base.String())
 		return m, tea.Batch(cmds...)
 
 	case nthtml.PaintRequest:
@@ -453,9 +453,9 @@ func (m *Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		}
 		cmd := m.viewer.Update(v)
 		if err := m.viewer.Err(); err != nil {
-			m.status = clean("paint: " + err.Error())
-		} else if strings.HasPrefix(m.status, "paint:") {
-			m.status = ""
+			m.setStatus(statusPaint, "paint: "+err.Error())
+		} else if m.status.kind == statusPaint {
+			m.clearStatus()
 		}
 		return m, cmd
 	case loop.FrameFocusMsg:
@@ -490,7 +490,7 @@ func (m *Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		oldChunk := m.chunk
 		m.chunk, m.chunkFailed = v.Chunk, v.Err != nil && v.Chunk.Count > 0
 		if v.Err != nil {
-			m.status = clean("render: " + v.Err.Error())
+			m.setStatus(statusRender, "render: "+v.Err.Error())
 			if m.chunkFailed {
 				return m, m.leaveForms()
 			}
@@ -498,24 +498,24 @@ func (m *Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		}
 		warnings := append(statusWarnings(v.Result.Warnings), v.Warnings...) // nthtml's, then the loader's
 		switch {
-		case strings.HasPrefix(m.status, "[error] ") || strings.HasPrefix(m.status, "load failed:") || strings.HasPrefix(m.status, "blocked:") || m.pendingNav != "":
+		case m.status.sticky() || m.pendingNav != "":
 			// Reflow and resource warnings do not resolve a page/script failure
 			// or answer a pending navigation confirmation.
 		case len(warnings) > 0:
-			m.status = clean("[page warning] " + strings.Join(warnings, "; "))
+			m.setStatus(statusWarning, "[page warning] "+strings.Join(warnings, "; "))
 			if len(warnings) == 1 && strings.HasPrefix(warnings[0], "image ") {
-				m.status = clean("[image warning] " + warnings[0])
+				m.setStatus(statusWarning, "[image warning] "+warnings[0])
 			}
-		case strings.HasPrefix(m.status, "render:") || strings.HasPrefix(m.status, "paint:"):
-			m.status = ""
-		case m.resetView && !strings.HasPrefix(m.status, "focus: "):
-			m.status = "" // the page's first frame: "loading …" is over (a focus line set by the page stays)
+		case m.status.kind == statusRender || m.status.kind == statusPaint:
+			m.clearStatus()
+		case m.resetView && m.status.kind != statusFocus:
+			m.clearStatus() // the page's first frame: "loading …" is over (a focus line set by the page stays)
 		}
 		if v.Painted != nil {
 			return m, m.installCSSFrame(v)
 		}
 		if v.Chunk.Count == 0 {
-			m.status = "render: missing initial CSS band"
+			m.setStatus(statusRender, "render: missing initial CSS band")
 			return m, nil
 		}
 		if m.viewer == nil {
@@ -580,7 +580,7 @@ func (m *Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 	case loop.TitleMsg:
 		m.title = clean(v.Title) // page text: never trusted at the terminal boundary
 	case loop.LogMsg:
-		m.status = clean(fmt.Sprintf("[%s] %s", v.Level, v.Line)) // jsvm strips console text; error strings may still echo page input
+		m.setStatus(consoleStatus(v.Level), fmt.Sprintf("[%s] %s", v.Level, v.Line)) // jsvm strips console text; error strings may still echo page input
 
 	case nthtml.LinkMsg:
 		if v.Owner != m.viewer || !m.frameInputReady() {
@@ -677,7 +677,7 @@ func (m *Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 	case tea.KeyPressMsg:
 		if m.downloading.Load() && v.String() == "esc" {
 			m.navCancel()
-			m.status = "download cancelled"
+			m.setStatus(statusPlain, "download cancelled")
 			return m, nil
 		}
 		if m.player != nil {
@@ -704,7 +704,7 @@ func (m *Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 			case "esc":
 				m.pendingScript = nil
 				m.pendingNav = ""
-				m.status = clean("stayed on " + m.current.String())
+				m.setStatus(statusPlain, "stayed on "+m.current.String())
 				return m, nil
 			}
 		}
@@ -903,7 +903,7 @@ func (m *Model) View() tea.View {
 		name, keys = "glynx", "↑↓ focus · → open · ← back · f fwd · g address/search"
 	}
 	copyHint := ""
-	if m.status != "" && m.profile.Clipboard == profile.ClipboardCopy {
+	if m.status.text != "" && m.profile.Clipboard == profile.ClipboardCopy {
 		copyHint = " · Alt+C copy status"
 	}
 	help := "\n " + name + copyHint + " · " + ansi.Truncate(clean(m.title), 40, "…") + pos + " · profile " + clean(m.profile.Name) + enforced + " · " + keys + " · ^R reload · / search · q quit"

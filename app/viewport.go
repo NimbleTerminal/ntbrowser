@@ -110,7 +110,7 @@ func (m *Model) syncViewport() tea.Cmd {
 
 func (m *Model) installCSSFrame(v loop.FrameMsg) tea.Cmd {
 	if v.Painted.Revision != v.Gen || v.Painted.Result != v.Result {
-		m.status = "render: mismatched frame revision"
+		m.setStatus(statusRender, "render: mismatched frame revision")
 		return nil
 	}
 	var desired nthtml.PaintViewport
@@ -134,7 +134,7 @@ func (m *Model) installCSSFrame(v loop.FrameMsg) tea.Cmd {
 	}
 	cmd, err := m.viewer.SetPaintedResult(*v.Painted, !m.resetView)
 	if err != nil {
-		m.status = clean("render: " + err.Error())
+		m.setStatus(statusRender, "render: "+err.Error())
 		return init
 	}
 	// Init is idempotent at the picture level and only needed for this model.

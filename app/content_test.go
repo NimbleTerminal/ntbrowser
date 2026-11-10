@@ -116,8 +116,8 @@ func TestUnknownKeepsPage(t *testing.T) {
 	m.current = mustURL(t, srv.URL+"/here")
 	m.history, m.hIndex = []string{srv.URL + "/here"}, 0
 	run(t, m, srv.URL+"/z")
-	if m.status != "application/zip · 2 KB · can't display" || m.current.Path != "/here" || len(m.history) != 1 {
-		t.Fatalf("status %q current %v history %v", m.status, m.current, m.history)
+	if m.status.text != "application/zip · 2 KB · can't display" || m.current.Path != "/here" || len(m.history) != 1 {
+		t.Fatalf("status %q current %v history %v", m.status.text, m.current, m.history)
 	}
 }
 
@@ -128,8 +128,8 @@ func TestRefusedKindReadsNoBody(t *testing.T) {
 	m := contentModel(t, openProfile(profile.MediaAnimation), srv.URL)
 	m.current = mustURL(t, srv.URL+"/here")
 	run(t, m, srv.URL+"/v")
-	if m.status != "video is off in this profile" || m.current.Path != "/here" {
-		t.Fatalf("status %q", m.status)
+	if m.status.text != "video is off in this profile" || m.current.Path != "/here" {
+		t.Fatalf("status %q", m.status.text)
 	}
 	if w.Load() >= int64(len(big)) {
 		t.Fatal("the whole body was sent; it should have been abandoned")
@@ -161,8 +161,8 @@ func TestImageRefusedUnderMediaOff(t *testing.T) {
 	srv := contentServer(t, &w, map[string][2]string{"/i": {"image/png", string(pngBytes(t))}})
 	m := contentModel(t, openProfile(profile.MediaOff), srv.URL)
 	run(t, m, srv.URL+"/i")
-	if m.media != nil || m.status != "image is off in this profile" {
-		t.Fatalf("status %q", m.status)
+	if m.media != nil || m.status.text != "image is off in this profile" {
+		t.Fatalf("status %q", m.status.text)
 	}
 }
 
@@ -190,8 +190,8 @@ func TestOverCapByLength(t *testing.T) {
 	p.MaxMediaBytes = 100
 	m := contentModel(t, p, srv.URL)
 	run(t, m, srv.URL+"/i")
-	if m.media != nil || m.status != "image/png · 4 KB · over the media limit" {
-		t.Fatalf("status %q", m.status)
+	if m.media != nil || m.status.text != "image/png · 4 KB · over the media limit" {
+		t.Fatalf("status %q", m.status.text)
 	}
 }
 
@@ -206,7 +206,7 @@ func TestOverCapByBytes(t *testing.T) {
 	p.MaxMediaBytes = 100
 	m := contentModel(t, p, srv.URL)
 	run(t, m, srv.URL+"/i")
-	if m.media != nil || !strings.Contains(m.status, "over the media limit") {
-		t.Fatalf("status %q", m.status)
+	if m.media != nil || !strings.Contains(m.status.text, "over the media limit") {
+		t.Fatalf("status %q", m.status.text)
 	}
 }

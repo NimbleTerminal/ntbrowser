@@ -68,7 +68,7 @@ func (m *Model) addressUpdate(msg tea.Msg) (bool, tea.Cmd) {
 			}
 			if err != nil {
 				m.addressError = err.Error()
-				m.status = clean("address: " + err.Error())
+				m.setStatus(statusPlain, "address: "+err.Error())
 				return true, nil
 			}
 			m.addressOpen = false

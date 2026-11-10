@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- The status line carries a kind with its text (`app.status`). Which message
+  a frame may replace and how a line is coloured used to be decided by
+  matching the text's prefix (`[error] `, `load failed:`, `render:` …) in
+  five places; both now follow from the kind, so text that merely looks like
+  a failure gains no priority or styling. No visible change
+  (`TestStatusKindNotTextDecidesPriorityAndStyle`).
 - Reuse connections across a session. Every fetcher used to build its own
   HTTP transport: the navigation, the page, its subresources and each
   external script or frame dialed and handshook separately, so a page with

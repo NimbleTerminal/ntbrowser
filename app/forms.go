@@ -56,13 +56,13 @@ func (m *Model) onFocus(f loop.FocusMsg) tea.Cmd {
 	m.focus = f
 	if f.Source == "" {
 		m.mode = modeBrowse
-		if strings.HasPrefix(m.status, "focus: ") {
-			m.status = ""
+		if m.status.kind == statusFocus {
+			m.clearStatus()
 		}
 		return tea.Batch(m.applyRing(false), m.resizeIfPanel(wasPanel))
 	}
 	cmds := []tea.Cmd{m.applyRing(true)}
-	m.status = clean("focus: " + m.label())
+	m.setStatus(statusFocus, "focus: "+m.label())
 	switch {
 	case f.User && isTextKind(f.Control.Kind):
 		cmds = append(cmds, m.startEdit())
@@ -157,7 +157,7 @@ func (m *Model) commit() tea.Cmd {
 		m.loop.SetValue(m.focus.Source, m.focus.Control.Value, true)
 	}
 	m.mode = modeBrowse
-	m.status = clean("focus: " + m.label())
+	m.setStatus(statusFocus, "focus: "+m.label())
 	return m.resizeIfPanel(before)
 }
 

@@ -129,7 +129,7 @@ func (m *Model) debugUpdate(msg tea.Msg) (bool, tea.Cmd) {
 	key, ok := msg.(tea.KeyPressMsg)
 	if ok && key.Code == tea.KeyF12 {
 		if !m.profile.DevTools || m.debug.session == nil {
-			m.status = "Devtools disabled; launch with --devtools"
+			m.setStatus(statusPlain, "Devtools disabled; launch with --devtools")
 			return true, nil
 		}
 		before := m.panelRows()

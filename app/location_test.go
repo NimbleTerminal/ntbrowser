@@ -48,7 +48,7 @@ func TestScriptNavigationIntersectionAndStaleRequests(t *testing.T) {
 		m.profile.Navigate = tc.nav
 		cmd := m.scriptNavigate(locationRequest(m, tc.href, "assign"))
 		if (cmd != nil) != tc.allowed || (m.pendingScript != nil) != tc.prompt {
-			t.Fatalf("%+v: %s", tc, m.status)
+			t.Fatalf("%+v: %s", tc, m.status.text)
 		}
 	}
 	m := locationModel(t, profile.ScriptNavOrigin)
@@ -87,7 +87,7 @@ func TestScriptNavigationRedirectScopeAndBudget(t *testing.T) {
 	m.policy.AllowHosts = []string{"127.0.0.1"}
 	cmd := m.scriptNavigate(locationRequest(m, server.URL+"/redirect", "replace"))
 	if cmd == nil {
-		t.Fatal(m.status)
+		t.Fatal(m.status.text)
 	}
 	result := cmd().(pageLoadedMsg)
 	if result.err == nil {
@@ -117,7 +117,7 @@ func TestLocationReplaceAndReloadSelectExistingHistoryEntry(t *testing.T) {
 		}
 		cmd := m.scriptNavigate(locationRequest(m, target, mode))
 		if cmd == nil {
-			t.Fatal(m.status)
+			t.Fatal(m.status.text)
 		}
 		result := cmd().(pageLoadedMsg)
 		if result.err != nil {

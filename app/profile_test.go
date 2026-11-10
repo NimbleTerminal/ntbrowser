@@ -17,8 +17,8 @@ func TestNavigateOffRefusesLinkButLoadsStart(t *testing.T) {
 	m := newModel(t, profile.NavOff)
 	m.start = "https://page.test/"
 	seq := m.navSeq
-	if cmd := m.admit("https://page.test/other", false); cmd != nil || m.navSeq != seq || !strings.Contains(m.status, "navigation is off") {
-		t.Fatalf("cmd %v seq %d→%d status %q", cmd != nil, seq, m.navSeq, m.status)
+	if cmd := m.admit("https://page.test/other", false); cmd != nil || m.navSeq != seq || !strings.Contains(m.status.text, "navigation is off") {
+		t.Fatalf("cmd %v seq %d→%d status %q", cmd != nil, seq, m.navSeq, m.status.text)
 	}
 	if m.Init() == nil || m.navSeq != seq+1 {
 		t.Fatal("the start URL must still load")
@@ -74,7 +74,7 @@ func TestAnchorDestinationProfilePerimeter(t *testing.T) {
 			m := newModel(t, tc.mode)
 			_, cmd := m.Update(loop.NavigateMsg{Href: tc.href})
 			if (cmd != nil) != tc.allowed || (m.pendingNav != "") != tc.prompt {
-				t.Fatalf("cmd=%v prompt=%q status=%q", cmd != nil, m.pendingNav, m.status)
+				t.Fatalf("cmd=%v prompt=%q status=%q", cmd != nil, m.pendingNav, m.status.text)
 			}
 		})
 	}

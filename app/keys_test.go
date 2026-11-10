@@ -50,8 +50,8 @@ func TestQuitAndHistoryKeys(t *testing.T) {
 
 func TestNavigationModes(t *testing.T) {
 	m := newModel(t, NavAllowlist)
-	if cmd := m.admit("https://evil.test/", false); cmd != nil || !strings.HasPrefix(m.status, "blocked:") {
-		t.Fatalf("allowlist admitted evil: %q", m.status)
+	if cmd := m.admit("https://evil.test/", false); cmd != nil || !strings.HasPrefix(m.status.text, "blocked:") {
+		t.Fatalf("allowlist admitted evil: %q", m.status.text)
 	}
 	if cmd := m.admit("https://cdn.test/x", false); cmd == nil {
 		t.Fatal("allowlist refused an allowlisted host")

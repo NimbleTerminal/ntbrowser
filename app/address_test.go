@@ -41,8 +41,8 @@ func TestAddressStartupPasteAndNavigationGate(t *testing.T) {
 		t.Fatal(m.address.Value())
 	}
 	m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	if m.navSeq != 0 || !strings.HasPrefix(m.status, "blocked:") {
-		t.Fatal("address bypassed navigation gate", m.status)
+	if m.navSeq != 0 || !strings.HasPrefix(m.status.text, "blocked:") {
+		t.Fatal("address bypassed navigation gate", m.status.text)
 	}
 	m.nav = NavConfirm
 	m.openAddress()

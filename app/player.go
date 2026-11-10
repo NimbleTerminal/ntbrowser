@@ -238,7 +238,7 @@ func (m *Model) startPlayer(name string) tea.Cmd {
 	closing := m.closePlayer() // never two
 	pic := ntpicture.New(m.pictureOptions())
 	m.player = &player{pic: pic, name: name, playing: true, dead: m.bridge.dead.Load()}
-	m.status = ""
+	m.clearStatus()
 	cmd := tea.Batch(closing, pic.Init(), pic.SetSize(m.cols, m.viewRows()))
 	m.sendSize()
 	m.bridge.client.OpenMedia(ntmediabox.OpenRequest{
@@ -291,7 +291,7 @@ func (m *Model) playerKey(k tea.KeyPressMsg) (handled bool, cmd tea.Cmd) {
 func (m *Model) onVideo(msg tea.Msg) tea.Cmd {
 	switch v := msg.(type) {
 	case videoProgressMsg:
-		m.status = "downloading · " + humanSize(v.bytes)
+		m.setStatus(statusPlain, "downloading · "+humanSize(v.bytes))
 	case videoDeadMsg:
 		if m.player != nil {
 			m.player.dead = true
