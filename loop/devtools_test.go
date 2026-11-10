@@ -15,12 +15,12 @@ import (
 
 func TestInspectionGateSnapshotAndStaleDOM(t *testing.T) {
 	p := testProfile
-	l, _, f := scriptTestLoop(t, p, "https://example.test")
+	l, _, _ := scriptTestLoop(t, p, "https://example.test")
 	if out, err := l.Inspect(context.Background(), devtools.Request{Method: "snapshot"}); err != nil || out.Error != "disabled" {
 		t.Fatal(out, err)
 	}
 	p.DevTools = true
-	l, _, f = scriptTestLoop(t, p, "https://example.test")
+	l, _, f := scriptTestLoop(t, p, "https://example.test")
 	l.LoadPage("<p>Hello</p>", "https://example.test/?token=SECRET", f)
 	pageState(t, l)
 	s := devtools.New(true, l.Inspect)

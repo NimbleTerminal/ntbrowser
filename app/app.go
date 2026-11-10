@@ -365,9 +365,6 @@ func (m *Model) admit(v loop.NavigateMsg) tea.Cmd {
 			m.setStatus(statusFailure, "blocked: "+err.Error())
 			return nil
 		}
-	default:
-		m.setStatus(statusFailure, "blocked: navigation is off in this profile")
-		return nil
 	case NavConfirm:
 		if !sameOrigin {
 			m.pendingNav = href
@@ -379,6 +376,9 @@ func (m *Model) admit(v loop.NavigateMsg) tea.Cmd {
 			return nil
 		}
 		return m.navigate(href, pushNew, reachAllowed) // same-origin: a redirect off-origin is refused, not silently followed
+	default:
+		m.setStatus(statusFailure, "blocked: navigation is off in this profile")
+		return nil
 	}
 	if m.nav == NavFree {
 		return m.navigate(href, pushNew, reachAny)

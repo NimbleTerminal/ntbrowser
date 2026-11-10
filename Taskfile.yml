@@ -10,6 +10,8 @@ vars:
   EXE: '{{if eq OS "windows"}}.exe{{end}}'
   RACE: '{{if eq OS "darwin"}}-race{{end}}' # needs cgo on Linux
   WASM_PKGS: ./devtools ./dom ./jsvm ./loop ./netpolicy ./subres ./profile ./content
+  GOLANGCI_LINT: github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.15.0
+  GOVULNCHECK: golang.org/x/vuln/cmd/govulncheck@v1.9.0
 
 tasks:
   default:
@@ -23,11 +25,13 @@ tasks:
       - task --list-all
 
   ci:
-    desc: Run formatting, module, test, vet, WASM, notices, build, and fuzz checks
+    desc: Run formatting, module, lint, vulnerability, test, vet, WASM, notices, build, and fuzz checks
     cmds:
       - task: fmt-check
       - task: go-tidy-check
       - task: go-verify
+      - task: lint
+      - task: vuln
       - task: check
       - task: build
       - task: build-nocjk
@@ -55,6 +59,18 @@ tasks:
     cmds:
       - go mod verify
       - go -C cmd/ntbrowser-media mod verify
+
+  lint:
+    desc: Run golangci-lint (.golangci.yml) in both modules
+    cmds:
+      - go run {{.GOLANGCI_LINT}} run ./...
+      - cd cmd/ntbrowser-media && go run {{.GOLANGCI_LINT}} run -c ../../.golangci.yml ./...
+
+  vuln:
+    desc: Check both modules against the Go vulnerability database (needs network)
+    cmds:
+      - go run {{.GOVULNCHECK}} ./...
+      - go -C cmd/ntbrowser-media run {{.GOVULNCHECK}} ./...
 
   fuzz:
     desc: 'Fuzz DOM parsing and serialization (DURATION=30s)'

@@ -35,7 +35,6 @@ func helperProbe(tmp string) {
 	_, err = os.ReadFile(filepath.Join(tmp, "clip"))
 	report("readtemp", err)
 	report("writetemp", os.WriteFile(filepath.Join(tmp, "new"), []byte("x"), 0o600))
-	_, err = os.Stat("/dev/tty")
 	f, err := os.OpenFile("/dev/tty", os.O_RDWR, 0)
 	if f != nil {
 		f.Close()

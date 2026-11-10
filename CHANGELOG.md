@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- `task lint` (golangci-lint, `.golangci.yml`) and `task vuln` (govulncheck)
+  run in both modules and are part of `task ci`. The tree is clean under
+  both on macOS and Linux; the findings fixed on the way were style only,
+  plus a dead `sysKill` constant left from the helper's move to ntmediabox.
 - Internal API cleanup, no behaviour change. `app.New` takes an
   `app.Options` struct in place of ten `Set*` calls (`SetMedia` remains: it
   needs the running program); the `file:` reader is `Options.OpenLocal` on

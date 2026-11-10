@@ -1,0 +1,27 @@
+# ntbrowser - Copyright (c) 2026 Neomantra Corp.
+# golangci-lint v2; `task lint` runs it in both modules.
+version: "2"
+linters:
+  settings:
+    staticcheck:
+      checks:
+        - all
+        # golangci-lint's own defaults (naming and comment-form style checks):
+        - -ST1000
+        - -ST1003
+        - -ST1016
+        - -ST1020
+        - -ST1021
+        - -ST1022
+        # De Morgan rewrites of character-range checks read worse.
+        - -QF1001
+  exclusions:
+    # Close, Remove and Print* on a path that is already ending: there is
+    # nothing to do with the error.
+    presets:
+      - std-error-handling
+    rules:
+      # Tests write to httptest recorders and close pipes they are done with.
+      - path: _test\.go
+        linters:
+          - errcheck

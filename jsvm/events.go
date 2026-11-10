@@ -143,7 +143,7 @@ func (s *Sandbox) addEventListener(w *goja.Object, typ string, callback, options
 		panic(s.vm.NewTypeError("listener must be an object or function"))
 	}
 	capture, once, passive := false, false, false
-	var signal goja.Value = goja.Undefined()
+	signal := goja.Undefined()
 	if o, ok := options.(*goja.Object); ok {
 		capture = flag(o, "capture")
 		once = flag(o, "once")
@@ -303,11 +303,12 @@ func (s *Sandbox) Dispatch(ev Event) (prevented bool, err error) {
 	}
 	run := func(*goja.Runtime) error {
 		proto := s.eventProto
-		if ev.Type == "keydown" || ev.Type == "keyup" || ev.Type == "keypress" {
+		switch ev.Type {
+		case "keydown", "keyup", "keypress":
 			proto = s.specialEventProtos["KeyboardEvent"]
-		} else if ev.Type == "click" {
+		case "click":
 			proto = s.specialEventProtos["MouseEvent"]
-		} else if ev.Type == "focus" || ev.Type == "blur" || ev.Type == "focusin" || ev.Type == "focusout" {
+		case "focus", "blur", "focusin", "focusout":
 			proto = s.specialEventProtos["FocusEvent"]
 		}
 		event := s.newEvent(ev.Type, !ev.NoBubble, !ev.NonCancelable, false, proto)

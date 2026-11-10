@@ -15,8 +15,6 @@ const (
 	sysSeccomp         = 317
 )
 
-const sysKill = 62
-
 // metadataCalls change a file without opening it, which landlock cannot see.
 var metadataCalls = []uintptr{
 	76,          // truncate

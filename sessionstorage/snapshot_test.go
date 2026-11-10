@@ -5,7 +5,6 @@ package sessionstorage
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"strings"
 	"testing"
 )
@@ -116,5 +115,4 @@ func TestOnChangeFiresForWritesOnly(t *testing.T) {
 	if calls != 5 {
 		t.Fatal("removed callback fired")
 	}
-	_ = fmt.Sprint(data)
 }

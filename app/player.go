@@ -227,9 +227,14 @@ func (m *Model) sendSize() {
 	}
 	if px := m.framePixels(); px != m.player.sized {
 		m.player.sized = px
-		m.bridge.client.Resize(px.X, px.Y)
+		m.command(m.bridge.client.Resize(px.X, px.Y))
 	}
 }
+
+// command discards the result of a helper command on purpose. A command
+// fails only when the helper is gone, and its death already reaches the
+// reader through videoDeadMsg ("media helper stopped").
+func (m *Model) command(error) {}
 
 func (m *Model) startPlayer(name string) tea.Cmd {
 	closing := m.closePlayer() // never two
@@ -238,11 +243,11 @@ func (m *Model) startPlayer(name string) tea.Cmd {
 	m.clearStatus()
 	cmd := tea.Batch(closing, pic.Init(), pic.SetSize(m.cols, m.viewRows()))
 	m.sendSize()
-	m.bridge.client.OpenMedia(ntmediabox.OpenRequest{
+	m.command(m.bridge.client.OpenMedia(ntmediabox.OpenRequest{
 		Name:   name,
 		Limits: ntmediabox.Limits{MaxFileBytes: m.profile.MaxMediaBytes},
-	})
-	m.bridge.client.Play()
+	}))
+	m.command(m.bridge.client.Play())
 	return cmd
 }
 
@@ -253,7 +258,7 @@ func (m *Model) closePlayer() tea.Cmd {
 	}
 	p := m.player
 	m.player = nil
-	m.bridge.client.Stop()
+	m.command(m.bridge.client.Stop())
 	os.Remove(filepath.Join(m.mediaDir, p.name))
 	return p.pic.Close()
 }
@@ -271,15 +276,15 @@ func (m *Model) playerKey(k tea.KeyPressMsg) (handled bool, cmd tea.Cmd) {
 		return true, m.closePlayer()
 	case "space":
 		if p.playing {
-			c.Pause()
+			m.command(c.Pause())
 		} else {
-			c.Play()
+			m.command(c.Play())
 		}
 		p.playing = !p.playing
 	case "left":
-		c.Seek(max(p.status.Position-seekStep, 0))
+		m.command(c.Seek(max(p.status.Position-seekStep, 0)))
 	case "right":
-		c.Seek(min(p.status.Position+seekStep, p.status.Duration))
+		m.command(c.Seek(min(p.status.Position+seekStep, p.status.Duration)))
 	}
 	return true, nil
 }

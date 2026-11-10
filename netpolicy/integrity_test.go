@@ -136,11 +136,11 @@ func TestScriptIntegrityCORSAndRedirects(t *testing.T) {
 			w.Header().Add("Access-Control-Allow-Origin", "*")
 		case "/cross":
 			w.Header().Set("Access-Control-Allow-Origin", "*")
-			http.Redirect(w, r, destination.URL, 302)
+			http.Redirect(w, r, destination.URL, http.StatusFound)
 			return
 		}
 		if r.URL.Path == "/redirect" {
-			http.Redirect(w, r, "/allow", 302)
+			http.Redirect(w, r, "/allow", http.StatusFound)
 			return
 		}
 		fmt.Fprint(w, body)

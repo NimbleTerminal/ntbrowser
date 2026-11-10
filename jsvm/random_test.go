@@ -40,7 +40,8 @@ func TestSeededRandomSourceReplays(t *testing.T) {
 		eventEval(t, s, `globalThis.out=[Math.random(),crypto.randomUUID(),Array.from(crypto.getRandomValues(new Uint8Array(8))).join('.')].join()`)
 		return s.vm.Get("out").String()
 	}
-	if run(7) != run(7) || run(7) == run(8) {
+	first, again, other := run(7), run(7), run(8) // three separate sandboxes
+	if first != again || first == other {
 		t.Fatal("seeded sandboxes are not reproducible")
 	}
 }
