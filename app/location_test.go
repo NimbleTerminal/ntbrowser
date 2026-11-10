@@ -16,7 +16,7 @@ import (
 func locationModel(t *testing.T, gate profile.ScriptNavigation) *Model {
 	p, _ := profile.Builtin("browse")
 	p.ScriptNavigation = gate
-	m := New(nil, p, "")
+	m := New(nil, p, Options{})
 	m.current = mustURL(t, "https://example.test/a")
 	m.history = []string{m.current.String()}
 	m.hIndex = 0
@@ -70,7 +70,7 @@ func TestScriptPromptCannotBeReplaced(t *testing.T) {
 	if m.pendingNav != "https://one.test/" || m.pendingScript.request.Mode != "replace" {
 		t.Fatal("prompt replaced")
 	}
-	m.admit("https://example.test/reader", false)
+	m.admit(loop.NavigateMsg{Href: "https://example.test/reader"})
 	if m.pendingNav != "" || m.pendingScript != nil {
 		t.Fatal("reader navigation kept stale prompt")
 	}
@@ -137,12 +137,12 @@ func TestScriptFormsCannotResetLocationBudgetOrReplacePrompt(t *testing.T) {
 	m := locationModel(t, profile.ScriptNavConfirm)
 	m.scriptNavigate(locationRequest(m, "https://one.test/", "replace"))
 	count := m.scriptNavCount
-	if m.admit("https://two.test/", true, true) != nil || m.pendingNav != "https://one.test/" || m.scriptNavCount != count {
+	if m.admit(loop.NavigateMsg{Href: "https://two.test/", Form: true, Script: true}) != nil || m.pendingNav != "https://one.test/" || m.scriptNavCount != count {
 		t.Fatal("script form replaced prompt or reset budget")
 	}
 	m.pendingNav = ""
 	m.pendingScript = nil
-	m.admit("https://example.test/form", true, true)
+	m.admit(loop.NavigateMsg{Href: "https://example.test/form", Form: true, Script: true})
 	if m.scriptNavCount != count {
 		t.Fatal("script form reset budget")
 	}

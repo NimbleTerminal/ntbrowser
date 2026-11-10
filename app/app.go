@@ -27,6 +27,7 @@ import (
 	"nimbleterminal.dev/ntpicture/animation"
 
 	"nimbleterminal.dev/ntbrowser/cookies"
+	"nimbleterminal.dev/ntbrowser/devtools"
 	"nimbleterminal.dev/ntbrowser/diagnostics"
 	"nimbleterminal.dev/ntbrowser/loop"
 	"nimbleterminal.dev/ntbrowser/netpolicy"
@@ -71,9 +72,10 @@ const shutdownGrace = 150 * time.Millisecond
 type Model struct {
 	debug             debugPanel
 	glynx             bool
-	autoScheme        bool    // --color-scheme auto: follow the terminal's reported background
-	pageScale         float64 // --scale: device pixels per CSS pixel; 0 picks one from the cell height
-	pageBytes         int     // top-level document body cap (default 1 MiB)
+	openLocal         func(path string) (io.ReadCloser, error) // Options.OpenLocal
+	autoScheme        bool                                     // --color-scheme auto: follow the terminal's reported background
+	pageScale         float64                                  // --scale: device pixels per CSS pixel; 0 picks one from the cell height
+	pageBytes         int                                      // top-level document body cap (default 1 MiB)
 	scriptPermissions []loop.ScriptPermissionMsg
 
 	loop              *loop.Loop
@@ -160,8 +162,47 @@ var viewerOptions = nthtml.ModelOptions{
 	},
 }
 
-func New(l *loop.Loop, p profile.Profile, start string) *Model {
-	return &Model{loop: l, profile: p, policy: PolicyFor(p), nav: p.Navigate, cols: 80, rows: 24, start: start, hIndex: -1, session: ntpicture.NewTerminalSession(ntpicture.TerminalOptions{})}
+// Options is everything the host hands a Model besides its loop and profile.
+// The zero value is a memory-only ntbrowser session with no start page.
+type Options struct {
+	Start           string  // the page to open first; file: is honoured only for this URL
+	Glynx           bool    // the browsing interface (keys, address/search), independent of the security profile
+	ColorSchemeAuto bool    // follow the terminal's background: a query at startup, then its change reports
+	PageScale       float64 // device pixels per CSS pixel, 1 to 4; anything else derives it from the cell height
+	PageBytes       int     // top-level document body cap; zero is 1 MiB. The loop's DOM budget is configured to match
+	Unenforced      bool    // the OS sandbox is not confining files: the help line says so
+
+	// Collaborators. The frozen profile decides whether each is used: cookies
+	// need cookies=session, diagnostics and devtools their own gates.
+	Cookies     *cookies.Store
+	Diagnostics *diagnostics.Recorder
+	DevTools    *devtools.Session
+	Pool        *netpolicy.Pool // the session's connections, shared with the subresource transport
+
+	// OpenLocal opens the file: start page. Nil refuses local files. It is
+	// the host's own file access and never reaches jsvm.
+	OpenLocal func(path string) (io.ReadCloser, error)
+}
+
+// New builds the model. The media bridge alone is attached afterwards
+// (SetMedia): it needs the running program to send to.
+func New(l *loop.Loop, p profile.Profile, o Options) *Model {
+	m := &Model{loop: l, profile: p, policy: PolicyFor(p), nav: p.Navigate, cols: 80, rows: 24, start: o.Start, hIndex: -1, session: ntpicture.NewTerminalSession(ntpicture.TerminalOptions{})}
+	m.glynx, m.autoScheme, m.pageBytes, m.notEnforced, m.openLocal = o.Glynx, o.ColorSchemeAuto, o.PageBytes, o.Unenforced, o.OpenLocal
+	if o.PageScale >= 1 && o.PageScale <= 4 {
+		m.pageScale = o.PageScale
+	}
+	m.policy.Pool = o.Pool
+	if p.Cookies == profile.CookiesSession {
+		m.policy.Cookies = o.Cookies
+	}
+	if p.Diagnostics {
+		m.policy.Trace = o.Diagnostics
+	}
+	if p.DevTools {
+		m.debug.session = o.DevTools
+	}
+	return m
 }
 
 // PolicyFor is the network policy template a profile implies.
@@ -179,26 +220,8 @@ func (m *Model) Init() tea.Cmd {
 	if m.start == "" {
 		return tea.Batch(m.session.Init(), scheme, m.openAddress())
 	}
-	return tea.Batch(m.session.Init(), scheme, m.navigate(m.start, pushNew, true))
+	return tea.Batch(m.session.Init(), scheme, m.navigate(m.start, pushNew, reachAny))
 }
-
-// SetColorSchemeAuto makes the page's color scheme follow the terminal's
-// reported background: a dark terminal gets the page's dark theme.
-func (m *Model) SetColorSchemeAuto(on bool) { m.autoScheme = on }
-
-// SetPageScale fixes the device pixel ratio pages are laid out for, 1 to 4;
-// zero (the default) derives it from the terminal's cell height.
-func (m *Model) SetPageScale(scale float64) {
-	if scale >= 1 && scale <= 4 {
-		m.pageScale = scale
-	} else {
-		m.pageScale = 0
-	}
-}
-
-// SetPageBytes caps a top-level document's body; the loop's DOM budget is
-// configured to match. Zero keeps the 1 MiB default.
-func (m *Model) SetPageBytes(n int) { m.pageBytes = n }
 
 func (m *Model) pageBodyLimit() int {
 	if m.pageBytes > 0 {
@@ -235,7 +258,7 @@ func (m *Model) holdFrames() bool {
 // never produce it because document.ResolveURL rejects local schemes. The
 // page Location requests use the additional script-navigation gate in
 // location.go; reader navigation continues through NavMode in Update.
-func (m *Model) navigate(href string, hist int, anyOrigin bool, originOnly ...bool) tea.Cmd {
+func (m *Model) navigate(href string, hist int, to reach) tea.Cmd {
 	m.pendingNav = ""
 	m.pendingScript = nil
 	m.scriptPermissions = nil
@@ -248,12 +271,12 @@ func (m *Model) navigate(href string, hist int, anyOrigin bool, originOnly ...bo
 	if su, err := url.Parse(m.start); err == nil {
 		startKey = su.String()
 	}
-	firstPage := m.hIndex < 0
+	firstPage, openLocal := m.hIndex < 0, m.openLocal
 	policy := m.policy
-	if len(originOnly) > 0 && originOnly[0] {
+	if to == reachOrigin {
 		policy.AllowHosts = nil
 	}
-	policy.Origin, policy.AnyOrigin, policy.MaxBody = m.current, anyOrigin, int64(m.pageBodyLimit())
+	policy.Origin, policy.AnyOrigin, policy.MaxBody = m.current, to == reachAny, int64(m.pageBodyLimit())
 	policy.Timeout = navTimeout
 	gates := m.profile
 	if m.navCancel != nil {
@@ -275,7 +298,7 @@ func (m *Model) navigate(href string, hist int, anyOrigin bool, originOnly ...bo
 			if !firstPage && u.String() != startKey {
 				return pageLoadedMsg{seq: seq, err: fmt.Errorf("file: navigation is only allowed for the start page")}
 			}
-			data, err := readLocal(u.Path)
+			data, err := readLocal(openLocal, u.Path)
 			return pageLoadedMsg{html: data, base: u, seq: seq, hist: hist, err: err}
 		case "http", "https":
 		default:
@@ -292,14 +315,30 @@ func (m *Model) navigate(href string, hist int, anyOrigin bool, originOnly ...bo
 	}
 }
 
-// anyOriginFor is the navigation policy for a URL the user already admitted
+// reach is how far a navigation and its redirects may go. The zero value is
+// the narrowest.
+type reach uint8
+
+const (
+	reachOrigin  reach = iota // the current origin only
+	reachAllowed              // the current origin plus the profile's hosts
+	reachAny                  // any public origin, like a browser
+)
+
+// admittedReach is the navigation policy for a URL the user already admitted
 // (Back, Forward, Reload): only -nav allowlist keeps redirects confined.
-func (m *Model) anyOriginFor() bool { return m.nav != NavAllowlist }
+func (m *Model) admittedReach() reach {
+	if m.nav == NavAllowlist {
+		return reachAllowed
+	}
+	return reachAny
+}
 
 // admit applies the NavMode to a link the page did not prevent, or to a form
 // submission (same gate, its own confirmation wording).
-func (m *Model) admit(href string, form bool, script ...bool) tea.Cmd {
-	if len(script) > 0 && script[0] {
+func (m *Model) admit(v loop.NavigateMsg) tea.Cmd {
+	href, form := v.Href, v.Form
+	if v.Script {
 		if m.pendingNav != "" {
 			return nil
 		}
@@ -339,9 +378,12 @@ func (m *Model) admit(href string, form bool, script ...bool) tea.Cmd {
 			}
 			return nil
 		}
-		return m.navigate(href, pushNew, false) // same-origin: a redirect off-origin is refused, not silently followed
+		return m.navigate(href, pushNew, reachAllowed) // same-origin: a redirect off-origin is refused, not silently followed
 	}
-	return m.navigate(href, pushNew, m.nav == NavFree)
+	if m.nav == NavFree {
+		return m.navigate(href, pushNew, reachAny)
+	}
+	return m.navigate(href, pushNew, reachAllowed)
 }
 
 func (m *Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
@@ -566,7 +608,7 @@ func (m *Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 				return m, cmd
 			}
 		}
-		return m, m.admit(v.Href, v.Form, v.Script)
+		return m, m.admit(v)
 	case videoFrameMsg, videoStatusMsg, videoDeadMsg, videoProgressMsg:
 		return m, m.onVideo(msg)
 	case loop.FocusMsg:
@@ -701,7 +743,7 @@ func (m *Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 					m.scriptNavCount = 0
 					return m, m.executeScriptNavigation(*plan)
 				}
-				return m, m.navigate(href, pushNew, true) // the reader confirmed: any origin
+				return m, m.navigate(href, pushNew, reachAny) // the reader confirmed: any origin
 			case "esc":
 				m.pendingScript = nil
 				m.pendingNav = ""
@@ -748,7 +790,7 @@ func (m *Model) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 			case "ctrl+r":
 				m.scriptNavCount = 0
 				if m.current != nil {
-					return m, m.navigate(m.current.String(), m.hIndex, m.anyOriginFor())
+					return m, m.navigate(m.current.String(), m.hIndex, m.admittedReach())
 				}
 				return m, nil
 			}
@@ -855,7 +897,7 @@ func (m *Model) step(delta int) tea.Cmd {
 	if i < 0 || i >= len(m.history) {
 		return nil
 	}
-	return m.navigate(m.history[i], i, m.anyOriginFor()) // hIndex moves when the load succeeds
+	return m.navigate(m.history[i], i, m.admittedReach()) // hIndex moves when the load succeeds
 }
 
 func (m *Model) View() tea.View {
@@ -938,28 +980,24 @@ func (m *Model) View() tea.View {
 }
 
 // readLocal is the host's own file access, bounded like nthtml's parser.
-// It lives in the app, never in jsvm.
-var readLocal = func(path string) (string, error) {
-	return "", fmt.Errorf("local files disabled in this build: %s", path)
-}
-
-// SetLocalReader lets cmd/ntbrowser install an os-backed reader.
-func SetLocalReader(open func(path string) (io.ReadCloser, error)) {
-	readLocal = func(path string) (string, error) {
-		r, err := open(path)
-		if err != nil {
-			return "", err
-		}
-		defer r.Close()
-		b, err := io.ReadAll(io.LimitReader(r, int64(document.DefaultLimits.Bytes)+1))
-		if err != nil {
-			return "", err
-		}
-		if len(b) > document.DefaultLimits.Bytes {
-			return "", document.ErrLimit
-		}
-		return string(b), nil
+// It lives in the app, never in jsvm; open is Options.OpenLocal.
+func readLocal(open func(path string) (io.ReadCloser, error), path string) (string, error) {
+	if open == nil {
+		return "", fmt.Errorf("local files disabled in this build: %s", path)
 	}
+	r, err := open(path)
+	if err != nil {
+		return "", err
+	}
+	defer r.Close()
+	b, err := io.ReadAll(io.LimitReader(r, int64(document.DefaultLimits.Bytes)+1))
+	if err != nil {
+		return "", err
+	}
+	if len(b) > document.DefaultLimits.Bytes {
+		return "", document.ErrLimit
+	}
+	return string(b), nil
 }
 
 // statusWarnings drops nthtml's notes about SVG elements it skipped: browsers
@@ -974,23 +1012,3 @@ func statusWarnings(warnings []string) []string {
 	}
 	return out
 }
-
-// SetDiagnostics installs the host recorder before the program starts.
-func (m *Model) SetDiagnostics(r *diagnostics.Recorder) {
-	if m.profile.Diagnostics {
-		m.policy.Trace = r
-	}
-}
-
-// SetPool makes every fetcher the model builds (navigations and each page's
-// own) dial through the session's connection pool.
-func (m *Model) SetPool(p *netpolicy.Pool) { m.policy.Pool = p }
-
-func (m *Model) SetCookies(s *cookies.Store) {
-	if m.profile.Cookies == profile.CookiesSession {
-		m.policy.Cookies = s
-	}
-}
-
-// SetGlynx selects the browsing interface independently of the security profile.
-func (m *Model) SetGlynx() { m.glynx = true }

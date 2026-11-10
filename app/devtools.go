@@ -29,12 +29,6 @@ type debugPanel struct {
 	dom                      *devtools.DOM
 }
 
-// SetDevTools attaches a host session; the frozen profile is checked separately.
-func (m *Model) SetDevTools(s *devtools.Session) {
-	if m.profile.DevTools {
-		m.debug.session = s
-	}
-}
 func (m *Model) debugRows() int {
 	if m.debug.open {
 		return min(12, max(0, m.rows-3), max(3, m.rows/2))

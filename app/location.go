@@ -13,9 +13,9 @@ import (
 )
 
 type scriptPlan struct {
-	request               loop.ScriptNavigateMsg
-	hist                  int
-	anyOrigin, originOnly bool
+	request loop.ScriptNavigateMsg
+	hist    int
+	reach   reach
 }
 
 func (m *Model) blockScriptNavigation(reason string) tea.Cmd {
@@ -61,11 +61,12 @@ func (m *Model) scriptNavigate(v loop.ScriptNavigateMsg) tea.Cmd {
 			return m.blockScriptNavigation("destination is not same-origin")
 		}
 		p.AllowHosts = nil
-		plan.originOnly = true
+		plan.reach = reachOrigin
 	case profile.ScriptNavAllowlist:
+		plan.reach = reachAllowed
 	case profile.ScriptNavConfirm:
-		p.AnyOrigin = m.nav != NavAllowlist
-		plan.anyOrigin = p.AnyOrigin
+		plan.reach = m.admittedReach()
+		p.AnyOrigin = plan.reach == reachAny
 	default:
 		return m.blockScriptNavigation("unknown gate")
 	}
@@ -81,7 +82,7 @@ func (m *Model) scriptNavigate(v loop.ScriptNavigateMsg) tea.Cmd {
 		return nil
 	}
 	if m.nav == NavConfirm && same {
-		plan.originOnly = true
+		plan.reach = reachOrigin
 	}
 	return m.executeScriptNavigation(plan)
 }
@@ -109,5 +110,5 @@ func (m *Model) executeScriptNavigation(plan scriptPlan) tea.Cmd {
 		m.loop.CommitFragment(m.documentNav, v.Href)
 		return cmd
 	}
-	return m.navigate(v.Href, plan.hist, plan.anyOrigin, plan.originOnly)
+	return m.navigate(v.Href, plan.hist, plan.reach)
 }

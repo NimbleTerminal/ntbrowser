@@ -50,7 +50,7 @@ func TestNavigationBodyFailureIsCaptured(t *testing.T) {
 	var output bytes.Buffer
 	recorder := diagnostics.New(&output)
 	m := &Model{profile: profile.Profile{Diagnostics: true}, navSeq: 1}
-	m.SetDiagnostics(recorder)
+	m.policy.Trace = recorder
 	m.Update(pageLoadedMsg{seq: 1, finalURL: "https://example.test/search", err: &netpolicy.BodyLimitError{Resource: "page", URL: "https://example.test/search", Limit: 1024, Observed: 1025, AtLeast: true}})
 	recorder.Close()
 	if !strings.Contains(output.String(), `"kind":"navigation_error"`) || !strings.Contains(output.String(), "page limit 1024 bytes") {

@@ -22,7 +22,7 @@ func TestWheelAndKeyboardStayInsideFrame(t *testing.T) {
 	sink := make(chanSink, 256)
 	l := loop.New(ctx, loop.Config{Profile: p, Width: 800, MinFrame: time.Millisecond}, sink)
 	go l.Run()
-	m := New(l, p, "https://example.test/")
+	m := New(l, p, Options{Start: "https://example.test/"})
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	child := `<div style="height:1500px;background:red">long child</div><script>addEventListener('scroll',()=>parent.postMessage('scroll:'+scrollY,'*'));addEventListener('keydown',e=>parent.postMessage('key:'+e.key,'*'))</script>`
 	l.LoadPage(`<iframe width=300 height=150 srcdoc="`+html.EscapeString(child)+`"></iframe><div style="height:3000px">long parent</div><script>addEventListener('message',e=>console.log(e.data))</script>`, "https://example.test/", nil)

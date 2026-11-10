@@ -42,7 +42,7 @@ func TestSessionPoolSharedByNavigationAndSubresources(t *testing.T) {
 	pool := netpolicy.NewPool()
 	defer pool.Close()
 	m := contentModel(t, p, srv.URL)
-	m.SetPool(pool)
+	m.policy.Pool = pool
 	for _, path := range []string{"/", "/next"} {
 		if msg := run(t, m, srv.URL+path); msg.err != nil {
 			t.Fatalf("%s: %v", path, msg.err)

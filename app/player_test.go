@@ -241,7 +241,7 @@ func TestDownloadCancelled(t *testing.T) {
 	defer srv.Close()
 	defer close(release)
 	r := videoModel(t, srv.URL)
-	cmd := r.m.navigate(srv.URL+"/v.mp4", pushNew, true)
+	cmd := r.m.navigate(srv.URL+"/v.mp4", pushNew, reachAny)
 	done := make(chan tea.Msg, 1)
 	go func() { done <- cmd() }()
 	deadline := time.Now().Add(2 * time.Second)
@@ -278,7 +278,7 @@ func TestSecondActivationIgnored(t *testing.T) {
 	defer close(release)
 	r := videoModel(t, srv.URL)
 	r.m.current = mustURL(t, srv.URL+"/")
-	cmd := r.m.navigate(srv.URL+"/v.mp4", pushNew, true)
+	cmd := r.m.navigate(srv.URL+"/v.mp4", pushNew, reachAny)
 	go cmd()
 	deadline := time.Now().Add(2 * time.Second)
 	for dirEntries(t, r.dir) == 0 {
@@ -287,7 +287,7 @@ func TestSecondActivationIgnored(t *testing.T) {
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
-	if again := r.m.admit(srv.URL+"/v.mp4", false); again != nil {
+	if again := r.m.admit(loop.NavigateMsg{Href: srv.URL + "/v.mp4"}); again != nil {
 		t.Fatal("a second download started")
 	}
 	r.m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
@@ -395,10 +395,10 @@ func TestLinkDuringDownloadNavigates(t *testing.T) {
 	m := newModel(t, NavFree)
 	m.downloading.Store(true)
 	m.navURL = "https://page.test/v.mp4"
-	if cmd := m.admit("https://page.test/v.mp4", false); cmd != nil {
+	if cmd := m.admit(loop.NavigateMsg{Href: "https://page.test/v.mp4"}); cmd != nil {
 		t.Fatal("the same video started twice")
 	}
-	if cmd := m.admit("https://page.test/other", false); cmd == nil {
+	if cmd := m.admit(loop.NavigateMsg{Href: "https://page.test/other"}); cmd == nil {
 		t.Fatal("a link to another page was ignored")
 	}
 }
@@ -443,7 +443,7 @@ func TestStalledDownloadTimesOut(t *testing.T) {
 	}))
 	defer srv.Close()
 	r := videoModel(t, srv.URL)
-	msg := r.m.navigate(srv.URL+"/v.mp4", pushNew, true)().(pageLoadedMsg)
+	msg := r.m.navigate(srv.URL+"/v.mp4", pushNew, reachAny)().(pageLoadedMsg)
 	if msg.video != "" || dirEntries(t, r.dir) != 0 {
 		t.Fatalf("%+v files %d", msg, dirEntries(t, r.dir))
 	}

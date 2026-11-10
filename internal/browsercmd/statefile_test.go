@@ -18,34 +18,34 @@ import (
 func TestPersistFlags(t *testing.T) {
 	data := t.TempDir()
 	t.Setenv("XDG_DATA_HOME", data)
-	c, err := parseCommandArgs("glynx", nil)
+	c, err := parseCommandArgs(Glynx, nil)
 	if err != nil || c.Profile.LocalStorage != profile.LocalStorageOn || c.Profile.Persist != profile.PersistFile || c.StateDir != filepath.Join(data, "glynx") {
 		t.Fatalf("glynx default: %+v %v", c, err)
 	}
 	for _, args := range [][]string{{"--safe"}, {"--persist=off"}, {"--persist=file", "--safe"}} {
-		c, err = parseCommandArgs("glynx", args)
+		c, err = parseCommandArgs(Glynx, args)
 		if err != nil || c.Profile.Persist != profile.PersistOff || c.Profile.LocalStorage != profile.LocalStorageOn || c.StateDir != "" {
 			t.Fatalf("%v: persist %q dir %q %v", args, c.Profile.Persist, c.StateDir, err)
 		}
 	}
-	c, err = parseCommandArgs("glynx", []string{"--local-storage=off"})
+	c, err = parseCommandArgs(Glynx, []string{"--local-storage=off"})
 	if err != nil || c.Profile.LocalStorage != profile.LocalStorageOff || c.Profile.Persist != profile.PersistFile {
 		t.Fatalf("local storage off keeps cookie persistence: %+v %v", c.Profile, err)
 	}
-	c, err = parseCommandArgs("glynx", []string{"--state-dir", filepath.Join(data, "elsewhere")})
+	c, err = parseCommandArgs(Glynx, []string{"--state-dir", filepath.Join(data, "elsewhere")})
 	if err != nil || c.StateDir != filepath.Join(data, "elsewhere") {
 		t.Fatalf("explicit dir: %q %v", c.StateDir, err)
 	}
 	for _, bad := range []string{"--local-storage=file", "--local-storage=memory", "--persist=disk", "--persist=on"} {
-		if _, err = parseCommandArgs("glynx", []string{bad}); err == nil {
+		if _, err = parseCommandArgs(Glynx, []string{bad}); err == nil {
 			t.Fatalf("%s accepted", bad)
 		}
 	}
-	c, err = parseCommandArgs("ntbrowser", nil)
+	c, err = parseCommandArgs(NTBrowser, nil)
 	if err != nil || c.Profile.LocalStorage != "" || c.Profile.Persist != "" || c.StateDir != "" {
 		t.Fatalf("ntbrowser default: %+v %v", c.Profile, err)
 	}
-	c, err = parseCommandArgs("ntbrowser", []string{"--local-storage=on", "--persist=file", "--cookies=session"})
+	c, err = parseCommandArgs(NTBrowser, []string{"--local-storage=on", "--persist=file", "--cookies=session"})
 	if err != nil || c.Profile.Persist != profile.PersistFile || c.StateDir != filepath.Join(data, "ntbrowser") {
 		t.Fatalf("ntbrowser opt-in: %+v %v", c, err)
 	}

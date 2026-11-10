@@ -8,4 +8,4 @@ import (
 	"os"
 )
 
-func main() { os.Exit(browsercmd.Run("glynx")) }
+func main() { os.Exit(browsercmd.Run(browsercmd.Glynx)) }

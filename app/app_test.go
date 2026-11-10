@@ -38,7 +38,7 @@ func TestReflowKeepsScrollAndNewPageResetsIt(t *testing.T) {
 	defer cancel()
 	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400}, dropSink{})
 	go l.Run()
-	m := New(l, testProfile(nil, false, NavFree), "")
+	m := New(l, testProfile(nil, false, NavFree), Options{})
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 26})
 
 	first := renderTall(t, `<p>v1</p>`)

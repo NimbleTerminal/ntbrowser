@@ -12,7 +12,7 @@ import (
 )
 
 func TestGlynxDefaultsAndOverrides(t *testing.T) {
-	c, err := parseCommandArgs("glynx", []string{"https://www.google.com"})
+	c, err := parseCommandArgs(Glynx, []string{"https://www.google.com"})
 	want, _ := profile.Builtin("glynx")
 	if err != nil || !reflect.DeepEqual(c.Profile, want) || c.Start != "https://www.google.com" {
 		t.Fatalf("%+v %v", c, err)
@@ -26,7 +26,7 @@ func TestGlynxDefaultsAndOverrides(t *testing.T) {
 		t.Fatal("ntbrowser default changed", original, err)
 	}
 	for _, name := range []string{"locked", "reader", "browse"} {
-		c, err = parseCommandArgs("glynx", []string{"--profile", name})
+		c, err = parseCommandArgs(Glynx, []string{"--profile", name})
 		want, _ = profile.Builtin(name)
 		if err != nil || !reflect.DeepEqual(c.Profile, want) {
 			t.Fatal("default leaked into explicit profile", c, err)
@@ -36,15 +36,15 @@ func TestGlynxDefaultsAndOverrides(t *testing.T) {
 	if err = os.WriteFile(path, []byte(`{"scripts":"inline"}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	c, err = parseCommandArgs("glynx", []string{"--profile-file", path})
+	c, err = parseCommandArgs(Glynx, []string{"--profile-file", path})
 	if err != nil || c.Profile.ScriptSources != "" || c.Profile.Frames != "" || c.Profile.Cookies != "" {
 		t.Fatal("file inherited glynx authority", c, err)
 	}
-	c, err = parseCommandArgs("glynx", []string{"--script-sources=grants", "--frames=off", "--cookies=off", "--dynamic-code=off"})
+	c, err = parseCommandArgs(Glynx, []string{"--script-sources=grants", "--frames=off", "--cookies=off", "--dynamic-code=off"})
 	if err != nil || c.Profile.ScriptSources != profile.ScriptSourcesGrants || c.Profile.Frames != profile.FramesOff || c.Profile.AllowsDynamicCode() || c.Profile.Name != "glynx+flags" {
 		t.Fatal(c, err)
 	}
-	if _, err = parseCommandArgs("glynx", []string{"--script-sources=unknown"}); err == nil {
+	if _, err = parseCommandArgs(Glynx, []string{"--script-sources=unknown"}); err == nil {
 		t.Fatal("unknown source mode accepted")
 	}
 }
@@ -57,7 +57,7 @@ func TestGlynxStartAndReexec(t *testing.T) {
 		{nil, ""}, {[]string{"google.com"}, "https://google.com"},
 		{[]string{"hello world"}, "https://www.google.com/search?q=hello+world"},
 	} {
-		c, err := parseCommandArgs("glynx", tc.args)
+		c, err := parseCommandArgs(Glynx, tc.args)
 		if err != nil || c.Start != tc.start {
 			t.Fatal(c, err)
 		}
@@ -74,15 +74,15 @@ func TestGlynxStartAndReexec(t *testing.T) {
 
 func TestDevToolsAndDiagnosticAlias(t *testing.T) {
 	for _, command := range []string{"ntbrowser", "glynx"} {
-		c, err := parseCommandArgs(command, nil)
+		c, err := parseCommandArgs(binaryNamed(command), nil)
 		if err != nil || c.Profile.DevTools {
 			t.Fatal("devtools enabled by default", c, err)
 		}
-		c, err = parseCommandArgs(command, []string{"--devtools", "-d", "capture.jsonl"})
+		c, err = parseCommandArgs(binaryNamed(command), []string{"--devtools", "-d", "capture.jsonl"})
 		if err != nil || !c.Profile.DevTools || !c.Profile.Diagnostics || c.Diagnostics != "capture.jsonl" {
 			t.Fatal(c, err)
 		}
-		c, err = parseCommandArgs(command, []string{"--devtools=false"})
+		c, err = parseCommandArgs(binaryNamed(command), []string{"--devtools=false"})
 		if err != nil || c.Profile.DevTools {
 			t.Fatal(c, err)
 		}
@@ -90,7 +90,7 @@ func TestDevToolsAndDiagnosticAlias(t *testing.T) {
 }
 
 func TestDiagnosticShortFlagPreservesDashFilename(t *testing.T) {
-	c, err := parseCommandArgs("glynx", []string{"-d", "-devtools"})
+	c, err := parseCommandArgs(Glynx, []string{"-d", "-devtools"})
 	if err != nil || c.Diagnostics != "-devtools" || c.Profile.DevTools {
 		t.Fatal(c, err)
 	}
@@ -101,12 +101,12 @@ func TestProcessHeapBudgets(t *testing.T) {
 		command string
 		want    uint64
 	}{{"ntbrowser", 256}, {"glynx", 512}} {
-		c, err := parseCommandArgs(tc.command, nil)
+		c, err := parseCommandArgs(binaryNamed(tc.command), nil)
 		if err != nil || c.HeapBudgetMiB != tc.want {
 			t.Fatalf("%s default: %d, %v", tc.command, c.HeapBudgetMiB, err)
 		}
 		for _, value := range []string{"64", "768", "2048"} {
-			c, err := parseCommandArgs(tc.command, []string{"--heap-budget-mib=" + value})
+			c, err := parseCommandArgs(binaryNamed(tc.command), []string{"--heap-budget-mib=" + value})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -120,7 +120,7 @@ func TestProcessHeapBudgets(t *testing.T) {
 			}
 		}
 		for _, value := range []string{"0", "63", "2049", "-1", "18446744073709551615"} {
-			if _, err := parseCommandArgs(tc.command, []string{"--heap-budget-mib=" + value}); err == nil {
+			if _, err := parseCommandArgs(binaryNamed(tc.command), []string{"--heap-budget-mib=" + value}); err == nil {
 				t.Fatalf("accepted budget %s", value)
 			}
 		}
@@ -129,7 +129,7 @@ func TestProcessHeapBudgets(t *testing.T) {
 
 func TestStylesheetBudgets(t *testing.T) {
 	for _, command := range []string{"glynx", "ntbrowser"} {
-		c, err := parseCommandArgs(command, nil)
+		c, err := parseCommandArgs(binaryNamed(command), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -140,7 +140,7 @@ func TestStylesheetBudgets(t *testing.T) {
 		} else if c.CSSRules != 4096 || c.StylesheetBytes != 256<<10 || c.StylesheetTotalBytes != 0 || c.Stylesheets != 16 {
 			t.Fatal(c)
 		}
-		c, err = parseCommandArgs(command, []string{"--stylesheet-bytes=524288", "--stylesheet-total-bytes=2097152", "--stylesheets=32", "--css-rules=8192"})
+		c, err = parseCommandArgs(binaryNamed(command), []string{"--stylesheet-bytes=524288", "--stylesheet-total-bytes=2097152", "--stylesheets=32", "--css-rules=8192"})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -161,7 +161,7 @@ func TestStylesheetBudgets(t *testing.T) {
 // glynx defaults to 8 MiB, ntbrowser keeps 1 MiB, and the ceiling is 16 MiB.
 func TestImageBudget(t *testing.T) {
 	for _, command := range []string{"glynx", "ntbrowser"} {
-		c, err := parseCommandArgs(command, nil)
+		c, err := parseCommandArgs(binaryNamed(command), nil)
 		if err != nil {
 			t.Fatal(command, err)
 		}
@@ -172,12 +172,12 @@ func TestImageBudget(t *testing.T) {
 		if c.ImageBytes != want {
 			t.Fatalf("%s default image bytes %d, want %d", command, c.ImageBytes, want)
 		}
-		c, err = parseCommandArgs(command, []string{"--image-bytes=16777216"})
+		c, err = parseCommandArgs(binaryNamed(command), []string{"--image-bytes=16777216"})
 		if err != nil || c.ImageBytes != 16<<20 {
 			t.Fatalf("%s override: %d %v", command, c.ImageBytes, err)
 		}
 		for _, arg := range []string{"--image-bytes=0", "--image-bytes=1023", "--image-bytes=16777217"} {
-			if _, err := parseCommandArgs(command, []string{arg}); err == nil {
+			if _, err := parseCommandArgs(binaryNamed(command), []string{arg}); err == nil {
 				t.Fatalf("%s accepted %s", command, arg)
 			}
 		}
@@ -187,18 +187,18 @@ func TestImageBudget(t *testing.T) {
 // --color-scheme defaults to following the terminal and otherwise takes
 // light or dark; anything else is refused.
 func TestColorSchemeFlag(t *testing.T) {
-	c, err := parseCommandArgs("glynx", []string{"https://example.test/"})
+	c, err := parseCommandArgs(Glynx, []string{"https://example.test/"})
 	if err != nil || c.ColorScheme != "auto" {
 		t.Fatalf("default scheme %q, %v", c.ColorScheme, err)
 	}
-	c, err = parseCommandArgs("glynx", []string{"--color-scheme=dark", "https://example.test/"})
+	c, err = parseCommandArgs(Glynx, []string{"--color-scheme=dark", "https://example.test/"})
 	if err != nil || c.ColorScheme != "dark" || startScheme(c.ColorScheme) != "dark" {
 		t.Fatalf("dark: %q %v", c.ColorScheme, err)
 	}
 	if startScheme("auto") != "light" {
 		t.Fatal("auto must start light until the terminal answers")
 	}
-	if _, err := parseCommandArgs("glynx", []string{"--color-scheme=sepia", "https://example.test/"}); err == nil {
+	if _, err := parseCommandArgs(Glynx, []string{"--color-scheme=sepia", "https://example.test/"}); err == nil {
 		t.Fatal("sepia accepted")
 	}
 }
@@ -207,7 +207,7 @@ func TestColorSchemeFlag(t *testing.T) {
 // ntbrowser, 64 KiB to 8 MiB when set.
 func TestPageBudget(t *testing.T) {
 	for _, command := range []string{"glynx", "ntbrowser"} {
-		c, err := parseCommandArgs(command, nil)
+		c, err := parseCommandArgs(binaryNamed(command), nil)
 		if err != nil {
 			t.Fatal(command, err)
 		}
@@ -218,12 +218,12 @@ func TestPageBudget(t *testing.T) {
 		if c.PageBytes != want {
 			t.Fatalf("%s default page bytes %d, want %d", command, c.PageBytes, want)
 		}
-		c, err = parseCommandArgs(command, []string{"--page-bytes=8388608"})
+		c, err = parseCommandArgs(binaryNamed(command), []string{"--page-bytes=8388608"})
 		if err != nil || c.PageBytes != 8<<20 {
 			t.Fatalf("%s override: %d %v", command, c.PageBytes, err)
 		}
 		for _, bad := range []string{"--page-bytes=1024", "--page-bytes=8388609"} {
-			if _, err := parseCommandArgs(command, []string{bad}); err == nil {
+			if _, err := parseCommandArgs(binaryNamed(command), []string{bad}); err == nil {
 				t.Fatalf("%s accepted %s", command, bad)
 			}
 		}
@@ -234,7 +234,7 @@ func TestPageBudget(t *testing.T) {
 // 1 to 1024 when set; the pixel budget still bounds decoded memory.
 func TestImagesFlag(t *testing.T) {
 	for _, command := range []string{"glynx", "ntbrowser"} {
-		c, err := parseCommandArgs(command, nil)
+		c, err := parseCommandArgs(binaryNamed(command), nil)
 		if err != nil {
 			t.Fatal(command, err)
 		}
@@ -245,10 +245,10 @@ func TestImagesFlag(t *testing.T) {
 		if c.Images != want {
 			t.Fatalf("%s default images %d, want %d", command, c.Images, want)
 		}
-		if c, err := parseCommandArgs(command, []string{"--images=1024"}); err != nil || c.Images != 1024 {
+		if c, err := parseCommandArgs(binaryNamed(command), []string{"--images=1024"}); err != nil || c.Images != 1024 {
 			t.Fatalf("%s override: %d %v", command, c.Images, err)
 		}
-		if _, err := parseCommandArgs(command, []string{"--images=1025"}); err == nil {
+		if _, err := parseCommandArgs(binaryNamed(command), []string{"--images=1025"}); err == nil {
 			t.Fatalf("%s accepted 1025 images", command)
 		}
 	}
@@ -256,18 +256,18 @@ func TestImagesFlag(t *testing.T) {
 
 // --scale is auto (from the cell height) or a device pixel ratio from 1 to 4.
 func TestScaleFlag(t *testing.T) {
-	c, err := parseCommandArgs("glynx", []string{"https://example.test/"})
+	c, err := parseCommandArgs(Glynx, []string{"https://example.test/"})
 	if err != nil || c.Scale != "auto" || c.PageScale != 0 {
 		t.Fatalf("default scale %q %g, %v", c.Scale, c.PageScale, err)
 	}
 	for arg, want := range map[string]float64{"2": 2, "1.5": 1.5, "1": 1, "4": 4} {
-		c, err = parseCommandArgs("ntbrowser", []string{"--scale=" + arg, "https://example.test/"})
+		c, err = parseCommandArgs(NTBrowser, []string{"--scale=" + arg, "https://example.test/"})
 		if err != nil || c.PageScale != want {
 			t.Fatalf("--scale=%s: %g %v", arg, c.PageScale, err)
 		}
 	}
 	for _, arg := range []string{"0.5", "5", "retina", "-1", ""} {
-		if _, err := parseCommandArgs("glynx", []string{"--scale=" + arg, "https://example.test/"}); err == nil {
+		if _, err := parseCommandArgs(Glynx, []string{"--scale=" + arg, "https://example.test/"}); err == nil {
 			t.Fatalf("--scale=%q accepted", arg)
 		}
 	}

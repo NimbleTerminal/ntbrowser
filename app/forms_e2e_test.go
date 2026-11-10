@@ -39,7 +39,7 @@ func TestSearchFormEndToEnd(t *testing.T) {
 	sink := make(chanSink, 256)
 	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400, MinFrame: 5 * time.Millisecond}, sink)
 	go l.Run()
-	m := New(l, testProfile(nil, true, NavFree), srv.URL+"/")
+	m := New(l, testProfile(nil, true, NavFree), Options{Start: srv.URL + "/"})
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	drive(m, m.Init())
 

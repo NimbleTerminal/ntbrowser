@@ -24,7 +24,7 @@ func newChunkApp(t *testing.T, html string) (*Model, chan tea.Msg) {
 	sink := make(chan tea.Msg, 256)
 	l := loop.New(ctx, loop.Config{Chunked: true, Profile: testLoopProfile, Width: 400, Fonts: document.MinimalFonts, MinFrame: time.Millisecond}, chanSink(sink))
 	go l.Run()
-	m := New(l, testProfile(nil, false, NavFree), "")
+	m := New(l, testProfile(nil, false, NavFree), Options{})
 	m.current = mustURL(t, "https://example.test/page")
 	m.Update(tea.WindowSizeMsg{Width: 40, Height: 15})
 	l.LoadPage(html, m.current.String(), nil)

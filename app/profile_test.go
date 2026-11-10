@@ -17,7 +17,7 @@ func TestNavigateOffRefusesLinkButLoadsStart(t *testing.T) {
 	m := newModel(t, profile.NavOff)
 	m.start = "https://page.test/"
 	seq := m.navSeq
-	if cmd := m.admit("https://page.test/other", false); cmd != nil || m.navSeq != seq || !strings.Contains(m.status.text, "navigation is off") {
+	if cmd := m.admit(loop.NavigateMsg{Href: "https://page.test/other"}); cmd != nil || m.navSeq != seq || !strings.Contains(m.status.text, "navigation is off") {
 		t.Fatalf("cmd %v seq %d→%d status %q", cmd != nil, seq, m.navSeq, m.status.text)
 	}
 	if m.Init() == nil || m.navSeq != seq+1 {
@@ -49,7 +49,7 @@ func TestHelpSaysWhenNotEnforced(t *testing.T) {
 	if strings.Contains(statusLines(m), "not OS-enforced") {
 		t.Fatal(statusLines(m))
 	}
-	m.SetEnforced(false)
+	m.notEnforced = true
 	if !strings.Contains(statusLines(m), "not OS-enforced") {
 		t.Fatal(statusLines(m))
 	}

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- Internal API cleanup, no behaviour change. `app.New` takes an
+  `app.Options` struct in place of ten `Set*` calls (`SetMedia` remains: it
+  needs the running program); the `file:` reader is `Options.OpenLocal` on
+  the model instead of a package global set by `app.SetLocalReader`.
+  `browsercmd.Run` takes a `Binary` (`browsercmd.NTBrowser`,
+  `browsercmd.Glynx`) carrying the per-binary defaults that three
+  `command == "glynx"` checks used to select. Optional trailing bools are
+  gone: navigation takes a `reach` (origin, allowlist, any), `admit` takes
+  the `loop.NavigateMsg`, and `loop` form submission takes a `submission`
+  source (`TestOptionsRespectProfileGates`, `TestLocalReaderIsPerModel`,
+  `TestBinaryDefaultsDriveFlags`).
 - One same-origin predicate. `origin.Same` (scheme, host, effective port;
   `origin.OfURL` serializes it) replaces five separate implementations in
   `app`, `netpolicy` and `cookies` that disagreed on default ports and host

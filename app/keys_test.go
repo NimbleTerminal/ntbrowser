@@ -5,7 +5,6 @@ package app
 
 import (
 	"context"
-	"errors"
 	"io"
 	"strings"
 	"testing"
@@ -21,7 +20,7 @@ func newModel(t *testing.T, nav NavMode) *Model {
 	t.Cleanup(cancel)
 	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400}, dropSink{})
 	go l.Run()
-	m := New(l, testProfile([]string{"cdn.test"}, false, nav), "")
+	m := New(l, testProfile([]string{"cdn.test"}, false, nav), Options{})
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 1, Result: renderTall(t, `<p>x</p>`)}))
 	m.current = mustURL(t, "https://page.test/a")
@@ -50,24 +49,24 @@ func TestQuitAndHistoryKeys(t *testing.T) {
 
 func TestNavigationModes(t *testing.T) {
 	m := newModel(t, NavAllowlist)
-	if cmd := m.admit("https://evil.test/", false); cmd != nil || !strings.HasPrefix(m.status.text, "blocked:") {
+	if cmd := m.admit(loop.NavigateMsg{Href: "https://evil.test/"}); cmd != nil || !strings.HasPrefix(m.status.text, "blocked:") {
 		t.Fatalf("allowlist admitted evil: %q", m.status.text)
 	}
-	if cmd := m.admit("https://cdn.test/x", false); cmd == nil {
+	if cmd := m.admit(loop.NavigateMsg{Href: "https://cdn.test/x"}); cmd == nil {
 		t.Fatal("allowlist refused an allowlisted host")
 	}
 	m = newModel(t, NavConfirm)
-	if cmd := m.admit("https://other.test/", false); cmd != nil || m.pendingNav != "https://other.test/" {
+	if cmd := m.admit(loop.NavigateMsg{Href: "https://other.test/"}); cmd != nil || m.pendingNav != "https://other.test/" {
 		t.Fatal("confirm did not prompt")
 	}
 	if _, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape}); cmd != nil || m.pendingNav != "" {
 		t.Fatal("esc did not cancel")
 	}
-	_ = m.admit("https://other.test/", false)
+	_ = m.admit(loop.NavigateMsg{Href: "https://other.test/"})
 	if _, cmd := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter}); cmd == nil || m.pendingNav != "" {
 		t.Fatal("enter did not navigate")
 	}
-	if cmd := m.admit("https://page.test/same", false); cmd == nil {
+	if cmd := m.admit(loop.NavigateMsg{Href: "https://page.test/same"}); cmd == nil {
 		t.Fatal("confirm mode prompted for a same-origin link")
 	}
 }
@@ -102,11 +101,10 @@ func TestDegenerateTerminalSizes(t *testing.T) {
 // Reload and Back to a file:// start page must work: file: is refused for
 // links, not for the page the user asked for (spec decision 16).
 func TestReloadAndBackToFileStartPage(t *testing.T) {
-	SetLocalReader(func(path string) (io.ReadCloser, error) {
-		return io.NopCloser(strings.NewReader("<p>local " + path + "</p>")), nil
-	})
-	t.Cleanup(func() { SetLocalReader(func(string) (io.ReadCloser, error) { return nil, errors.New("disabled") }) })
 	m := newModel(t, NavFree)
+	m.openLocal = func(path string) (io.ReadCloser, error) {
+		return io.NopCloser(strings.NewReader("<p>local " + path + "</p>")), nil
+	}
 	m.start = "file:///tmp/page.html"
 	m.current = mustURL(t, m.start)
 	m.history, m.hIndex = []string{m.start, "https://page.test/b"}, 1
@@ -117,12 +115,12 @@ func TestReloadAndBackToFileStartPage(t *testing.T) {
 	}
 	// Reload while on it.
 	m.hIndex, m.current = 0, mustURL(t, m.start)
-	msg = m.navigate(m.current.String(), m.hIndex, m.anyOriginFor())().(pageLoadedMsg)
+	msg = m.navigate(m.current.String(), m.hIndex, m.admittedReach())().(pageLoadedMsg)
 	if msg.err != nil {
 		t.Fatalf("reload of file start page: %v", msg.err)
 	}
 	// A link to another local file is still refused.
-	msg = m.navigate("file:///etc/passwd", pushNew, true)().(pageLoadedMsg)
+	msg = m.navigate("file:///etc/passwd", pushNew, reachAny)().(pageLoadedMsg)
 	if msg.err == nil {
 		t.Fatal("a file: link other than the start page was accepted")
 	}

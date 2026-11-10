@@ -19,12 +19,12 @@ func TestTerminalBackgroundSelectsColorScheme(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400}, dropSink{})
-	m := New(l, testProfile(nil, false, NavFree), "")
+	m := New(l, testProfile(nil, false, NavFree), Options{})
 	m.Update(tea.BackgroundColorMsg{Color: color.Black})
 	if l.ColorScheme() != "light" {
 		t.Fatal("background changed the scheme without auto mode")
 	}
-	m.SetColorSchemeAuto(true)
+	m.autoScheme = true
 	m.Update(tea.BackgroundColorMsg{Color: color.Black})
 	if l.ColorScheme() != "dark" {
 		t.Fatalf("dark terminal gave scheme %q", l.ColorScheme())

@@ -37,7 +37,7 @@ func runCmd(cmd tea.Cmd) (pageLoadedMsg, bool) {
 	return m, ok
 }
 
-// SetPageBytes raises the navigation body cap: a 1.5 MiB document loads under
+// Options.PageBytes raises the navigation body cap: a 1.5 MiB document loads under
 // a 2 MiB budget and is refused under the 1 MiB default.
 func TestPageBytesRaisesNavigationCap(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -49,14 +49,14 @@ func TestPageBytesRaisesNavigationCap(t *testing.T) {
 	defer cancel()
 	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400, DOMLimits: dom.Limits{TotalBytes: 2 << 20}}, dropSink{})
 	go l.Run()
-	m := New(l, testProfile(nil, true, NavFree), "")
-	m.SetPageBytes(2 << 20)
-	loaded, ok := runCmd(m.navigate(srv.URL+"/", pushNew, true))
+	m := New(l, testProfile(nil, true, NavFree), Options{})
+	m.pageBytes = 2 << 20
+	loaded, ok := runCmd(m.navigate(srv.URL+"/", pushNew, reachAny))
 	if !ok || loaded.err != nil || len(loaded.html) < 3<<19 {
 		t.Fatalf("1.5 MiB page under a 2 MiB budget: ok=%v err=%v len=%d", ok, loaded.err, len(loaded.html))
 	}
-	m.SetPageBytes(0)
-	loaded, ok = runCmd(m.navigate(srv.URL+"/", pushNew, true))
+	m.pageBytes = 0
+	loaded, ok = runCmd(m.navigate(srv.URL+"/", pushNew, reachAny))
 	if !ok || !errors.Is(loaded.err, netpolicy.ErrTooLarge) {
 		t.Fatalf("default cap: ok=%v err=%v", ok, loaded.err)
 	}

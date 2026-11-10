@@ -68,7 +68,33 @@ type config struct {
 	Chunked                                            bool
 }
 
-func parseArgs(args []string) (config, error) { return parseCommandArgs("ntbrowser", args) }
+// Binary is what distinguishes the executables built on this package: a name
+// and the defaults its flags start from. Explicit flags and profiles replace
+// the defaults; nothing else in the session depends on which binary it is.
+type Binary struct {
+	Name                                               string // the command, also the default state directory's name
+	Profile                                            string // built-in profile used without --profile
+	Browsing                                           bool   // browsing interface: glynx keys, and a bare start argument is an address or search
+	HeapBudgetMiB                                      uint64
+	StylesheetBytes, StylesheetTotalBytes, Stylesheets int
+	CSSRules                                           int
+	ImageBytes                                         int // decoded-size caps are the same for every binary
+	PageBytes                                          int
+	Images                                             int // the per-page pixel budget still bounds memory
+}
+
+var (
+	NTBrowser = Binary{Name: "ntbrowser", Profile: "browse", HeapBudgetMiB: 256,
+		StylesheetBytes: 256 << 10, StylesheetTotalBytes: 0, Stylesheets: 16, CSSRules: 4096,
+		ImageBytes: 1 << 20, PageBytes: 1 << 20, Images: 64}
+	Glynx = Binary{Name: "glynx", Profile: "glynx", Browsing: true, HeapBudgetMiB: 512,
+		StylesheetBytes: 1 << 20, StylesheetTotalBytes: 4 << 20, Stylesheets: 64, CSSRules: 32768,
+		ImageBytes: 8 << 20, // README demo GIFs
+		PageBytes:  4 << 20, // portal front pages (yahoo.com) exceed 1 MiB of HTML
+		Images:     256}     // news front pages carry well over 64 thumbnails
+)
+
+func parseArgs(args []string) (config, error) { return parseCommandArgs(NTBrowser, args) }
 
 // maxImageBytes is the --image-bytes ceiling (the subresource loader's own).
 const maxImageBytes = subres.MaxImageBytesLimit
@@ -82,28 +108,12 @@ const (
 	maxImages    = 1024 // the per-page pixel budget still bounds decoded memory
 )
 
-func parseCommandArgs(command string, args []string) (config, error) {
+func parseCommandArgs(b Binary, args []string) (config, error) {
 	var c config
-	defaultProfile := "browse"
-	defaultHeapMiB := uint64(256)
-	sheetBytes, sheetTotal, sheetCount := 256<<10, 0, 16
-	cssRules := 4096
-	imageBytes := 1 << 20
-	pageBytes := 1 << 20
-	images := 64
-	if command == "glynx" {
-		defaultProfile = "glynx"
-		defaultHeapMiB = 512
-		sheetBytes, sheetTotal, sheetCount = 1<<20, 4<<20, 64
-		cssRules = 32768
-		imageBytes = 8 << 20 // README demo GIFs; decoded-size caps are unchanged
-		pageBytes = 4 << 20  // portal front pages (yahoo.com) exceed 1 MiB of HTML
-		images = 256         // news front pages carry well over 64 thumbnails; the pixel budget still bounds memory
-	}
-	fs := flag.NewFlagSet(command, flag.ContinueOnError)
+	fs := flag.NewFlagSet(b.Name, flag.ContinueOnError)
 	fs.StringVarP(&c.Diagnostics, "diagnostics", "d", "", "write bounded JSONL diagnostics to a new owner-only file")
 	debugTools := fs.Bool("devtools", false, "enable host-only read-only devtools (F12); no remote listener")
-	name := fs.String("profile", defaultProfile, "built-in profile: locked, reader, browse, glynx")
+	name := fs.String("profile", b.Profile, "built-in profile: locked, reader, browse, glynx")
 	file := fs.String("profile-file", "", "JSON profile file (overrides --profile)")
 	fs.BoolVar(&c.ShowProfile, "show-profile", false, "print the effective profile and exit")
 	frameDOM := fs.String("frame-dom", "", "shared frame DOM: off, same-origin (default from profile)")
@@ -141,14 +151,14 @@ func parseCommandArgs(command string, args []string) (config, error) {
 	fs.StringVar(&c.ColorScheme, "color-scheme", "auto", "page color scheme for prefers-color-scheme and light-dark(): auto (follow the terminal background), light, dark")
 	fs.StringVar(&c.Scale, "scale", "auto", "device pixels per CSS pixel (window.devicePixelRatio): auto (from the terminal's cell height: 1x up to 23 px, 2x up to 39 px, then 3x and 4x) or a number from 1 to 4")
 	fs.DurationVar(&c.Slice, "slice", 50*time.Millisecond, "JS time slice per callback")
-	fs.Uint64Var(&c.HeapBudgetMiB, "heap-budget-mib", defaultHeapMiB, "process Go heap budget after GC in MiB (64..2048; includes rendering)")
-	fs.IntVar(&c.CSSRules, "css-rules", cssRules, "maximum CSS rules (256..32768; matching-work budget still applies)")
-	fs.IntVar(&c.StylesheetBytes, "stylesheet-bytes", sheetBytes, "maximum bytes per stylesheet (1024..1048576)")
-	fs.IntVar(&c.StylesheetTotalBytes, "stylesheet-total-bytes", sheetTotal, "separate host stylesheet allowance (0 shares DOM budget; max 4194304)")
-	fs.IntVar(&c.Stylesheets, "stylesheets", sheetCount, "maximum stylesheets per page including imports (1..64)")
-	fs.IntVar(&c.ImageBytes, "image-bytes", imageBytes, "maximum encoded bytes per page image (1024..16777216)")
-	fs.IntVar(&c.PageBytes, "page-bytes", pageBytes, "maximum bytes of a page's HTML and its DOM (65536..8388608)")
-	fs.IntVar(&c.Images, "images", images, "maximum distinct images per page, backgrounds included (1..1024)")
+	fs.Uint64Var(&c.HeapBudgetMiB, "heap-budget-mib", b.HeapBudgetMiB, "process Go heap budget after GC in MiB (64..2048; includes rendering)")
+	fs.IntVar(&c.CSSRules, "css-rules", b.CSSRules, "maximum CSS rules (256..32768; matching-work budget still applies)")
+	fs.IntVar(&c.StylesheetBytes, "stylesheet-bytes", b.StylesheetBytes, "maximum bytes per stylesheet (1024..1048576)")
+	fs.IntVar(&c.StylesheetTotalBytes, "stylesheet-total-bytes", b.StylesheetTotalBytes, "separate host stylesheet allowance (0 shares DOM budget; max 4194304)")
+	fs.IntVar(&c.Stylesheets, "stylesheets", b.Stylesheets, "maximum stylesheets per page including imports (1..64)")
+	fs.IntVar(&c.ImageBytes, "image-bytes", b.ImageBytes, "maximum encoded bytes per page image (1024..16777216)")
+	fs.IntVar(&c.PageBytes, "page-bytes", b.PageBytes, "maximum bytes of a page's HTML and its DOM (65536..8388608)")
+	fs.IntVar(&c.Images, "images", b.Images, "maximum distinct images per page, backgrounds included (1..1024)")
 	fs.Uint64Var(&c.Seed, "seed", 0, "seed for Math.random and crypto, for reproducible runs (0 = a fresh unpredictable generator per page); the clock is never fixed, timers depend on it")
 	if err := fs.Parse(legacyLongFlags(fs, args)); err != nil {
 		return c, err
@@ -315,7 +325,7 @@ func parseCommandArgs(command string, args []string) (config, error) {
 	}
 	c.Profile = p
 	if p.Persist == profile.PersistFile && c.StateDir == "" {
-		dir, err := defaultStateDir(command)
+		dir, err := defaultStateDir(b.Name)
 		if err != nil {
 			return c, fmt.Errorf("persist=file needs --state-dir: %v", err)
 		}
@@ -325,13 +335,13 @@ func parseCommandArgs(command string, args []string) (config, error) {
 		return c, nil
 	}
 	if fs.NArg() > 1 {
-		return c, fmt.Errorf("usage: %s [flags] [url|file://path]", command)
+		return c, fmt.Errorf("usage: %s [flags] [url|file://path]", b.Name)
 	}
 	if fs.NArg() == 0 {
 		return c, nil
 	}
 	c.Start = fs.Arg(0)
-	if command == "glynx" && !strings.HasPrefix(c.Start, "file:") {
+	if b.Browsing && !strings.HasPrefix(c.Start, "file:") {
 		var err error
 		c.Start, err = app.BrowsingURL(c.Start)
 		if err != nil {
@@ -377,10 +387,10 @@ func decodeState(args []string) (state, bool, error) {
 	return st, true, json.Unmarshal(data, &st)
 }
 
-func runMain() int { return Run("ntbrowser") }
+func runMain() int { return Run(NTBrowser) }
 
-// Run starts one browser session using the named executable defaults.
-func Run(command string) int {
+// Run starts one browser session with the given binary's defaults.
+func Run(b Binary) int {
 	if len(os.Args) == 3 && os.Args[1] == sandbox.StageArg {
 		// Linux: this static binary locks down, then becomes the helper.
 		helper, err := sandbox.HelperPath()
@@ -393,7 +403,7 @@ func Run(command string) int {
 	st, sandboxed, err := decodeState(os.Args[1:])
 	if err == nil && !sandboxed {
 		st.HelperFD = -1
-		st.Config, err = parseCommandArgs(command, os.Args[1:])
+		st.Config, err = parseCommandArgs(b, os.Args[1:])
 	}
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -405,7 +415,7 @@ func Run(command string) int {
 	c := st.Config
 	if c.ShowProfile {
 		fmt.Print(c.Profile.Table(sandbox.Probe()))
-		fmt.Printf("strengths are what this machine should achieve; a running %s says if it did not\n", command)
+		fmt.Printf("strengths are what this machine should achieve; a running %s says if it did not\n", b.Name)
 		return 0
 	}
 	if !sandboxed && c.Profile.UsesTemp() {
@@ -477,9 +487,10 @@ func Run(command string) int {
 	// keep individual allocations bounded.
 	debug.SetMemoryLimit(int64(max(uint64(512), c.HeapBudgetMiB)) << 20)
 
+	var openLocal func(path string) (io.ReadCloser, error)
 	if c.Profile.ReadsStartFile() {
-		// The only os.Open in the program; installed into app, never jsvm.
-		app.SetLocalReader(func(path string) (io.ReadCloser, error) { return os.Open(path) })
+		// The only os.Open in the program; handed to app, never jsvm.
+		openLocal = func(path string) (io.ReadCloser, error) { return os.Open(path) }
 	}
 
 	var program *tea.Program
@@ -512,20 +523,21 @@ func Run(command string) int {
 	browserLoop = l
 	go l.Run()
 
-	m := app.New(l, c.Profile, c.Start)
-	if command == "glynx" {
-		m.SetGlynx()
-	}
-	m.SetColorSchemeAuto(c.ColorScheme == "auto")
-	m.SetPageScale(c.PageScale)
-	m.SetPageBytes(c.PageBytes)
-	m.SetDevTools(inspector)
-	m.SetDiagnostics(trace)
-	m.SetCookies(cookieStore)
-	m.SetPool(pool)
+	m := app.New(l, c.Profile, app.Options{
+		Start:           c.Start,
+		Glynx:           b.Browsing,
+		ColorSchemeAuto: c.ColorScheme == "auto",
+		PageScale:       c.PageScale,
+		PageBytes:       c.PageBytes,
+		Unenforced:      strengths["files"] != profile.StrengthOS,
+		Cookies:         cookieStore,
+		Diagnostics:     trace,
+		DevTools:        inspector,
+		Pool:            pool,
+		OpenLocal:       openLocal,
+	})
 	defer m.Cleanup()
 	program = tea.NewProgram(m)
-	m.SetEnforced(strengths["files"] == profile.StrengthOS)
 	if conn != nil {
 		bridge, err := app.NewMediaBridge(conn, program.Send, closeMedia)
 		if err != nil {

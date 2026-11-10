@@ -28,7 +28,7 @@ func TestAddressStartupPasteAndNavigationGate(t *testing.T) {
 	defer cancel()
 	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400}, dropSink{})
 	go l.Run()
-	m := New(l, testProfile(nil, false, NavOff), "")
+	m := New(l, testProfile(nil, false, NavOff), Options{})
 	m.Init()
 	if !m.addressOpen || m.navSeq != 0 {
 		t.Fatal("empty launch navigated")
@@ -91,7 +91,7 @@ func TestGlynxBrowsingInput(t *testing.T) {
 		}
 	}
 	m := newModel(t, NavFree)
-	m.SetGlynx()
+	m.glynx = true
 	m.Update(tea.KeyPressMsg{Code: 'g', Text: "g"})
 	if !m.addressOpen || !strings.Contains(m.address.Placeholder, "search") {
 		t.Fatal("g did not open browsing input")

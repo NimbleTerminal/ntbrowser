@@ -43,7 +43,7 @@ Click-to-play video is the first feature that needs both.
 
 - **Flags today** (`cmd/ntbrowser/main.go`): `-nav`, `-allow`, `-allow-private`, `-subresources`, `-external-scripts`, `-width`, `-slice`, `-seed`. Defaults: `-nav free`, `-subresources any`, inline scripts on.
 - **Navigation** runs `netpolicy.Fetcher.Do` with `KindDocument`. `acceptableContentType` admits only text-like types, and the whole body is read under `MaxBody` (`--page-bytes`: 1 MiB for ntbrowser, 4 MiB for glynx, at most 8 MiB, since 2026-11-09; the same figure bounds `dom.Limits.TotalBytes` and nthtml's input cap is raised to match).
-- **The only `os.Open`** in the program is `cmd/ntbrowser`'s `app.SetLocalReader`, for the `file:` start page. `jsvm` and `dom` import no system packages (enforced by test).
+- **The only `os.Open`** in the program is the reader `internal/browsercmd` passes as `app.Options.OpenLocal`, for the `file:` start page. `jsvm` and `dom` import no system packages (enforced by test).
 - **The script clock** is already coarsened (`jsvm/sandbox.go`), and there is no JIT.
 - **ntpicture** plays GIF and animated WebP in pure Go (`animation`, `playback`).
 - **ntvideo v0.3.0** is a Bubble Tea widget (`Init`, `Update`, `View`, `SetBounds`, `Play`, `Pause`, `Seek`, `Close`, `WithPoster`, `WithScrubber`). Native playback loads libmpv at runtime through goffi (cgo-free, but `unsafe`); without libmpv it shows "install mpv to play video". It sets `config=no`, `load-scripts=no`, `ytdl=no`, `sub-auto=no` and `protocol_whitelist=file`, so mpv opens only local files.

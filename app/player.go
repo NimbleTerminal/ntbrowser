@@ -117,9 +117,6 @@ func (m *Model) Cleanup() {
 	os.Remove(m.mediaDir)
 }
 
-// SetEnforced records whether the OS actually holds the profile.
-func (m *Model) SetEnforced(on bool) { m.notEnforced = !on }
-
 // videoTarget is what load needs to download a video.
 type videoTarget struct {
 	dir      string

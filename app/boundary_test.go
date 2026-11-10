@@ -34,7 +34,7 @@ func TestViewNeverCarriesTerminalEscapes(t *testing.T) {
 	defer cancel()
 	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400}, dropSink{})
 	go l.Run()
-	m := New(l, testProfile(nil, false, NavConfirm), "")
+	m := New(l, testProfile(nil, false, NavConfirm), Options{})
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	osc52 := "\x1b]52;c;SGVsbG8=\x07"
 	m.Update(loop.TitleMsg{Title: "Owned" + osc52 + "\x9d title   line"})
@@ -69,7 +69,7 @@ func TestHistoryMovesOnlyOnSuccessAndLatestNavigationWins(t *testing.T) {
 	defer cancel()
 	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400}, dropSink{})
 	go l.Run()
-	m := New(l, testProfile(nil, false, NavFree), "")
+	m := New(l, testProfile(nil, false, NavFree), Options{})
 	m.history, m.hIndex = []string{"https://a.test/", "https://b.test/"}, 1
 	m.current = mustURL(t, "https://b.test/")
 
@@ -84,7 +84,7 @@ func TestHistoryMovesOnlyOnSuccessAndLatestNavigationWins(t *testing.T) {
 	// Back again, but a newer navigation (a link) starts before it lands.
 	_ = m.step(-1)
 	backSeq := m.navSeq
-	_ = m.admit("https://c.test/", false)
+	_ = m.admit(loop.NavigateMsg{Href: "https://c.test/"})
 	m.Update(pageLoadedMsg{seq: backSeq, hist: 0, html: "<p>a</p>", base: mustURL(t, "https://a.test/")})
 	if m.hIndex != 1 || m.current.String() != "https://b.test/" {
 		t.Fatalf("superseded Back landed: index %d current %s", m.hIndex, m.current)
@@ -109,7 +109,7 @@ func TestFirstFrameReflowsAtTerminalWidth(t *testing.T) {
 	sink := make(chan tea.Msg, 256)
 	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 800, MinFrame: time.Millisecond}, chanSink(sink))
 	go l.Run()
-	m := New(l, testProfile(nil, false, NavFree), "")
+	m := New(l, testProfile(nil, false, NavFree), Options{})
 	m.Update(tea.WindowSizeMsg{Width: 200, Height: 50})
 	l.LoadPage(`<p>hello</p>`, "https://example.test/", nil)
 
@@ -152,7 +152,7 @@ func TestFrameWithoutWarningsKeepsStatus(t *testing.T) {
 	defer cancel()
 	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400}, dropSink{})
 	go l.Run()
-	m := New(l, testProfile(nil, false, NavFree), "")
+	m := New(l, testProfile(nil, false, NavFree), Options{})
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 1, Result: renderTall(t, `<p>x</p>`)}))
 	m.Update(loop.LogMsg{Level: "log", Line: "hello from the page"})
@@ -169,7 +169,7 @@ func TestFirstFrameClearsLoadingStatus(t *testing.T) {
 	defer cancel()
 	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400}, dropSink{})
 	go l.Run()
-	m := New(l, testProfile(nil, false, NavFree), "")
+	m := New(l, testProfile(nil, false, NavFree), Options{})
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m.Update(pageLoadedMsg{html: "<p>x</p>", base: mustURL(t, "https://example.test/"), seq: m.navSeq, hist: pushNew})
 	if !strings.HasPrefix(m.status.text, "loading ") {
@@ -186,7 +186,7 @@ func TestScriptErrorSurvivesFirstFrameAndResize(t *testing.T) {
 	defer cancel()
 	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400}, dropSink{})
 	go l.Run()
-	m := New(l, testProfile(nil, false, NavFree), "")
+	m := New(l, testProfile(nil, false, NavFree), Options{})
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m.Update(pageLoadedMsg{html: "<p>x</p>", base: mustURL(t, "https://example.test/"), seq: m.navSeq, hist: pushNew})
 	m.Update(loop.LogMsg{Level: "error", Line: "ReferenceError: Image is not defined at page.js:2:1"})
@@ -212,7 +212,7 @@ func TestImageWarningDoesNotReplaceNavigationFailureOrPrompt(t *testing.T) {
 	defer cancel()
 	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400}, dropSink{})
 	go l.Run()
-	m := New(l, testProfile(nil, false, NavFree), "")
+	m := New(l, testProfile(nil, false, NavFree), Options{})
 	m.Update(tea.WindowSizeMsg{Width: 120, Height: 24})
 	res := renderTall(t, `<p>still readable</p>`)
 	warning := `image "/gen_204": content type "text/html" is not a decodable image`

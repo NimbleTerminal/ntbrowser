@@ -12,6 +12,8 @@ import (
 	"charm.land/bubbles/v2/cursor"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
+
+	"nimbleterminal.dev/ntbrowser/loop"
 )
 
 func addressURL(raw string) (string, error) {
@@ -73,7 +75,7 @@ func (m *Model) addressUpdate(msg tea.Msg) (bool, tea.Cmd) {
 			}
 			m.addressOpen = false
 			m.address.Blur()
-			return true, m.admit(href, false)
+			return true, m.admit(loop.NavigateMsg{Href: href})
 		}
 	case tea.PasteMsg:
 		msg = tea.PasteMsg{Content: strings.ReplaceAll(clean(v.Content), "\n", " ")}

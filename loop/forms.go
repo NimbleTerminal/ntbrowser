@@ -355,7 +355,7 @@ func (l *Loop) buttonDefault(page *Page, n *dom.Node) {
 	}
 	switch typ {
 	case "submit", "image":
-		l.submit(page, form, n, true)
+		l.submit(page, form, n, submitByReader)
 	case "reset":
 		l.reset(page, form)
 	}
@@ -400,20 +400,29 @@ func (l *Loop) ImplicitSubmit(source string) {
 			}
 		}
 		if blocking == 1 {
-			l.submit(page, form, nil, true)
+			l.submit(page, form, nil, submitByReader)
 		}
 	})
 }
 
+// submission is who asked for a form to be submitted.
+type submission uint8
+
+const (
+	submitByReader        submission = iota // a click or implicit submission: fires submit
+	submitByScriptRequest                   // form.requestSubmit(): fires submit; the navigation is script's
+	submitByScript                          // form.submit(): no submit event; the navigation is script's
+)
+
 // submit runs HTML's form submission for GET (decisions 10–13, 17): the
-// submit event (unless fireEvent is false, as for form.submit()), then the
+// submit event (except for form.submit(), submitByScript), then the
 // method, password, size and action checks, then a NavigateMsg the host
 // admits like a link. Refusals are reported without any value.
-func (l *Loop) submit(page *Page, form, submitter *dom.Node, fireEvent bool, script ...bool) {
+func (l *Loop) submit(page *Page, form, submitter *dom.Node, how submission) {
 	if !page.Tree.Attached(form) {
 		return
 	}
-	if fireEvent {
+	if how != submitByScript {
 		page.firing[form.ID()] = true // requestSubmit() from a submit listener is a no-op (HTML)
 		prevented, err := page.Sandbox.Dispatch(jsvm.Event{Type: "submit", Target: form.ID()})
 		delete(page.firing, form.ID())
@@ -472,7 +481,7 @@ func (l *Loop) submit(page *Page, form, submitter *dom.Node, fireEvent bool, scr
 		l.send(LogMsg{"warn", "form too large to submit"})
 		return
 	}
-	l.send(NavigateMsg{Href: u.String(), Form: true, Script: len(script) > 0 && script[0]})
+	l.send(NavigateMsg{Href: u.String(), Form: true, Script: how != submitByReader})
 }
 
 // reset restores every control of form to its defaults after an
@@ -609,7 +618,11 @@ func (l *Loop) formHooks(page *Page) jsvm.FormHooks {
 			}
 			page.formTasks = append(page.formTasks, func() {
 				if f := page.Tree.Node(form); f != nil {
-					l.submit(page, f, page.Tree.Node(submitter), fireEvent, true)
+					how := submitByScript
+					if fireEvent {
+						how = submitByScriptRequest
+					}
+					l.submit(page, f, page.Tree.Node(submitter), how)
 				}
 			})
 		},

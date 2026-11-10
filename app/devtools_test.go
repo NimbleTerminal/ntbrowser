@@ -29,7 +29,7 @@ func TestDevToolsPanelUsesGatedAPIAndSanitizes(t *testing.T) {
 		}
 		return devtools.Response{DOM: &devtools.DOM{Revision: 7, Node: devtools.Node{ID: 1, Tag: "document"}, Children: []devtools.Node{{ID: 2, Tag: "#text", Text: "\x1b]52;c;EVIL\x07"}}, Next: -1}}, nil
 	})
-	m.SetDevTools(s)
+	m.debug.session = s
 	before := m.viewRows()
 	m.Update(tea.KeyPressMsg{Code: tea.KeyF12})
 	if !m.debug.open || m.viewRows() >= before {

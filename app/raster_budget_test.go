@@ -46,7 +46,7 @@ func TestFirstFrameUsesProbedCellSizeAndRasterBudget(t *testing.T) {
 	sink := make(chan tea.Msg, 256)
 	l := loop.New(ctx, loop.Config{Profile: testLoopProfile, Width: 400, Fonts: document.MinimalFonts, MinFrame: time.Millisecond}, chanSink(sink))
 	go l.Run()
-	m := New(l, testProfile(nil, false, NavFree), "")
+	m := New(l, testProfile(nil, false, NavFree), Options{})
 	m.session = ntpicture.NewTerminalSession(ntpicture.TerminalOptions{Kitty: ntpicture.KittyCapabilitySupported, CellPixelWidth: 10, CellPixelHeight: 20})
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 26})
 	l.LoadPage(`<body>`+strings.Repeat(`<p style="height:1000px">long CSS text</p>`, 40), "https://example.test/", nil)

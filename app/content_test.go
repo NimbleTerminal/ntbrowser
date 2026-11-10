@@ -69,7 +69,7 @@ func contentModel(t *testing.T, p profile.Profile, start string) *Model {
 	t.Cleanup(cancel)
 	l := loop.New(ctx, loop.Config{Profile: p, Width: 400}, dropSink{})
 	go l.Run()
-	m := New(l, p, start)
+	m := New(l, p, Options{Start: start})
 	m.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 	m.Update(cssFrame(t, m, loop.FrameMsg{Gen: 1, Result: renderTall(t, `<p>x</p>`)}))
 	return m
@@ -84,7 +84,7 @@ func openProfile(media profile.Media) profile.Profile {
 // run navigates and feeds the result back, as Bubble Tea would.
 func run(t *testing.T, m *Model, u string) pageLoadedMsg {
 	t.Helper()
-	msg := m.navigate(u, pushNew, true)().(pageLoadedMsg)
+	msg := m.navigate(u, pushNew, reachAny)().(pageLoadedMsg)
 	m.Update(msg)
 	return msg
 }
@@ -177,7 +177,7 @@ func TestBackFromImageRestoresPage(t *testing.T) {
 	if cmd == nil {
 		t.Fatal("Esc did not go back")
 	}
-	m.Update(m.navigate(m.history[0], 0, true)().(pageLoadedMsg))
+	m.Update(m.navigate(m.history[0], 0, reachAny)().(pageLoadedMsg))
 	if m.media != nil || !shown.closed || m.current.Path != "/" {
 		t.Fatalf("media %+v closed %v", m.media, shown.closed)
 	}
