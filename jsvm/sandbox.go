@@ -104,7 +104,13 @@ type FetchResponse struct {
 	Body       string
 }
 
-type Sandbox struct {
+// Sandbox state is grouped by feature. Each group is an embedded struct, so
+// its fields read as the sandbox's own, and Close releases a group with one
+// assignment: a field added to a group is released without touching Close
+// (TestCloseReleasesEveryReference checks the rest).
+
+// mutationFields is MutationObserver state (mutations.go).
+type mutationFields struct {
 	mutationProto, mutationPromise                                                                *goja.Object
 	mutationNotify                                                                                goja.Value
 	mutationThen                                                                                  goja.Callable
@@ -114,15 +120,20 @@ type Sandbox struct {
 	mutationPins                                                                                  map[dom.NodeID]int
 	mutationRegistrations, mutationRecords, mutationBytes, mutationTransients, mutationDeliveries int
 	mutationScheduled, mutationStopped                                                            bool
+}
 
-	styleProto                *goja.Object
-	styleSym                  *goja.Symbol
-	foreignNodes              map[DOMRef]*goja.Object
-	foreignRefs               map[*goja.Object]DOMRef
-	foreignPins               map[dom.NodeID]int
-	iframeProto               *goja.Object
-	frameWindows              map[uint64]*goja.Object
-	frameChildCount           int
+// frameFields is child frames and shared frame DOM handles.
+type frameFields struct {
+	foreignNodes    map[DOMRef]*goja.Object
+	foreignRefs     map[*goja.Object]DOMRef
+	foreignPins     map[dom.NodeID]int
+	iframeProto     *goja.Object
+	frameWindows    map[uint64]*goja.Object
+	frameChildCount int
+}
+
+// messageFields is message channels and window.postMessage.
+type messageFields struct {
 	messageOrigin             string
 	messagePorts              map[dom.NodeID]*messagePort
 	portMessages              []portMessage
@@ -130,56 +141,59 @@ type Sandbox struct {
 	messageTaskPending        bool
 	cloneMessage              func(goja.Value) (goja.Value, int)
 	emptyMessagePorts         *goja.Object
-	signalPins                map[dom.NodeID]*goja.Object
-	specialEventProtos        map[string]*goja.Object
-	specialEventDefaults      map[*goja.Object]map[string]any
-	domExceptionProto         *goja.Object
-	eventTargetProto          *goja.Object
-	eventProto                *goja.Object
-	customEventProto          *goja.Object
-	signalProto               *goja.Object
-	eventPrivate              *goja.Object
-	privateGet, privateSet    goja.Callable
-	extraTargetNext           dom.NodeID
-	extraTargets              map[dom.NodeID]bool
-	abortTimers               map[dom.NodeID]int
-	eventDepth                int
-	pendingRejections         []pendingRejection
-	rejectionsDropped         bool
-	rejectionReporting        bool
-	eventErrorReporting       bool
+}
 
-	collectionProto *goja.Object
+// eventFields is event targets, dispatch, abort signals and rejection
+// reporting. The listener counts are in bindingFields with the wrappers
+// they mirror.
+type eventFields struct {
+	signalPins             map[dom.NodeID]*goja.Object
+	specialEventProtos     map[string]*goja.Object
+	specialEventDefaults   map[*goja.Object]map[string]any
+	domExceptionProto      *goja.Object
+	eventTargetProto       *goja.Object
+	eventProto             *goja.Object
+	customEventProto       *goja.Object
+	signalProto            *goja.Object
+	eventPrivate           *goja.Object
+	privateGet, privateSet goja.Callable
+	extraTargetNext        dom.NodeID
+	extraTargets           map[dom.NodeID]bool
+	abortTimers            map[dom.NodeID]int
+	eventDepth             int
+	pendingRejections      []pendingRejection
+	rejectionsDropped      bool
+	rejectionReporting     bool
+	eventErrorReporting    bool
+}
 
-	documentReady     string
-	performanceOrigin float64
-	performanceNow    func() float64
-	vm                *goja.Runtime
-	cfg               Config
-	host              Host
-	tree              *dom.Tree
-	strikes           int
-	heapOver          time.Time // first over-budget sample after a collection; zero while under budget
-	mediaLists        []*mediaList
-	urlSym, paramsSym *goja.Symbol
+// resourceFields is scripts, document.write and images.
+type resourceFields struct {
 	writeScriptWarned bool
 	writeScript       dom.NodeID // script whose document.write insertion point writeCursor follows
 	writeCursor       dom.NodeID
-	disabled          bool
-	running           bool
+	scriptProto       *goja.Object
+	scripts           map[dom.NodeID]*scriptState
+	scriptCount       int
+	currentScript     dom.NodeID
+	imageProto        *goja.Object
+	images            map[dom.NodeID]*imageState
+	imageDecodes      int
+	imageSequence     uint64
+}
 
-	anchorProto   *goja.Object
-	relListSym    *goja.Symbol
-	scriptProto   *goja.Object
-	scripts       map[dom.NodeID]*scriptState
-	scriptCount   int
-	currentScript dom.NodeID
-	imageProto    *goja.Object
-	images        map[dom.NodeID]*imageState
-	imageDecodes  int
-	imageSequence uint64
-	elemProto     *goja.Object
-	nodeSym       *goja.Symbol // wrapper -> NodeID
+// bindingFields is the DOM bindings: prototypes, symbols, node wrappers and
+// the listener counts that mirror them.
+type bindingFields struct {
+	styleProto        *goja.Object
+	styleSym          *goja.Symbol
+	collectionProto   *goja.Object
+	mediaLists        []*mediaList
+	urlSym, paramsSym *goja.Symbol
+	anchorProto       *goja.Object
+	relListSym        *goja.Symbol
+	elemProto         *goja.Object
+	nodeSym           *goja.Symbol // wrapper -> NodeID
 	// weakW holds every wrapper weakly; strong pins listener-bearing wrappers
 	// of attached nodes. See bindings.go for the lifetime rules.
 	weakW  map[dom.NodeID]weak.Pointer[goja.Object]
@@ -191,12 +205,45 @@ type Sandbox struct {
 	nListen     int
 	active      dom.NodeID // focused element, 0 = none
 	forms       FormHooks  // host hooks for submit/reset/value writes (forms.go)
-	collectedMu sync.Mutex
-	collected   []dom.NodeID // NodeIDs whose wrappers the GC reclaimed
 	docObj      *goja.Object
 	jsonParse   goja.Callable
 	promiseCtor *goja.Object
-	wd          watchdog
+}
+
+// newBindingFields is the empty state: the maps exist because wrapper
+// finalizers and late host calls may still write after Close.
+func newBindingFields() bindingFields {
+	return bindingFields{
+		weakW:       map[dom.NodeID]weak.Pointer[goja.Object]{},
+		strong:      map[dom.NodeID]*goja.Object{},
+		listenCount: map[dom.NodeID]map[string]int{},
+		typeCount:   map[string]int{},
+	}
+}
+
+type Sandbox struct {
+	mutationFields
+	frameFields
+	messageFields
+	eventFields
+	resourceFields
+	bindingFields
+
+	// The runtime itself and what outlives a page's state.
+	documentReady     string
+	performanceOrigin float64
+	performanceNow    func() float64
+	vm                *goja.Runtime
+	cfg               Config
+	host              Host
+	tree              *dom.Tree
+	strikes           int
+	heapOver          time.Time // first over-budget sample after a collection; zero while under budget
+	disabled          bool
+	running           bool
+	collectedMu       sync.Mutex
+	collected         []dom.NodeID // NodeIDs whose wrappers the GC reclaimed
+	wd                watchdog
 }
 
 // watchdog is the time dimension of the sandbox: one timer per entry into
@@ -288,8 +335,7 @@ func New(cfg Config, tree *dom.Tree, host Host) *Sandbox {
 		cfg.Rand = RandomSource(0) // fresh OS-keyed generator for this page
 	}
 	s := &Sandbox{cfg: cfg, host: host, tree: tree, performanceOrigin: origin, performanceNow: now,
-		weakW: map[dom.NodeID]weak.Pointer[goja.Object]{}, strong: map[dom.NodeID]*goja.Object{},
-		listenCount: map[dom.NodeID]map[string]int{}, typeCount: map[string]int{}}
+		bindingFields: newBindingFields()}
 	s.vm = goja.New()
 	s.wd.vm = s.vm
 	s.harden()
@@ -514,66 +560,36 @@ func (s *Sandbox) Disabled() bool { return s.disabled }
 // when a page is replaced; after Close every entry point returns ErrDisabled
 // and Dispatch reports "not prevented". The dom.Tree is left to its owner.
 func (s *Sandbox) Close() {
-	s.pendingRejections = nil
-	s.rejectionsDropped = false
 	s.disabled = true
+	// Cleanup that reaches outside the sandbox comes first, while the state
+	// it reads is still there.
 	s.tree.SetMutationHook(nil)
-	s.mutationObservers = nil
-	s.mutationOrder = nil
-	s.mutationPending = nil
-	s.mutationPins = nil
-	s.mutationProto = nil
-	s.mutationPromise = nil
-	s.mutationNotify = nil
-	s.mutationThen = nil
 	if s.messageTaskPending {
 		s.host.ClearTask(s.messageTask)
 	}
-	s.messageTaskPending = false
-	s.messagePorts = nil
-	s.portMessages = nil
-	s.messageBytes = 0
-	s.cloneMessage = nil
 	if s.cfg.CloseFrameDOM != nil {
 		s.cfg.CloseFrameDOM()
 	}
-	s.foreignNodes = nil
-	s.foreignRefs = nil
-	s.foreignPins = nil
-	s.styleProto = nil
-	s.styleSym = nil
-	s.frameWindows = nil
-	s.iframeProto = nil
-	s.emptyMessagePorts = nil
-	s.wd.disarm()
-	s.images = nil
-	s.scriptProto, s.scripts = nil, nil
-	s.collectionProto = nil
-	s.eventPrivate, s.eventTargetProto, s.eventProto, s.customEventProto, s.signalProto = nil, nil, nil, nil, nil
-	s.privateGet, s.privateSet = nil, nil
-	s.extraTargets = nil
-	s.signalPins = nil
-	s.domExceptionProto = nil
-	s.specialEventProtos = nil
-	s.specialEventDefaults = nil
 	for _, id := range s.abortTimers {
 		s.host.ClearTimer(id)
 	}
-	s.abortTimers = nil
+	s.wd.disarm()
+	// Then every feature's state goes at once.
+	s.mutationFields = mutationFields{}
+	s.frameFields = frameFields{}
+	s.messageFields = messageFields{}
+	s.eventFields = eventFields{}
+	s.resourceFields = resourceFields{}
+	s.bindingFields = newBindingFields()
 	s.cfg.LoadScript = nil
-	s.imageProto = nil
-	s.anchorProto = nil
-	s.performanceNow = nil
 	s.cfg.SessionStorage = nil
 	s.cfg.LocalStorage = nil
+	s.performanceNow = nil
 	s.vm = nil
 	s.wd.vm = nil
-	s.elemProto, s.docObj, s.promiseCtor, s.jsonParse = nil, nil, nil, nil
-	s.weakW = map[dom.NodeID]weak.Pointer[goja.Object]{}
-	s.strong = map[dom.NodeID]*goja.Object{}
-	s.listenCount = map[dom.NodeID]map[string]int{}
-	s.typeCount = map[string]int{}
-	s.nListen = 0
+	s.collectedMu.Lock()
+	s.collected = nil
+	s.collectedMu.Unlock()
 }
 
 // Eval compiles and runs page script source in sloppy mode with a stable

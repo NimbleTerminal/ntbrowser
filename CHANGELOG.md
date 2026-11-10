@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- `jsvm.Sandbox` state is grouped per feature (mutations, frames, messages,
+  events, resources, bindings) in embedded structs, and `Close` releases a
+  group with one assignment instead of clearing some fifty fields by hand.
+  `TestCloseReleasesEveryReference` fails for any reference `Close` leaves
+  behind; it found eight that always were (the form hooks, the media query
+  lists and four symbols), which kept the loop's closures and VM objects
+  reachable from a closed sandbox.
 - `loop.Config.PaintDeadline` (default 2 s, unchanged) bounds a layout or
   band paint. The HiDPI and wide-terminal tests paint rasters large enough
   to miss two seconds under the race detector on a loaded machine; they now
