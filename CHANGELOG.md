@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- `Model.Update` hands its five largest cases to `onPageLoaded`, `onFrame`,
+  `onMouseRelease`, `onMouseWheel` and `onKey` (481 lines to 194), and the
+  loop's `startRender` is three steps over one `frameJob`: snapshot on the VM
+  goroutine, `renderFrame` on the worker, `commitFrame` back on the VM
+  goroutine. Code moved verbatim; no behaviour change.
 - A page's timers and animation callbacks belong to its `loop.Page`
   (`scheduled`) instead of the `Loop`: a new page starts with none and
   `dropPage` discards them in one place, where three sites used to reset

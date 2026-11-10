@@ -1080,183 +1080,218 @@ func (l *Loop) startRender() {
 		viewport.Origin = image.Point{}
 		viewport.ZoomSteps = 0
 	}
+	f := &frameJob{page: page, opts: opts, loaderWarnings: loaderWarnings, injected: injected, frameImages: frameImages, requestedScroll: requestedScroll, rebuildChunks: rebuildChunks, chunkState: chunkState, chunkReq: chunkReq, useChunks: useChunks, html: html, gen: gen, navigation: navigation, viewport: viewport}
 	l.renderJobs <- func(worker *paintWorker) {
-		ctx, cancel := context.WithTimeout(page.paintCtx, l.cfg.PaintDeadline)
-		defer cancel()
-		// Parse and Render enforce nthtml's own byte/node/pixel budgets; a
-		// hostile tree fails here with document.ErrLimit instead of
-		// exhausting memory. One parse per frame also yields the CSS
-		// background sources (decision 21).
-		var res *document.Result
-		var painted *nthtml.PaintedResult
-		var backgrounds []string
-		var chunkInfo ChunkInfo
-		if useChunks {
-			chunkInfo.Count = 1
-		}
-		var doc *document.Document
-		var err error
-		if useChunks && chunkState != nil && !rebuildChunks {
-			doc = chunkState.doc
-		} else {
-			doc, err = document.Parse(ctx, strings.NewReader(html), opts.Limits)
-		}
-		if err == nil && doc != nil {
-			for _, src := range doc.ImageSourceList() {
-				if src.Kind == "background" && !strings.HasPrefix(strings.ToLower(src.Src), "data:") {
-					backgrounds = append(backgrounds, src.Src)
-				}
+		l.renderFrame(f, worker)
+		l.post(func() { l.commitFrame(f) })
+	}
+}
+
+// frameJob carries one frame through its three steps: startRender snapshots
+// the page on the VM goroutine, renderFrame lays it out and paints on the
+// render worker, and commitFrame applies the result back on the VM
+// goroutine. Between the first and the last step only the worker touches it.
+type frameJob struct {
+	// The snapshot: immutable copies of what the page looked like.
+	page            *Page
+	opts            document.Options
+	loaderWarnings  []string
+	injected        []string // hrefs whose sheet is in this snapshot
+	frameImages     map[dom.NodeID]framePresentation
+	requestedScroll image.Point
+	rebuildChunks   bool
+	chunkState      *chunkRender
+	chunkReq        chunkRequest
+	useChunks       bool
+	html            string
+	gen, navigation uint64
+	viewport        nthtml.PaintViewport
+
+	// The worker's result.
+	res            *document.Result
+	painted        *nthtml.PaintedResult
+	backgrounds    []string
+	chunkInfo      ChunkInfo
+	err            error
+	embeddedImage  image.Image
+	embeddedOrigin image.Point
+}
+
+// renderFrame runs on the render worker: parse, lay out, and paint the first
+// band, all inside nthtml's budgets and the page's paint deadline.
+func (l *Loop) renderFrame(f *frameJob, worker *paintWorker) {
+	ctx, cancel := context.WithTimeout(f.page.paintCtx, l.cfg.PaintDeadline)
+	defer cancel()
+	// Parse and Render enforce nthtml's own byte/node/pixel budgets; a
+	// hostile tree fails here with document.ErrLimit instead of
+	// exhausting memory. One parse per frame also yields the CSS
+	// background sources (decision 21).
+	if f.useChunks {
+		f.chunkInfo.Count = 1
+	}
+	var doc *document.Document
+	if f.useChunks && f.chunkState != nil && !f.rebuildChunks {
+		doc = f.chunkState.doc
+	} else {
+		doc, f.err = document.Parse(ctx, strings.NewReader(f.html), f.opts.Limits)
+	}
+	if f.err == nil && doc != nil {
+		for _, src := range doc.ImageSourceList() {
+			if src.Kind == "background" && !strings.HasPrefix(strings.ToLower(src.Src), "data:") {
+				f.backgrounds = append(f.backgrounds, src.Src)
 			}
-			renderDocument := func() {
-				if useChunks {
-					if chunkState == nil || rebuildChunks || chunkState.width != opts.Width || chunkState.diagramsDisabled != opts.DisableDiagrams {
-						old := chunkState
-						chunkState, err = newChunkRender(ctx, doc, opts)
-						if err == nil && old != nil && chunkReq.index == old.index && chunkReq.anchor == "" && old.place != "" {
-							if start, end, ok := chunkState.source.ChunkRange(old.place); ok && (chunkReq.index < start || chunkReq.index >= end) {
-								chunkReq.index = start
-							}
+		}
+		renderDocument := func() {
+			if f.useChunks {
+				if f.chunkState == nil || f.rebuildChunks || f.chunkState.width != f.opts.Width || f.chunkState.diagramsDisabled != f.opts.DisableDiagrams {
+					old := f.chunkState
+					f.chunkState, f.err = newChunkRender(ctx, doc, f.opts)
+					if f.err == nil && old != nil && f.chunkReq.index == old.index && f.chunkReq.anchor == "" && old.place != "" {
+						if start, end, ok := f.chunkState.source.ChunkRange(old.place); ok && (f.chunkReq.index < start || f.chunkReq.index >= end) {
+							f.chunkReq.index = start
 						}
 					}
-					if err == nil {
-						res, chunkInfo, err = chunkState.render(ctx, chunkReq, opts)
-					}
-				} else {
-					res, err = doc.Render(ctx, opts)
 				}
+				if f.err == nil {
+					f.res, f.chunkInfo, f.err = f.chunkState.render(ctx, f.chunkReq, f.opts)
+				}
+			} else {
+				f.res, f.err = doc.Render(ctx, f.opts)
 			}
+		}
+		renderDocument()
+		if !f.opts.DisableDiagrams && diagramBudgetExceeded(f.err) && ctx.Err() == nil {
+			// Keep the same document, CSS, images, deadline and budgets.
+			// nthtml's supported label/source fallback avoids rasterizing
+			// diagrams; it does not grant a larger resource allowance.
+			f.opts.DisableDiagrams = true
 			renderDocument()
-			if !opts.DisableDiagrams && diagramBudgetExceeded(err) && ctx.Err() == nil {
-				// Keep the same document, CSS, images, deadline and budgets.
-				// nthtml's supported label/source fallback avoids rasterizing
-				// diagrams; it does not grant a larger resource allowance.
-				opts.DisableDiagrams = true
-				renderDocument()
-				loaderWarnings = append(loaderWarnings, diagramFallbackWarning)
-			}
-			if !useChunks && errors.Is(err, document.ErrLimit) && (opts.Images != nil || opts.BackgroundImages != nil) {
-				// Images are the only thing the host added: drop them and
-				// retry once so an image-heavy page degrades to placeholders
-				// instead of a blank viewer (decision 16).
-				opts.Images, opts.BackgroundImages = nil, nil
-				frameImages = nil
-				res, err = doc.Render(ctx, opts)
-				loaderWarnings = append(loaderWarnings, "page too large with images; rendered without them")
-			}
+			f.loaderWarnings = append(f.loaderWarnings, diagramFallbackWarning)
 		}
-		var embeddedImage image.Image
-		embeddedOrigin := requestedScroll
-		if l.cfg.FrameHeight > 0 && err == nil && res != nil {
-			embeddedOrigin.X = max(0, min(embeddedOrigin.X, res.Bounds().Dx()-opts.Width))
-			embeddedOrigin.Y = max(0, min(embeddedOrigin.Y, res.Bounds().Dy()-l.cfg.FrameHeight))
-			embeddedImage, err = res.Paint(ctx, image.Rect(0, 0, opts.Width, l.cfg.FrameHeight).Add(embeddedOrigin), 1)
-			if err == nil && embeddedImage.Bounds().Size() != image.Pt(opts.Width, l.cfg.FrameHeight) {
-				canvas := image.NewRGBA(image.Rect(0, 0, opts.Width, l.cfg.FrameHeight))
-				draw.Draw(canvas, canvas.Bounds(), image.NewUniform(res.Background()), image.Point{}, draw.Src)
-				draw.Draw(canvas, embeddedImage.Bounds(), embeddedImage, image.Point{}, draw.Src)
-				embeddedImage = canvas
-			}
+		if !f.useChunks && errors.Is(f.err, document.ErrLimit) && (f.opts.Images != nil || f.opts.BackgroundImages != nil) {
+			// Images are the only thing the host added: drop them and
+			// retry once so an image-heavy page degrades to placeholders
+			// instead of a blank viewer (decision 16).
+			f.opts.Images, f.opts.BackgroundImages = nil, nil
+			f.frameImages = nil
+			f.res, f.err = doc.Render(ctx, f.opts)
+			f.loaderWarnings = append(f.loaderWarnings, "page too large with images; rendered without them")
 		}
-		if l.cfg.FrameHeight == 0 && !useChunks && err == nil && res != nil {
-			var painter *document.Painter
-			var plan nthtml.PaintPlan
-			painter, err = res.NewPainter(ctx)
-			if err == nil {
-				plan, err = nthtml.PlanPaint(res, viewport)
-				if err == nil {
-					var band *image.RGBA
-					band, err = painter.Paint(ctx, plan.Area, plan.Scale)
-					if err == nil {
-						painted = &nthtml.PaintedResult{Result: res, Revision: gen, Plan: plan, Image: band}
-						worker.close()
-						worker.painter, worker.result, worker.revision, worker.ctx = painter, res, gen, page.paintCtx
-					}
-				}
-				if err != nil {
-					painter.Close()
-				}
-			}
-		}
-		if useChunks && err != nil && doc == nil {
-			chunkState = nil
-		}
-		l.post(func() {
-			l.renderInFlight = false
-			if l.page != page || navigation != l.navGen.Load() {
-				return // frame for a page we navigated away from
-			}
-			if opts.DisableDiagrams {
-				page.diagramsDisabled = true
-			}
-			if opts.Width != l.cfg.Width {
-				l.currentFrame.Store(0)
-				l.pendingFrame = true
-				return
-			}
-			if useChunks {
-				page.chunkState = chunkState
-				// A newer chunk request supersedes this frame. Finish the worker
-				// before starting another: the engine is never used concurrently.
-				if page.chunkReq.seq != chunkReq.seq {
-					l.pendingFrame = true
-					return
-				}
-				page.chunkIndex = nil
-				if chunkState != nil {
-					page.chunkIndex = chunkState.source.ChunkSource
-				}
-				if chunkInfo.Count > 0 {
-					page.chunkInfo = chunkInfo
-					page.chunkReq.index = chunkInfo.Index
-				}
-				page.chunkReq.anchor, page.chunkReq.bottom = "", false
-			}
-			if !useChunks && errors.Is(err, document.ErrLimit) && len(injected) > 0 {
-				// nthtml refused a page that only differs from the one it
-				// would accept by the injected sheets: drop them for good and
-				// render without, rather than show a failed frame forever.
-				page.Tree.ClearStyles()
-				for _, href := range injected {
-					page.refused[href] = true
-				}
-				l.send(LogMsg{"error", fmt.Sprintf("stylesheets dropped, the renderer refused the page with them: %v (%s)", injected, err)})
-				page.Tree.MarkDirty()
-				return
-			}
-			if useChunks && err != nil {
-				page.boxes, page.result = nil, nil
-			}
-			if res != nil && err == nil {
-				page.boxes, page.result = res.Boxes, res
-				page.displayedFrames = frameImages
-				if l.cfg.FrameHeight > 0 && page.frameScroll == requestedScroll {
-					if page.frameScroll != embeddedOrigin {
-						page.scrollEvent = true
-					}
-					page.frameScroll = embeddedOrigin
-				}
-				l.autofocus(page)
-			}
-			if page.subres != nil {
-				page.backgrounds = backgrounds
-				page.subres.Discover(nil, nil, backgrounds)
-				if page.firstFrame {
-					page.firstFrame = false
-					page.subres.FirstFrameRendered()
-				}
-				loaderWarnings = append(loaderWarnings, page.subres.Warnings()...)
-			}
-			if err == nil || useChunks {
-				page.frameGen = gen
-				if !page.Tree.Dirty() {
-					l.currentFrame.Store(gen)
-					l.frameNavigation.Store(navigation)
-				}
-				page.firstFrame = false
-			}
-			l.send(FrameMsg{FrameImage: embeddedImage, FrameOrigin: embeddedOrigin, FrameRegions: l.frameRegions(page), Painted: painted, Navigation: navigation, Gen: gen, Result: res, Err: err, Warnings: loaderWarnings, Chunk: chunkInfo})
-		})
 	}
+	f.embeddedOrigin = f.requestedScroll
+	if l.cfg.FrameHeight > 0 && f.err == nil && f.res != nil {
+		f.embeddedOrigin.X = max(0, min(f.embeddedOrigin.X, f.res.Bounds().Dx()-f.opts.Width))
+		f.embeddedOrigin.Y = max(0, min(f.embeddedOrigin.Y, f.res.Bounds().Dy()-l.cfg.FrameHeight))
+		f.embeddedImage, f.err = f.res.Paint(ctx, image.Rect(0, 0, f.opts.Width, l.cfg.FrameHeight).Add(f.embeddedOrigin), 1)
+		if f.err == nil && f.embeddedImage.Bounds().Size() != image.Pt(f.opts.Width, l.cfg.FrameHeight) {
+			canvas := image.NewRGBA(image.Rect(0, 0, f.opts.Width, l.cfg.FrameHeight))
+			draw.Draw(canvas, canvas.Bounds(), image.NewUniform(f.res.Background()), image.Point{}, draw.Src)
+			draw.Draw(canvas, f.embeddedImage.Bounds(), f.embeddedImage, image.Point{}, draw.Src)
+			f.embeddedImage = canvas
+		}
+	}
+	if l.cfg.FrameHeight == 0 && !f.useChunks && f.err == nil && f.res != nil {
+		var painter *document.Painter
+		var plan nthtml.PaintPlan
+		painter, f.err = f.res.NewPainter(ctx)
+		if f.err == nil {
+			plan, f.err = nthtml.PlanPaint(f.res, f.viewport)
+			if f.err == nil {
+				var band *image.RGBA
+				band, f.err = painter.Paint(ctx, plan.Area, plan.Scale)
+				if f.err == nil {
+					f.painted = &nthtml.PaintedResult{Result: f.res, Revision: f.gen, Plan: plan, Image: band}
+					worker.close()
+					worker.painter, worker.result, worker.revision, worker.ctx = painter, f.res, f.gen, f.page.paintCtx
+				}
+			}
+			if f.err != nil {
+				painter.Close()
+			}
+		}
+	}
+	if f.useChunks && f.err != nil && doc == nil {
+		f.chunkState = nil
+	}
+}
+
+// commitFrame runs back on the VM goroutine: it applies a finished frame to
+// the page it was made for and sends it to the host.
+func (l *Loop) commitFrame(f *frameJob) {
+	l.renderInFlight = false
+	if l.page != f.page || f.navigation != l.navGen.Load() {
+		return // frame for a page we navigated away from
+	}
+	if f.opts.DisableDiagrams {
+		f.page.diagramsDisabled = true
+	}
+	if f.opts.Width != l.cfg.Width {
+		l.currentFrame.Store(0)
+		l.pendingFrame = true
+		return
+	}
+	if f.useChunks {
+		f.page.chunkState = f.chunkState
+		// A newer chunk request supersedes this frame. Finish the worker
+		// before starting another: the engine is never used concurrently.
+		if f.page.chunkReq.seq != f.chunkReq.seq {
+			l.pendingFrame = true
+			return
+		}
+		f.page.chunkIndex = nil
+		if f.chunkState != nil {
+			f.page.chunkIndex = f.chunkState.source.ChunkSource
+		}
+		if f.chunkInfo.Count > 0 {
+			f.page.chunkInfo = f.chunkInfo
+			f.page.chunkReq.index = f.chunkInfo.Index
+		}
+		f.page.chunkReq.anchor, f.page.chunkReq.bottom = "", false
+	}
+	if !f.useChunks && errors.Is(f.err, document.ErrLimit) && len(f.injected) > 0 {
+		// nthtml refused a page that only differs from the one it
+		// would accept by the injected sheets: drop them for good and
+		// render without, rather than show a failed frame forever.
+		f.page.Tree.ClearStyles()
+		for _, href := range f.injected {
+			f.page.refused[href] = true
+		}
+		l.send(LogMsg{"error", fmt.Sprintf("stylesheets dropped, the renderer refused the page with them: %v (%s)", f.injected, f.err)})
+		f.page.Tree.MarkDirty()
+		return
+	}
+	if f.useChunks && f.err != nil {
+		f.page.boxes, f.page.result = nil, nil
+	}
+	if f.res != nil && f.err == nil {
+		f.page.boxes, f.page.result = f.res.Boxes, f.res
+		f.page.displayedFrames = f.frameImages
+		if l.cfg.FrameHeight > 0 && f.page.frameScroll == f.requestedScroll {
+			if f.page.frameScroll != f.embeddedOrigin {
+				f.page.scrollEvent = true
+			}
+			f.page.frameScroll = f.embeddedOrigin
+		}
+		l.autofocus(f.page)
+	}
+	if f.page.subres != nil {
+		f.page.backgrounds = f.backgrounds
+		f.page.subres.Discover(nil, nil, f.backgrounds)
+		if f.page.firstFrame {
+			f.page.firstFrame = false
+			f.page.subres.FirstFrameRendered()
+		}
+		f.loaderWarnings = append(f.loaderWarnings, f.page.subres.Warnings()...)
+	}
+	if f.err == nil || f.useChunks {
+		f.page.frameGen = f.gen
+		if !f.page.Tree.Dirty() {
+			l.currentFrame.Store(f.gen)
+			l.frameNavigation.Store(f.navigation)
+		}
+		f.page.firstFrame = false
+	}
+	l.send(FrameMsg{FrameImage: f.embeddedImage, FrameOrigin: f.embeddedOrigin, FrameRegions: l.frameRegions(f.page), Painted: f.painted, Navigation: f.navigation, Gen: f.gen, Result: f.res, Err: f.err, Warnings: f.loaderWarnings, Chunk: f.chunkInfo})
 }
 
 // startSubresources opens the page's subresource session and arms the
