@@ -2,6 +2,49 @@
 
 ## Unreleased
 
+## v0.2.0 (2026-11-10)
+
+This release adds `glynx`, a browsing-focused binary on the same engine, and
+makes large real-world pages usable: more of the web platform for scripts,
+HiDPI and wide terminals, and budgets sized for sites such as github.com and
+yahoo.com. It builds on published nthtml v0.6.0.
+
+**Adoption:** `ntbrowser`'s built-in profiles and defaults are unchanged;
+`glynx` has its own browsing defaults (external scripts, frames, session
+cookies and storage, larger budgets) that explicit profiles and flags replace.
+Persistence is off unless `persist=file` (glynx default; `--safe` turns it
+off). Releases are signed and notarized on macOS and published as a Homebrew
+cask.
+
+**Limits:** Still a reader and small-application runtime, not a full browser:
+no ES modules or dynamic `import()`, no POST forms, classic scripts only, and
+CSS is nthtml's supported subset.
+
+- **glynx:** a second executable for everyday browsing, with an address/search
+  prompt, its own key bindings, and a browsing profile; user guides for both
+  binaries.
+- **Display:** device scale for HiDPI terminals (`--scale`), full use of wide
+  and tall terminals, automatic light/dark from the terminal background, CSS
+  `:hover`, and link hover and press feedback.
+- **Web platform:** `localStorage`, `matchMedia`, `crypto.getRandomValues` and
+  `randomUUID`, `getElementsByClassName`, `:has()` in DOM queries, global event
+  handler properties, and more accepted script MIME types and iframe sandbox
+  tokens.
+- **Bigger pages:** `--page-bytes`, `--images`, larger image, stylesheet and
+  rule budgets in glynx, and a heap guard with a grace period so a transient
+  spike no longer disables a page's scripts.
+- **Networking:** one connection pool per session (a host is dialed once
+  instead of once per fetcher) and a single same-origin rule used everywhere.
+- **Persistence and inspection:** optional on-disk cookies and localStorage in
+  owner-only files opened before the sandbox closes, and opt-in read-only
+  devtools (`--devtools`, F12).
+- **Hardening and tooling:** per-page unpredictable random sources, six more
+  fuzz targets, lint and vulnerability checks in CI, Linux and macOS CI gates,
+  and release packaging for amd64 and arm64.
+
+<details>
+<summary>Full change notes</summary>
+
 - `Model.Update` hands its five largest cases to `onPageLoaded`, `onFrame`,
   `onMouseRelease`, `onMouseWheel` and `onKey` (481 lines to 194), and the
   loop's `startRender` is three steps over one `frameJob`: snapshot on the VM
@@ -126,14 +169,14 @@
   hover/pointer, reduced-motion and resolution features, and a 256-list cap.
   yahoo.com picks its dark theme in script through
   `matchMedia('(prefers-color-scheme: dark)')` and stayed light without it.
-  With the local nthtml applying CSS `fill` to inline SVG roots, its search
+  With nthtml v0.6.0 applying CSS `fill` to inline SVG roots, its search
   button's magnifier paints too.
 
 - Add `--images` (glynx 256, ntbrowser 64, up to 1024) for distinct images
   per page; the per-page pixel budget is unchanged. Skip a script whose
   syntax Goja has not implemented ("Async generators are not supported
   yet") with a warning instead of a page error, as for module syntax. With
-  the local nthtml's larger declaration budget, yahoo.com's front page now
+  nthtml v0.6.0's larger declaration budget, yahoo.com's front page now
   keeps its stylesheets and its thumbnails.
 
 - Add `--page-bytes` (glynx 4 MiB, ntbrowser 1 MiB, 64 KiB to 8 MiB) for a
@@ -145,7 +188,7 @@
   `--color-scheme auto` (the default) asks the terminal for its background
   and lays the page out with `prefers-color-scheme: dark` and the dark branch
   of `light-dark()` on a dark terminal; `light` and `dark` force one, and the
-  loop re-flows when the scheme changes. Together with the local nthtml's
+  loop re-flows when the scheme changes. Together with nthtml v0.6.0's
   CSS nesting, `light-dark()`, logical properties, grid `justify-self`, spec
   fr sizing, hairline borders and implied `</p>`, fallthrough.fm renders its
   dark theme, header rules, tagline separator, hidden skip link and
@@ -158,7 +201,7 @@
   screen), the first band was painted at glyph resolution and upscaled
   tenfold, and the band was unbounded up to 283 rows. The band is now bounded
   to two screens of terminal pixels (one above 4 Mpx viewports), the first
-  band is painted at the probed cell size, and the local nthtml hands the
+  band is painted at the probed cell size, and nthtml v0.6.0 hands the
   transport an exact-size band. Replayed peaks fell from 366 MiB to 122 MiB
   on a 1800×1200 terminal and from 1007 MiB to 166 MiB at 3960×2520.
 
@@ -175,7 +218,7 @@
   the top of the README. Correct the README passages that still described
   glynx as memory-only after persistence landed.
 
-- Render GitHub's header buttons at full width with the local nthtml
+- Render GitHub's header buttons at full width with nthtml v0.6.0
   renderer, which now sizes grid tracks from their items: Notifications, Fork,
   Star and the branch selector no longer clip or overlap their labels.
 
@@ -210,7 +253,7 @@
   subresource loader decodes rasters under the configured cap with the same
   4096 px / 4 Mpx checks; the 16 Mpx page budget is unchanged.
 
-- Render GitHub's inline octicons in place with the local nthtml renderer:
+- Render GitHub's inline octicons in place with the nthtml v0.6.0 renderer:
   icon-sized SVGs flow with their text and are budgeted apart from the
   32-diagram count, so repository pages no longer fall back to `[SVG: …]`
   labels, and images inside `visibility: hidden` panels (GitHub's closed
@@ -264,7 +307,7 @@
   once. The session closes on shutdown after the pictures.
 
 - Render GitHub's repository sidebar beside the README and keep narrow page
-  layouts readable, using the local nthtml renderer's fixed-width intrinsic
+  layouts readable, using the nthtml v0.6.0 renderer's fixed-width intrinsic
   sizing, 4,096 custom properties per element, `calc()` width media ranges,
   column flex minimum heights and clipped alt text in sized image boxes. No
   ntbrowser budget or gate changes.
@@ -274,10 +317,10 @@
   pacing and deadline; pages without hover rules avoid pointer-driven reflows.
 
 - Enable full pointer-motion reporting for viewer link hover/press feedback.
-  The local nthtml renderer supplies cyan hover and amber pressed outlines
+  The nthtml v0.6.0 renderer supplies cyan hover and amber pressed outlines
   without changing navigation permissions or DOM/frame dispatch gates.
 
-- Admit up to 32,768 CSS rules in glynx now that the local nthtml renderer
+- Admit up to 32,768 CSS rules in glynx now that the nthtml v0.6.0 renderer
   evaluates cascade-layer blocks. Keep ntbrowser's 4,096-rule default and
   existing selector-work, stylesheet-byte and script-mutable DOM limits.
 
@@ -320,6 +363,8 @@
   contain both browsers and their media helper and their license notices, with SHA-256 checksums.
   Version tags publish after source checks and archive verification; manual
   dispatch can package an existing tag without moving it.
+
+</details>
 
 ## v0.1.0 (2026-11-05)
 
