@@ -15,7 +15,7 @@ require (
 	nimbleterminal.dev/ntconfine v0.1.1
 	nimbleterminal.dev/ntfonts v0.3.1
 	nimbleterminal.dev/ntfonts/cjk v0.3.1
-	nimbleterminal.dev/nthtml v0.5.0
+	nimbleterminal.dev/nthtml v0.6.0
 	nimbleterminal.dev/ntmediabox v0.1.0
 	nimbleterminal.dev/ntpicture v0.1.5
 	nimbleterminal.dev/nttypeset v0.3.0
@@ -57,6 +57,3 @@ replace charm.land/bubbletea/v2 => github.com/neomantra/bubbletea/v2 v2.0.0-2026
 
 // Vector rendering fork used by nttypeset and ntsvg (same as nthtml).
 replace github.com/srwiley/rasterx => github.com/neomantra/rasterx v0.1.0
-
-// Temporary local CSS iteration; remove when adopting the next nthtml release.
-replace nimbleterminal.dev/nthtml => /private/tmp/nthtml-colored-rows

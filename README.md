@@ -123,7 +123,7 @@ WASM compilation, notices, builds, and a 30-second DOM fuzz run. Tasks set
 `GOWORK=off CGO_ENABLED=0`. Override the fuzz duration with `task ci DURATION=10s`;
 `task check` remains available for checks without builds or fuzzing.
 
-Dependencies use published module versions, including nthtml v0.5.0 and
+Dependencies use published module versions, including nthtml v0.6.0 and
 nttypeset v0.3.0. No sibling library checkouts are required. The media helper's
 replacement of ntbrowser points to this repository's root module.
 ntbrowser retains the WASM-capable Bubble Tea fork for its compile-only gate.
@@ -177,7 +177,7 @@ it; the last readable image remains visible until another chunk succeeds.
 DOM, stylesheet, image, and width changes rebuild the index, preserving a stable
 source anchor when available. No new profile gates are opened.
 
-The default CSS renderer uses nthtml v0.5.0 viewport painting: full bounded CSS
+The default CSS renderer uses nthtml v0.6.0 viewport painting: full bounded CSS
 layout, with only a bounded raster band resident. A serial worker paints the
 first band with each layout and handles later scroll/zoom requests with a
 two-second deadline. Search, selection, focus and hit-testing retain global CSS
