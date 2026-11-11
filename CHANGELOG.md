@@ -38,12 +38,19 @@ CSS is nthtml's supported subset.
 - **Persistence and inspection:** optional on-disk cookies and localStorage in
   owner-only files opened before the sandbox closes, and opt-in read-only
   devtools (`--devtools`, F12).
-- **Hardening and tooling:** per-page unpredictable random sources, six more
+- **Hardening and tooling:** built with Go 1.26.11, which fixes ten
+  standard-library vulnerabilities in 1.26.8's HTTP and TLS stack; per-page
+  unpredictable random sources, six more
   fuzz targets, lint and vulnerability checks in CI, Linux and macOS CI gates,
   and release packaging for amd64 and arm64.
 
 <details>
 <summary>Full change notes</summary>
+
+- Build with Go 1.26.11 (was 1.26.8). The new `task vuln` step found ten
+  standard-library vulnerabilities reachable from the browser in 1.26.8
+  (`net/http`, `crypto/tls`, `crypto/x509`, `net/textproto`,
+  `mime/multipart`), all fixed by 1.26.10.
 
 - `Model.Update` hands its five largest cases to `onPageLoaded`, `onFrame`,
   `onMouseRelease`, `onMouseWheel` and `onKey` (481 lines to 194), and the

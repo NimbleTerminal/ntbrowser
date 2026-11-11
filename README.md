@@ -117,7 +117,7 @@ own data policies. Cookies and storage contents are not exposed by devtools.
 
 ## Development dependencies
 
-Use Go 1.26.8 and run `task ci` for the full local and GitHub Actions gate:
+Use Go 1.26.11 and run `task ci` for the full local and GitHub Actions gate:
 formatting, module tidy/verification, vet and tests for both modules, `nocjk`,
 WASM compilation, notices, builds, and a 30-second DOM fuzz run. Tasks set
 `GOWORK=off CGO_ENABLED=0`. Override the fuzz duration with `task ci DURATION=10s`;

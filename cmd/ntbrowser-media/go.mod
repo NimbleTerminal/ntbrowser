@@ -1,6 +1,6 @@
 module nimbleterminal.dev/ntbrowser/cmd/ntbrowser-media
 
-go 1.26.8
+go 1.26.11
 
 require (
 	nimbleterminal.dev/ntbrowser v0.0.0
