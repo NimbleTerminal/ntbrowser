@@ -91,7 +91,7 @@ func TestOpenSlotHeldUntilClose(t *testing.T) {
 	}
 	o.Body.Close()
 	o.Body.Close() // twice is safe
-	deadline := time.Now().Add(time.Second)
+	deadline := time.Now().Add(patience)
 	for {
 		o2, err := f.Open(context.Background(), Request{URL: base + "/", Kind: KindNavigate})
 		if err == nil {

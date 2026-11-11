@@ -43,7 +43,7 @@ func loadExample(t *testing.T, name string, srv *httptest.Server) (*Loop, chanSi
 
 func waitLog(t *testing.T, sink chanSink, want string) {
 	t.Helper()
-	deadline := time.After(5 * time.Second)
+	deadline := time.After(patience)
 	for {
 		select {
 		case <-deadline:
@@ -84,7 +84,7 @@ func TestExampleFetchList(t *testing.T) {
 func TestExampleLinks(t *testing.T) {
 	l, s := loadExample(t, "links.html", nil)
 	var frame FrameMsg
-	deadline := time.After(5 * time.Second)
+	deadline := time.After(patience)
 	for frame.Result == nil {
 		select {
 		case <-deadline:
@@ -102,7 +102,7 @@ func TestExampleLinks(t *testing.T) {
 		l.LinkActivated(link)
 	}
 	waitLog(t, s, "intercepted")
-	deadline = time.After(2 * time.Second)
+	deadline = time.After(patience)
 	for {
 		select {
 		case <-deadline:

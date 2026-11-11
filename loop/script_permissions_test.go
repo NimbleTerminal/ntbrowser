@@ -27,7 +27,7 @@ func permissionFixture(t *testing.T, p profile.Profile) (*Loop, chanSink, *netpo
 }
 func waitScriptPermission(t *testing.T, sink chanSink) ScriptPermissionMsg {
 	t.Helper()
-	deadline := time.After(5 * time.Second)
+	deadline := time.After(patience)
 	for {
 		select {
 		case <-deadline:
@@ -100,7 +100,7 @@ func TestScriptPermissionDenialAndQueueBound(t *testing.T) {
 	l.LoadPage(`<script>for(let i=0;i<10;i++){let s=document.createElement("script");s.src="http://cdn.test/"+i;s.onerror=()=>console.log("DENIED");document.head.appendChild(s)}</script>`, "http://page.test/", f)
 	count := 0
 	denied := 0
-	deadline := time.After(5 * time.Second)
+	deadline := time.After(patience)
 	for count < 8 || denied < 2 {
 		select {
 		case <-deadline:

@@ -20,7 +20,7 @@ func TestFrameScriptScrollAndClickAfterScroll(t *testing.T) {
  </script>`
 	l.LoadPage(`<iframe id=f height=150 srcdoc="`+html.EscapeString(child)+`"></iframe><script>addEventListener('message',e=>console.log(e.data))</script>`, "https://example.test/", f)
 	waitLog(t, sink, "scroll-requested")
-	deadline := time.After(5 * time.Second)
+	deadline := time.After(patience)
 	for {
 		ready := make(chan bool, 1)
 		l.post(func() {

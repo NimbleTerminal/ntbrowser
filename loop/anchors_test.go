@@ -25,7 +25,7 @@ func TestAnchorBindingsHaveNoHostEffectsBeforeActivation(t *testing.T) {
 	go l.Run()
 	l.LoadPage(`<a id=a>go</a><script>const a=document.getElementById("a");a.href="https://other.test/next";a.target="_blank";a.download="saved";a.ping="https://beacon.test/";a.relList.add("opener");</script>`, "https://example.test/", nil)
 	var link document.Link
-	deadline := time.After(3 * time.Second)
+	deadline := time.After(patience)
 	ready := false
 	for !ready {
 		select {
@@ -76,7 +76,7 @@ func TestAnchorClickUsesFinalDestination(t *testing.T) {
 			go l.Run()
 			l.LoadPage(`<a id=a href="/original">go</a><script>const a=document.getElementById("a");a.addEventListener("click",()=>{a.href="https://OTHER.test:443/changed"});a.focus();</script>`, "https://example.test/", nil)
 			var link document.Link
-			deadline := time.After(3 * time.Second)
+			deadline := time.After(patience)
 			ready := false
 			for !ready {
 				select {
@@ -118,7 +118,7 @@ func TestAnchorExecutionAndLocalSchemesNotOpenable(t *testing.T) {
 	l := New(ctx, Config{Profile: testProfile, Width: 400}, sink)
 	go l.Run()
 	l.LoadPage(`<a id=a href="/original">go</a><script>const a=document.getElementById("a");a.addEventListener("click",()=>{a.href="javascript:console.log('executed')"});</script>`, "https://example.test/", nil)
-	deadline := time.After(3 * time.Second)
+	deadline := time.After(patience)
 	var link document.Link
 	for link.Href == "" {
 		select {

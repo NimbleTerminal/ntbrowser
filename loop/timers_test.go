@@ -26,7 +26,7 @@ func TestTimerFloodIsCappedAndLoopStaysResponsive(t *testing.T) {
 	  console.log("timers " + made + " " + refused);
 	</script></body>`, "https://example.test/", nil)
 	sawCap, sawAlive := false, false
-	deadline := time.After(5 * time.Second)
+	deadline := time.After(patience)
 	for !(sawCap && sawAlive) {
 		select {
 		case <-deadline:

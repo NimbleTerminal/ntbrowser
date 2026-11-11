@@ -37,7 +37,7 @@ func TestCompatibilityFixtures(t *testing.T) {
 				cancel()
 				select {
 				case <-done:
-				case <-time.After(5 * time.Second):
+				case <-time.After(patience):
 					t.Error("loop did not stop")
 				}
 			})
@@ -53,7 +53,7 @@ func TestCompatibilityFixtures(t *testing.T) {
 				}
 				generation := l.LoadPage(string(html), url, fetcher)
 				sawMarker, sawNavigation, sawPaint := false, !navigation, !painted
-				deadline := time.After(5 * time.Second)
+				deadline := time.After(patience)
 				for !sawMarker || !sawNavigation || !sawPaint {
 					select {
 					case <-deadline:

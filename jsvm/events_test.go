@@ -124,7 +124,7 @@ func TestEventTargetsAndHandlerCyclesCollected(t *testing.T) {
 	// at that depth replaces it. Overwrite that transient frame without a
 	// listener cycle before checking exact collection counts.
 	eventEval(t, s, `(function(){const c=new AbortController();c.signal.onabort=()=>{};c.signal.onabort=null;})()`)
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(patience)
 	for s.nListen != 0 && time.Now().Before(deadline) {
 		s.collectNow()
 	}

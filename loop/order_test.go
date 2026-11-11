@@ -23,7 +23,7 @@ func pageState(t *testing.T, l *Loop) (base string, killed, disabled bool) {
 	})
 	select {
 	case <-done:
-	case <-time.After(5 * time.Second):
+	case <-time.After(patience):
 		t.Fatal("loop did not answer")
 	}
 	return
@@ -41,7 +41,7 @@ func TestLatestLoadPageWins(t *testing.T) {
 		l.LoadPage(`<title>B</title><p>b</p>`, "https://b.test/", nil)
 		// A may legitimately apply before B's call was even made; B must
 		// apply eventually, and once it has, A must never apply again.
-		deadline := time.Now().Add(5 * time.Second)
+		deadline := time.Now().Add(patience)
 		for {
 			base, _, _ := pageState(t, l)
 			if base == "https://b.test/" {
@@ -74,7 +74,7 @@ func TestLinkActivatedMatchesNthtmlLinks(t *testing.T) {
   for (const a of document.querySelectorAll("a")) a.addEventListener("click", e => { e.preventDefault(); console.log("prevented " + a.textContent); });
 </script></body>`, "https://example.test/", nil)
 	var frame FrameMsg
-	deadline := time.After(5 * time.Second)
+	deadline := time.After(patience)
 	for frame.Result == nil {
 		select {
 		case <-deadline:
@@ -92,7 +92,7 @@ func TestLinkActivatedMatchesNthtmlLinks(t *testing.T) {
 		l.LinkActivated(link)
 	}
 	prevented := 0
-	timeout := time.After(2 * time.Second)
+	timeout := time.After(patience)
 	for prevented < 3 {
 		select {
 		case <-timeout:
@@ -143,7 +143,7 @@ func TestDisabledPageIsDropped(t *testing.T) {
 	  document.querySelector("a").addEventListener("click", e => e.preventDefault());
 	  for(;;){}
 	</script></body>`, "https://example.test/", nil)
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(patience)
 	for {
 		_, killed, disabled := pageState(t, l)
 		if killed && disabled {
@@ -155,7 +155,7 @@ func TestDisabledPageIsDropped(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	var frame FrameMsg
-	timeout := time.After(5 * time.Second)
+	timeout := time.After(patience)
 	for frame.Result == nil {
 		select {
 		case <-timeout:
@@ -167,7 +167,7 @@ func TestDisabledPageIsDropped(t *testing.T) {
 		}
 	}
 	l.LinkActivated(frame.Result.Links[0])
-	timeout = time.After(2 * time.Second)
+	timeout = time.After(patience)
 	for {
 		select {
 		case <-timeout:
@@ -194,7 +194,7 @@ func TestNilFetcherDeniesInsteadOfPanicking(t *testing.T) {
 	l.LoadPage(`<body><script src="https://x.test/a.js"></script><script>
 	  fetch("https://x.test/d").catch(e => console.log("fetch refused " + (e instanceof Error)));
 	</script></body>`, "https://example.test/", nil)
-	deadline := time.After(5 * time.Second)
+	deadline := time.After(patience)
 	for {
 		select {
 		case <-deadline:

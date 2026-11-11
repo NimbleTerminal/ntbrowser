@@ -38,7 +38,7 @@ func TestLocalStoragePersistsThroughSink(t *testing.T) {
 		if !strings.Contains(string(data), `"origin":"https://example.test"`) {
 			t.Fatalf("snapshot: %s", data)
 		}
-	case <-time.After(3 * time.Second):
+	case <-time.After(patience):
 		t.Fatal("no coalesced write")
 	}
 	select {
@@ -59,7 +59,7 @@ func TestLocalStoragePersistsThroughSink(t *testing.T) {
 		if !strings.Contains(string(data), "other.test") {
 			t.Fatalf("final snapshot: %s", data)
 		}
-	case <-time.After(3 * time.Second):
+	case <-time.After(patience):
 		t.Fatal("final flush missing")
 	}
 }
@@ -103,7 +103,7 @@ func TestLocalStorageSinkFailureIsReportedOnce(t *testing.T) {
 	for entries := 0; entries < 2; {
 		select {
 		case entries = <-writes:
-		case <-time.After(5 * time.Second):
+		case <-time.After(patience):
 			t.Fatal("the second entry was never flushed")
 		}
 	}

@@ -61,7 +61,7 @@ func TestDetachedSubtreesAreReleasedAfterGC(t *testing.T) {
 		t.Fatal(err)
 	}
 	before := tree.Live()
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(patience)
 	for tree.Live() > 10 && time.Now().Before(deadline) {
 		runtime.GC()
 		time.Sleep(5 * time.Millisecond)
@@ -136,7 +136,7 @@ func TestCreatedButNeverInsertedNodesAreReleased(t *testing.T) {
 		t.Fatalf("create-and-drop exhausted the budget: %v", err)
 	}
 	base := tree.Live()
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(patience)
 	for tree.Live() > 10 && time.Now().Before(deadline) {
 		runtime.GC()
 		s.Reap()

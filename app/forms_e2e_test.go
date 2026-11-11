@@ -48,7 +48,7 @@ func TestSearchFormEndToEnd(t *testing.T) {
 	// would, and its pageLoadedMsg fed back.
 	pump := func(what string, done func(tea.Msg) bool) {
 		t.Helper()
-		deadline := time.After(5 * time.Second)
+		deadline := time.After(patience)
 		for {
 			select {
 			case <-deadline:

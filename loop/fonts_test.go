@@ -26,7 +26,7 @@ func TestCJKFallbackFace(t *testing.T) {
 	if cjkLinked {
 		want = 0
 	}
-	deadline := time.After(5 * time.Second)
+	deadline := time.After(patience)
 	for {
 		select {
 		case <-deadline:

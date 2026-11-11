@@ -18,7 +18,7 @@ import (
 
 func awaitPaint(t *testing.T, sink chanSink) nthtml.PaintReady {
 	t.Helper()
-	timeout := time.NewTimer(5 * time.Second)
+	timeout := time.NewTimer(patience)
 	defer timeout.Stop()
 	for {
 		select {

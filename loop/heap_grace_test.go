@@ -27,7 +27,7 @@ func TestHeapOverrunDropsPageAfterGrace(t *testing.T) {
 	l := New(ctx, Config{Profile: testProfile, Width: 200, Script: jsvm.Config{HeapBudget: budget, HeapGrace: 50 * time.Millisecond, Slice: 30 * time.Second}}, sink)
 	go l.Run()
 	l.LoadPage(`<body><p>bomb</p><script>globalThis.keep = []; for (let i = 0; i < 1<<15; i++) keep.push(new Array(64).fill(i));</script></body>`, "https://example.test/", nil)
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(patience)
 	for {
 		_, killed, disabled := pageState(t, l)
 		if killed && disabled {
@@ -39,7 +39,7 @@ func TestHeapOverrunDropsPageAfterGrace(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	var warned, errored bool
-	timeout := time.After(2 * time.Second)
+	timeout := time.After(patience)
 	for !(warned && errored) {
 		select {
 		case m := <-sink:

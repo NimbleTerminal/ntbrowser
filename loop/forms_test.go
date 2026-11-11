@@ -30,7 +30,7 @@ func formLoop(t *testing.T, page string) (*Loop, chanSink, FrameMsg) {
 
 func waitFor(t *testing.T, sink chanSink, match func(tea.Msg) bool) tea.Msg {
 	t.Helper()
-	deadline := time.After(3 * time.Second)
+	deadline := time.After(patience)
 	for {
 		select {
 		case <-deadline:

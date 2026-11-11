@@ -105,14 +105,14 @@ func TestDynamicScriptNavigationCancels(t *testing.T) {
 	l.LoadPage(`<script>let sc=document.createElement("script");sc.src="/slow.js";sc.onload=sc.onerror=()=>console.log("STALE");document.head.appendChild(sc);</script>`, server.URL+"/", f)
 	select {
 	case <-started:
-	case <-time.After(5 * time.Second):
+	case <-time.After(patience):
 		t.Fatal("request not started")
 	}
 	l.LoadPage(`<script>console.log("NEW")</script>`, server.URL+"/next", f)
 	waitLog(t, sink, "NEW")
 	select {
 	case <-cancelled:
-	case <-time.After(5 * time.Second):
+	case <-time.After(patience):
 		t.Fatal("request not cancelled")
 	}
 	// A task barrier ensures the replacement realm is responsive; the generation
@@ -191,7 +191,7 @@ func TestParsedIntegrityMismatchNeverExecutes(t *testing.T) {
 	l, sink, f := scriptTestLoop(t, externalProfile, server.URL)
 	l.LoadPage(`<script src="/bad.js" integrity="sha256-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="></script><script>console.log("result:"+typeof window.unverified)</script>`, server.URL+"/", f)
 	sawRefusal := false
-	deadline := time.After(5 * time.Second)
+	deadline := time.After(patience)
 	for {
 		select {
 		case <-deadline:

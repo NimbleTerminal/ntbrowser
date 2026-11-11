@@ -40,7 +40,7 @@ func TestIsolatedFrameRoundTrip(t *testing.T) {
  </script>`, "https://example.test/", f)
 	// Messages and loads can arrive in either order.
 	wanted := map[string]bool{"frame-roundtrip": false, "child-loaded": false, "parent-loaded": false}
-	deadline := time.After(8 * time.Second)
+	deadline := time.After(patience)
 	for {
 		all := true
 		for _, v := range wanted {
@@ -195,7 +195,7 @@ func TestFrameRasterClick(t *testing.T) {
 	l.LoadPage(`<iframe id=f width=300 height=150 srcdoc="`+html.EscapeString(child)+`"></iframe><script>addEventListener('message',e=>console.log(e.data));addEventListener('load',()=>console.log('ready'))</script>`, "https://example.test/", f)
 	waitLog(t, sink, "ready")
 	// Wait for the parent to install a frame containing the child's raster.
-	deadline := time.After(5 * time.Second)
+	deadline := time.After(patience)
 	for {
 		done := make(chan bool, 1)
 		l.post(func() {

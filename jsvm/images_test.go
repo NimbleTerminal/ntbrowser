@@ -138,7 +138,7 @@ func TestPendingDetachedImageRetainedUntilCompletion(t *testing.T) {
 	if len(h.lines) != 1 || h.lines[0] != "log: survived" {
 		t.Fatal(h.lines)
 	}
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(patience)
 	for tree.Live() > before && time.Now().Before(deadline) {
 		runtime.GC()
 		time.Sleep(5 * time.Millisecond)

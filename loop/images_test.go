@@ -18,7 +18,7 @@ import (
 
 func imageLog(t *testing.T, sink chanSink, want string) {
 	t.Helper()
-	timeout := time.After(5 * time.Second)
+	timeout := time.After(patience)
 	for {
 		select {
 		case <-timeout:
@@ -105,7 +105,7 @@ func TestImageReplacementDropsStaleCompletion(t *testing.T) {
 	l.LoadPage(`<script>let count=0;const i=new Image();i.onload=()=>{count++;console.log("loaded:"+i.currentSrc.split("/").pop())};i.src="/old";</script>`, srv.URL+"/", nil)
 	select {
 	case <-started:
-	case <-time.After(3 * time.Second):
+	case <-time.After(patience):
 		close(release)
 		t.Fatal("no old request")
 	}
@@ -125,11 +125,11 @@ func TestImageNavigationDiscardsCompletion(t *testing.T) {
 	l.LoadPage(`<script>const i=new Image();i.onload=i.onerror=()=>console.log("stale");i.src="/slow";</script>`, srv.URL+"/", nil)
 	select {
 	case <-started:
-	case <-time.After(3 * time.Second):
+	case <-time.After(patience):
 		t.Fatal("no request")
 	}
 	l.LoadPage(`<p>new</p><script>setTimeout(()=>console.log("new page"),100)</script>`, srv.URL+"/next", nil)
-	timeout := time.After(3 * time.Second)
+	timeout := time.After(patience)
 	for {
 		select {
 		case <-timeout:

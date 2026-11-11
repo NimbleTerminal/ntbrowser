@@ -33,7 +33,7 @@ func newChunkApp(t *testing.T, html string) (*Model, chan tea.Msg) {
 
 func chunkAppFrame(t *testing.T, m *Model, sink chan tea.Msg) loop.FrameMsg {
 	t.Helper()
-	timer := time.NewTimer(time.Minute) // large rasters under the race detector on a slow runner
+	timer := time.NewTimer(patience)
 	defer timer.Stop()
 	for {
 		select {
@@ -169,7 +169,7 @@ func TestChunkMouseFragmentRespectsPreventDefault(t *testing.T) {
 	drive(m, cmd)
 	_, cmd = m.Update(tea.MouseReleaseMsg{X: x, Y: y, Button: tea.MouseLeft})
 	drive(m, cmd)
-	timer := time.NewTimer(3 * time.Second)
+	timer := time.NewTimer(patience)
 	defer timer.Stop()
 	for {
 		select {

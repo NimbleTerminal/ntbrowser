@@ -105,7 +105,7 @@ func TestCSSViewportWorkerIntegration(t *testing.T) {
 		t.Fatal("pending paint changed presented viewport")
 	}
 	var ready nthtml.PaintReady
-	timeout := time.NewTimer(5 * time.Second)
+	timeout := time.NewTimer(patience)
 	defer timeout.Stop()
 	for ready.Image == nil {
 		select {

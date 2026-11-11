@@ -79,7 +79,7 @@ func (r *runner) post(f func()) { r.q <- f }
 // settle runs posted funcs until cond holds or two seconds pass.
 func (r *runner) settle(t *testing.T, cond func() bool) {
 	t.Helper()
-	deadline := time.After(2 * time.Second)
+	deadline := time.After(patience)
 	for !cond() {
 		select {
 		case f := <-r.q:
@@ -515,7 +515,7 @@ func TestMaxInFlightQueue(t *testing.T) {
 	s, r := newTestSession(t, cfg, ft)
 	s.Discover(nil, []string{"1.png", "2.png", "3.png", "4.png", "5.png"}, nil)
 	// Hold every fetch until the cap is reached, so the cap is exercised.
-	for deadline := time.Now().Add(2 * time.Second); high.Load() < 2; runtime.Gosched() {
+	for deadline := time.Now().Add(patience); high.Load() < 2; runtime.Gosched() {
 		if time.Now().After(deadline) {
 			t.Fatalf("only %d fetches in flight, want 2", high.Load())
 		}

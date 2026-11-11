@@ -109,7 +109,7 @@ func videoModel(t *testing.T, srvURL string) *videoRig {
 
 func (r *videoRig) pump(t *testing.T, done func() bool) {
 	t.Helper()
-	deadline := time.After(3 * time.Second)
+	deadline := time.After(patience)
 	for !done() {
 		select {
 		case msg := <-r.msgs:
@@ -244,7 +244,7 @@ func TestDownloadCancelled(t *testing.T) {
 	cmd := r.m.navigate(srv.URL+"/v.mp4", pushNew, reachAny)
 	done := make(chan tea.Msg, 1)
 	go func() { done <- cmd() }()
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(patience)
 	for dirEntries(t, r.dir) == 0 {
 		if time.Now().After(deadline) {
 			t.Fatal("download never started")
@@ -255,7 +255,7 @@ func TestDownloadCancelled(t *testing.T) {
 	select {
 	case msg := <-done:
 		r.m.Update(msg)
-	case <-time.After(3 * time.Second):
+	case <-time.After(patience):
 		t.Fatal("download not cancelled")
 	}
 	if r.m.player != nil || dirEntries(t, r.dir) != 0 {
@@ -280,7 +280,7 @@ func TestSecondActivationIgnored(t *testing.T) {
 	r.m.current = mustURL(t, srv.URL+"/")
 	cmd := r.m.navigate(srv.URL+"/v.mp4", pushNew, reachAny)
 	go cmd()
-	deadline := time.Now().Add(2 * time.Second)
+	deadline := time.Now().Add(patience)
 	for dirEntries(t, r.dir) == 0 {
 		if time.Now().After(deadline) {
 			t.Fatal("download never started")
@@ -421,7 +421,7 @@ func TestBridgeKillsHelperWhenTheConnectionEnds(t *testing.T) {
 	b.Write([]byte{0, 0, 0, 1, 99}) // a protocol violation
 	select {
 	case <-killed:
-	case <-time.After(2 * time.Second):
+	case <-time.After(patience):
 		t.Fatal("helper not killed")
 	}
 }
@@ -483,7 +483,7 @@ func frame(t *testing.T, m *Model, gen uint64, body string) tea.Cmd {
 // Bubble Tea would, until nothing is pending.
 func drain(t *testing.T, m *Model, cmd tea.Cmd) {
 	t.Helper()
-	deadline := time.Now().Add(3 * time.Second)
+	deadline := time.Now().Add(patience)
 	queue := []tea.Cmd{cmd}
 	for len(queue) > 0 && time.Now().Before(deadline) {
 		c := queue[0]
@@ -619,13 +619,13 @@ func TestBlockedUIDoesNotBlockHelperTermination(t *testing.T) {
 	defer bridge.client.Close()
 	select {
 	case <-blocked:
-	case <-time.After(2 * time.Second):
+	case <-time.After(patience):
 		t.Fatal("no UI delivery")
 	}
 	b.Close()
 	select {
 	case <-killed:
-	case <-time.After(2 * time.Second):
+	case <-time.After(patience):
 		t.Fatal("UI blocked protocol termination")
 	}
 }

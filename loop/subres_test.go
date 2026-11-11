@@ -79,7 +79,7 @@ func newSubresLoop(t *testing.T, cfg subres.Config) (*Loop, chanSink) {
 
 func frameWhere(t *testing.T, sink chanSink, timeout time.Duration, cond func(FrameMsg) bool) FrameMsg {
 	t.Helper()
-	deadline := time.After(timeout)
+	deadline := time.After(max(timeout, patience))
 	var last FrameMsg
 	var all []string // loader warnings accumulate across frames: a completion's warning rides the next frame only
 	for {
@@ -276,10 +276,14 @@ func TestLinkMediaPrintIgnored(t *testing.T) {
 	if isGreen(boxColor(first.Result, "h1")) {
 		t.Fatal("print stylesheet applied on screen")
 	}
-	later := frameWhere(t, sink, 5*time.Second, func(f FrameMsg) bool {
+	again := func(f FrameMsg) bool {
 		txt, _ := f.Result.TTY(context.Background(), 60)
 		return strings.Contains(txt, "again")
-	})
+	}
+	later := first // on a slow machine the 20 ms timer can beat the first frame
+	if !again(first) {
+		later = frameWhere(t, sink, 5*time.Second, again)
+	}
 	if isGreen(boxColor(later.Result, "h1")) {
 		t.Fatal("print stylesheet applied on a later frame")
 	}
@@ -695,7 +699,7 @@ func TestRendererRefusalDropsInjectedSheets(t *testing.T) {
 	// unstyled frame that follows it.
 	var f FrameMsg
 	sawDrop := false
-	deadline := time.After(5 * time.Second)
+	deadline := time.After(patience)
 	for f.Result == nil {
 		select {
 		case m := <-sink:

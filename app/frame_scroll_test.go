@@ -30,7 +30,7 @@ func TestWheelAndKeyboardStayInsideFrame(t *testing.T) {
 	pump := func(want string, old uint64) {
 		t.Helper()
 		seen := want == ""
-		deadline := time.After(5 * time.Second)
+		deadline := time.After(patience)
 		for {
 			select {
 			case <-deadline:

@@ -31,7 +31,7 @@ func TestClickAtHitsElementsAndMintedAnchors(t *testing.T) {
 	l.LoadPage(clickPage, "https://example.test/", nil)
 
 	var frame FrameMsg
-	deadline := time.After(5 * time.Second)
+	deadline := time.After(patience)
 	for frame.Result == nil {
 		select {
 		case <-deadline:
@@ -58,7 +58,7 @@ func TestClickAtHitsElementsAndMintedAnchors(t *testing.T) {
 	l.ClickAt(image.Rect(card.Min.X+10, card.Min.Y+10, card.Min.X+11, card.Min.Y+11))
 	l.ClickAt(image.Rect(anon.Min.X+10, anon.Min.Y+10, anon.Min.X+11, anon.Min.Y+11))
 	want := map[string]bool{"card click card": false, "anon click DIV": false}
-	deadline = time.After(3 * time.Second)
+	deadline = time.After(patience)
 	for {
 		done := true
 		for _, ok := range want {

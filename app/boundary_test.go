@@ -113,7 +113,7 @@ func TestFirstFrameReflowsAtTerminalWidth(t *testing.T) {
 	m.Update(tea.WindowSizeMsg{Width: 200, Height: 50})
 	l.LoadPage(`<p>hello</p>`, "https://example.test/", nil)
 
-	deadline := time.After(5 * time.Second)
+	deadline := time.After(patience)
 	var first loop.FrameMsg
 	for first.Result == nil {
 		select {

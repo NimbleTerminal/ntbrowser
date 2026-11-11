@@ -51,7 +51,7 @@ func TestLoopEndToEnd(t *testing.T) {
 	l.LoadPage(page, origin.String(), fetcher)
 
 	var sawTitle, sawBoot, sawTick, sawFetch, sawRAF bool
-	deadline := time.After(5 * time.Second)
+	deadline := time.After(patience)
 	for !(sawTitle && sawBoot && sawTick && sawFetch && sawRAF) {
 		select {
 		case <-deadline:
@@ -103,7 +103,7 @@ func TestLoopEndToEnd(t *testing.T) {
 		if lm, ok := m.(LogMsg); !ok || !strings.Contains(lm.Line, "time slice") {
 			t.Fatalf("expected watchdog log, got %#v", m)
 		}
-	case <-time.After(2 * time.Second):
+	case <-time.After(patience):
 		t.Fatal("watchdog did not fire")
 	}
 }

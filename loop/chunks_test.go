@@ -118,7 +118,7 @@ func TestChunkRendererOversizedUnitAndPixelBudget(t *testing.T) {
 
 func nextChunkFrame(t *testing.T, sink chanSink) FrameMsg {
 	t.Helper()
-	timer := time.NewTimer(5 * time.Second)
+	timer := time.NewTimer(patience)
 	defer timer.Stop()
 	for {
 		select {
@@ -213,7 +213,7 @@ func TestChunkFocusAndLinkIdentity(t *testing.T) {
 		t.Fatal("no links")
 	}
 	l.LinkActivatedAt(f.Gen, f.Result.Links[0])
-	timer := time.NewTimer(3 * time.Second)
+	timer := time.NewTimer(patience)
 	defer timer.Stop()
 	for {
 		select {
@@ -248,7 +248,7 @@ func TestChunkInlineLinkHandler(t *testing.T) {
 		t.Fatal("missing inline link")
 	}
 	l.LinkActivatedAt(f.Gen, f.Result.Links[0])
-	timer := time.NewTimer(3 * time.Second)
+	timer := time.NewTimer(patience)
 	defer timer.Stop()
 	for {
 		select {
