@@ -33,7 +33,7 @@ func newChunkApp(t *testing.T, html string) (*Model, chan tea.Msg) {
 
 func chunkAppFrame(t *testing.T, m *Model, sink chan tea.Msg) loop.FrameMsg {
 	t.Helper()
-	timer := time.NewTimer(5 * time.Second)
+	timer := time.NewTimer(time.Minute) // large rasters under the race detector on a slow runner
 	defer timer.Stop()
 	for {
 		select {

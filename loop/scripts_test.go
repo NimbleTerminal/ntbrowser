@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"nimbleterminal.dev/ntbrowser/jsvm"
 	"nimbleterminal.dev/ntbrowser/netpolicy"
 	"nimbleterminal.dev/ntbrowser/profile"
 	"os"
@@ -21,10 +22,18 @@ import (
 
 func scriptTestLoop(t *testing.T, p profile.Profile, base string) (*Loop, chanSink, *netpolicy.Fetcher) {
 	t.Helper()
+	return scriptTestLoopSlice(t, p, base, 0)
+}
+
+// scriptTestLoopSlice sets the script time slice, for tests whose script does
+// real work and is not about the watchdog: under the race detector on a slow
+// runner the default 50 ms is not enough.
+func scriptTestLoopSlice(t *testing.T, p profile.Profile, base string, slice time.Duration) (*Loop, chanSink, *netpolicy.Fetcher) {
+	t.Helper()
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	sink := make(chanSink, 256)
-	l := New(ctx, Config{Profile: p, Width: 400}, sink)
+	l := New(ctx, Config{Profile: p, Width: 400, Script: jsvm.Config{Slice: slice}}, sink)
 	go l.Run()
 	u, _ := url.Parse(base)
 	return l, sink, netpolicy.New(netpolicy.Policy{Origin: u, AllowPrivate: true})

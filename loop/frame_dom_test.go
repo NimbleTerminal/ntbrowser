@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"nimbleterminal.dev/ntbrowser/profile"
 	"testing"
+	"time"
 )
 
 func TestSharedFrameDOMBidirectional(t *testing.T) {
@@ -121,7 +122,7 @@ func TestSharedDOMRetainsDetachedNodesAndBoundsHandles(t *testing.T) {
 	p := externalProfile
 	p.Frames = profile.FramesOrigin
 	p.FrameDOM = "same-origin"
-	l, sink, f := scriptTestLoop(t, p, "https://example.test")
+	l, sink, f := scriptTestLoopSlice(t, p, "https://example.test", 30*time.Second) // 300 cross-realm calls
 	child := `<p id=c>retained</p><script>addEventListener('message',()=>{document.body.innerHTML='<p>replacement</p>';parent.postMessage('detached','*')})</script>`
 	l.LoadPage(`<iframe id=f srcdoc="`+html.EscapeString(child)+`"></iframe><script>
  const f=document.getElementById('f');let retained,d;

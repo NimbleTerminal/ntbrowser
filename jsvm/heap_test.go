@@ -40,7 +40,9 @@ func heapBomb(t *testing.T, grace time.Duration) (*Sandbox, *nopHost) {
 // recheck after HeapGrace, and a page still over budget then is disabled and
 // says why. Nothing is disabled on the first high sample alone.
 func TestHeapBudgetDisablesPageAfterGrace(t *testing.T) {
-	const grace = 20 * time.Millisecond
+	// Long enough that no runner, however slow, leaves it by accident; the
+	// test ends the grace itself by moving its start back.
+	const grace = time.Minute
 	s, host := heapBomb(t, grace)
 	if s.Disabled() {
 		t.Fatal("page disabled on the first over-budget sample")
@@ -48,14 +50,14 @@ func TestHeapBudgetDisablesPageAfterGrace(t *testing.T) {
 	if host.later == nil || host.laterDelay != grace {
 		t.Fatalf("no host recheck scheduled for the grace: delay=%v", host.laterDelay)
 	}
-	if line := strings.Join(host.lines, "\n"); !strings.Contains(line, "warn: heap budget exceeded") || !strings.Contains(line, "stays above the budget for 20ms") {
+	if line := strings.Join(host.lines, "\n"); !strings.Contains(line, "warn: heap budget exceeded") || !strings.Contains(line, "stays above the budget for 1m0s") {
 		t.Fatalf("no warning: %v", host.lines)
 	}
 	// Still over budget inside the grace: another entry does not disable yet.
 	if err := s.Eval("during.js", `1`); err != nil || s.Disabled() {
 		t.Fatalf("disabled inside the grace: err=%v disabled=%v", err, s.Disabled())
 	}
-	time.Sleep(grace + 5*time.Millisecond)
+	s.heapOver = s.heapOver.Add(-grace)
 	host.later()
 	if !s.Disabled() {
 		t.Fatal("heap budget exceeded for the whole grace but page not disabled")
@@ -63,7 +65,7 @@ func TestHeapBudgetDisablesPageAfterGrace(t *testing.T) {
 	if err := s.Eval("after.js", `1`); err != ErrDisabled {
 		t.Fatalf("Eval after heap disable: %v", err)
 	}
-	if line := strings.Join(host.lines, "\n"); !strings.Contains(line, "error: scripting disabled: heap budget exceeded for 20ms") || !strings.Contains(line, "process heap") || !strings.Contains(line, "after GC; budget") {
+	if line := strings.Join(host.lines, "\n"); !strings.Contains(line, "error: scripting disabled: heap budget exceeded for 1m0s") || !strings.Contains(line, "process heap") || !strings.Contains(line, "after GC; budget") {
 		t.Fatalf("no log line: %v", host.lines)
 	}
 }
@@ -73,7 +75,7 @@ func TestHeapBudgetDisablesPageAfterGrace(t *testing.T) {
 // must not disable a healthy page. The recheck then finds nothing to do, and a
 // later overrun starts a fresh grace instead of inheriting the old start.
 func TestHeapBudgetTransientOverrunIsForgiven(t *testing.T) {
-	const grace = 20 * time.Millisecond
+	const grace = time.Minute
 	s, host := heapBomb(t, grace)
 	if err := s.Eval("release.js", `globalThis.keep = null`); err != nil {
 		t.Fatal(err)
@@ -81,8 +83,7 @@ func TestHeapBudgetTransientOverrunIsForgiven(t *testing.T) {
 	if s.Disabled() || !s.heapOver.IsZero() {
 		t.Fatalf("heap back under budget but grace still running: disabled=%v", s.Disabled())
 	}
-	time.Sleep(grace + 5*time.Millisecond)
-	host.later()
+	host.later() // the recheck, whenever it comes, finds nothing to do
 	if s.Disabled() {
 		t.Fatalf("recheck disabled a page that was back under budget: %v", host.lines)
 	}
