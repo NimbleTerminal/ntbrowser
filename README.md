@@ -115,6 +115,15 @@ still contain page data: inspection access is privileged host access.
 The live panel and JSONL recorder share observation hooks, while applying their
 own data policies. Cookies and storage contents are not exposed by devtools.
 
+## Chrome comparison
+
+Use `task compare -- --out /tmp/page-comparison https://example.com/page` to
+capture Chrome and the glynx browser loop at the same CSS viewport. The local
+report includes screenshots, pixel differences, geometry and diagnostics.
+See [the comparison guide](docs/tools/browser-comparison.md) for settings,
+interpretation and the Rust blog findings. This is a developer tool; it does
+not publish anything or change the interactive browser's permissions.
+
 ## Development dependencies
 
 Use Go 1.26.11 and run `task ci` for the full local and GitHub Actions gate:

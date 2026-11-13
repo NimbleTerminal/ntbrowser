@@ -164,6 +164,11 @@ tasks:
     cmds:
       - go run ./cmd/ntbrowser {{.CLI_ARGS}}
 
+  compare:
+    desc: Compare a URL in Chrome and the glynx loop, writing a local report
+    cmds:
+      - go run ./cmd/glynx-compare {{.CLI_ARGS}}
+
   release-check:
     desc: Validate release configuration and packaging guards
     cmds:
