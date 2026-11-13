@@ -150,3 +150,29 @@ replacements, releases or pushes were used to conceal that distinction. Once
 releases are authorized, publish the renderer fixes and update the dependency
 pins, notices and regression baselines before calling the interactive browser
 fixed. The comparison/report improvements work immediately.
+
+## Optional local workspace for the SVG fixes
+
+For an explicitly opted-in local trial, copy `go.work.local.example` to
+`go.work` in the repository root. The workspace uses `../oksvg` and overrides
+rasterx with `../rasterx`; nthtml and other libraries stay on published versions.
+The actual `go.work` and `go.work.sum` are ignored by Git. Module files and
+release dependency pins are unchanged.
+
+```sh
+# Run from ntbrowser. The current local workspace has already been created.
+GOWORK="$PWD/go.work" CGO_ENABLED=0 go build -o bin/glynx-local ./cmd/glynx
+./bin/glynx-local https://blog.rust-lang.org/2026/11/12/Rust-1.100.0/
+
+# Compare the locally fixed rendering; choose a fresh output directory.
+GOWORK="$PWD/go.work" CGO_ENABLED=0 go run ./cmd/glynx-compare \
+  --out /tmp/rust-workspace-comparison \
+  https://blog.rust-lang.org/2026/11/12/Rust-1.100.0/
+```
+
+`task build` and `task compare` deliberately retain `GOWORK=off`, so use these
+explicit commands for this experiment. Plain Go commands can auto-discover
+`go.work`; set `GOWORK=off` to bypass it. Avoid `go work sync`: this trial does
+not require changing any repository's module files. The local binary includes
+these workspace libraries at build time; running it does not require setting
+`GOWORK` again.

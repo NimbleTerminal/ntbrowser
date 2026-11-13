@@ -3,3 +3,7 @@ bin/
 .DS_Store
 dist/
 __pycache__/
+
+# Optional local dependency experiments; Taskfile keeps GOWORK=off.
+/go.work
+/go.work.sum

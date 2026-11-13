@@ -1,0 +1,9 @@
+go 1.26.11
+
+use (
+	.
+	../oksvg
+)
+
+// Override ntbrowser's published rasterx fork for this local experiment.
+replace github.com/srwiley/rasterx => ../rasterx
