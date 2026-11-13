@@ -172,6 +172,8 @@ type Page struct {
 }
 
 type Config struct {
+	ReducedMotion                  string // reduce or no-preference (default)
+	Hover                          string // none or hover (default)
 	DOMLimits                      dom.Limits
 	FrameHeight                    int // nonzero only for embedded child raster viewports
 	frameHub                       *frameHub
@@ -877,7 +879,10 @@ func (l *Loop) Resize(widthPx int) {
 // its own layout; nothing here is host authority.
 func (l *Loop) mediaState() jsvm.MediaState {
 	scale := l.Scale()
-	st := jsvm.MediaState{Width: l.cfg.Width, Height: 600, ColorScheme: l.cfg.ColorScheme, Scale: scale}
+	st := jsvm.MediaState{Width: l.cfg.Width, Height: 600, ColorScheme: l.cfg.ColorScheme, Scale: scale, ReducedMotion: l.cfg.ReducedMotion, Hover: l.cfg.Hover, Scripting: "none"}
+	if l.cfg.Profile.ScriptsOn() {
+		st.Scripting = "enabled"
+	}
 	if v := l.viewport(); v.Rows > 0 && v.CellHeight > 0 {
 		st.Height = max(1, int(math.Round(float64(v.Rows*v.CellHeight)/scale)))
 	}

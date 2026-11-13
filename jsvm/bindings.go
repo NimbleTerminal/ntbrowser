@@ -368,6 +368,11 @@ func (s *Sandbox) buildElementProto() *goja.Object {
 	})
 	s.method(p, "querySelector", func(c goja.FunctionCall) goja.Value { return s.query(s.node(c.This), c.Argument(0).String(), false) })
 	s.method(p, "querySelectorAll", func(c goja.FunctionCall) goja.Value { return s.query(s.node(c.This), c.Argument(0).String(), true) })
+	s.method(p, "matches", func(c goja.FunctionCall) goja.Value {
+		ok, err := s.tree.Matches(s.node(c.This), c.Argument(0).String())
+		s.must(err)
+		return vm.ToValue(ok)
+	})
 	s.bindEventTarget(p)
 
 	s.method(p, "focus", func(c goja.FunctionCall) goja.Value {
@@ -383,6 +388,7 @@ func (s *Sandbox) buildElementProto() *goja.Object {
 		return goja.Undefined()
 	})
 	s.installFormBindings(p)
+	s.installDisclosureBindings(p)
 	_ = p.SetPrototype(s.eventTargetProto)
 	s.bindEventHandlers(p)
 	return p

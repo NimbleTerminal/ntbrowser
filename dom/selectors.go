@@ -124,3 +124,31 @@ func selectorParts(selector string) ([]string, error) {
 	}
 	return parts, nil
 }
+
+// Matches evaluates the same bounded selector subset as Query for one node,
+// including detached elements. It does not scan unrelated document nodes.
+func (t *Tree) Matches(n *Node, selector string) (bool, error) {
+	groups, err := selectorGroups(selector)
+	if err != nil {
+		return false, err
+	}
+	q := &queryState{}
+	var chains [][]func(*Node) bool
+	for _, group := range groups {
+		chain, err := compoundChain(group, q, true)
+		if err != nil {
+			return false, err
+		}
+		chains = append(chains, chain)
+	}
+	matched := false
+	for _, chain := range chains {
+		if chain[len(chain)-1](n) && ancestorsMatch(n, chain[:len(chain)-1], nil) {
+			matched = true
+		}
+	}
+	if q.exceeded {
+		return false, ErrLimit
+	}
+	return matched, nil
+}

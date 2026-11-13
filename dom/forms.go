@@ -436,7 +436,9 @@ func OwnerSelect(opt *Node) *Node {
 
 // needsAnchor reports elements the host must map back from a frame box:
 // listener-bearing, focusable and label elements.
-func needsAnchor(n *Node) bool { return len(n.listeners) > 0 || Focusable(n) || n.tag == "label" }
+func needsAnchor(n *Node) bool {
+	return len(n.listeners) > 0 || Focusable(n) || n.tag == "label" || n.popoverOpen
+}
 
 // frameID is the id Serialize writes for n, given whether an earlier element
 // already used n's id: its own id when that is unique so far and not in the

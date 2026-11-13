@@ -1243,3 +1243,28 @@ Same-origin foreign elements expose `style` through the existing frame DOM gate.
 Observers register only on their own runtime's nodes; foreign writes notify the
 target runtime's observers at its next owner checkpoint. No foreign callback
 runs synchronously in the calling runtime.
+
+### Declarative disclosures
+
+Named details groups keep their first initially open member. Opening a member
+or changing its group closes other members through real DOM attribute changes,
+including MutationObserver records. The reader can activate the first summary;
+`open` and `name` are reflected, and `:open` matches details/dialog state.
+
+Popovers keep private state, exposed through `:popover-open`, `showPopover()`,
+`hidePopover()`, and `togglePopover([force])`. Reader button activation supports
+`popovertarget`/`popovertargetaction` and `commandfor` with show-popover,
+hide-popover, or toggle-popover commands. Synthetic clicks do not run these
+default actions. Manual popovers are independent; showing auto/hint popovers
+closes unrelated peers of the applicable kind while retaining ancestors.
+This is a bounded subset: no top layer, focus restoration, light dismissal,
+invoker-based nested stack, modal dialogs, or IntersectionObserver.
+
+Opening fires cancelable `beforetoggle`; closing fires a noncancelable one.
+`toggle` events carry oldState/newState and coalesce per node, with 256 pending
+nodes and delivery through private tasks sharing the existing timer cap.
+Shared-DOM writes queue native data only; the owner checkpoint schedules events.
+Queue overflow reports a warning and drops excess notifications, not DOM writes.
+Removal clears shown state, navigation cancels delivery, and renderer state is
+excluded from page-visible markup. Loop configuration can set `ReducedMotion`
+and `Hover`; scripting media state follows the profile.

@@ -88,6 +88,7 @@ const (
 )
 
 type Node struct {
+	popoverOpen  bool
 	parserScript bool
 
 	id       NodeID
@@ -135,6 +136,7 @@ func (n *Node) HasListener(typ string) bool {
 // Tree is single-owner: only the VM goroutine mutates it. Serialize produces
 // an immutable snapshot string that may be rendered on another goroutine.
 type Tree struct {
+	toggleHook   func(*Node, bool, bool)
 	mutationHook func(Mutation)
 	frames       map[NodeID]FrameImage
 	limits       Limits
@@ -205,6 +207,7 @@ func Parse(r io.Reader, l Limits) (*Tree, error) {
 	if err := t.ingest(t.root, doc, 0); err != nil {
 		return nil, err
 	}
+	t.normalizeDetails(t.root)
 	t.dirty = true
 	return t, nil
 }
@@ -408,6 +411,9 @@ func (t *Tree) SetAttr(n *Node, name, value string) error {
 			t.dirty = true
 			t.styleMediaDelta(n)
 			t.emitMutation(Mutation{Type: "attributes", Target: n, AttributeName: name, OldValue: old, OldPresent: true})
+			if name != "popover" || old != value {
+				t.disclosureAttr(n, name, true)
+			}
 			return nil
 		}
 	}
@@ -421,6 +427,7 @@ func (t *Tree) SetAttr(n *Node, name, value string) error {
 	t.dirty = true
 	t.styleMediaDelta(n)
 	t.emitMutation(Mutation{Type: "attributes", Target: n, AttributeName: name})
+	t.disclosureAttr(n, name, false)
 	return nil
 }
 
@@ -434,6 +441,13 @@ func (t *Tree) RemoveAttr(n *Node, name string) {
 			t.dirty = true
 			t.styleMediaDelta(n)
 			t.emitMutation(Mutation{Type: "attributes", Target: n, AttributeName: name, OldValue: old, OldPresent: true})
+			if name == "open" && n.tag == "details" {
+				t.toggled(n, true, false)
+			}
+			if name == "popover" && n.popoverOpen {
+				n.popoverOpen = false
+				t.toggled(n, true, false)
+			}
 			return
 		}
 	}
@@ -468,6 +482,11 @@ func (t *Tree) SetText(n *Node, s string) error {
 		m.Type = "childList"
 		m.Removed = n.Children()
 		for _, old := range n.children {
+			Walk(old, func(v *Node) {
+				if v.popoverOpen {
+					t.SetPopoverOpen(v, false)
+				}
+			})
 			old.parent = nil
 			t.detached[old.id] = old // the bridge releases them once unreferenced
 		}
@@ -530,6 +549,7 @@ func (t *Tree) InsertBefore(parent, child, ref *Node) error {
 		t.dirty = true
 		previous, next := siblings(child)
 		t.emitMutation(Mutation{Type: "childList", Target: parent, Added: []*Node{child}, PreviousSibling: previous, NextSibling: next})
+		t.normalizeInsertedDetails(child)
 		return nil
 	}
 	for i, c := range parent.children {
@@ -540,6 +560,7 @@ func (t *Tree) InsertBefore(parent, child, ref *Node) error {
 			t.dirty = true
 			previous, next := siblings(child)
 			t.emitMutation(Mutation{Type: "childList", Target: parent, Added: []*Node{child}, PreviousSibling: previous, NextSibling: next})
+			t.normalizeInsertedDetails(child)
 			return nil
 		}
 	}
@@ -558,6 +579,11 @@ func (t *Tree) Detach(n *Node) {
 	}
 	parent := n.parent
 	previous, next := siblings(n)
+	Walk(n, func(c *Node) {
+		if c.popoverOpen {
+			t.SetPopoverOpen(c, false)
+		}
+	})
 	t.detach(n)
 	t.detached[n.id] = n
 	t.dirty = true
@@ -805,6 +831,32 @@ func ancestorsMatch(n *Node, preds []func(*Node) bool, stop *Node) bool {
 }
 
 func simplePredicate(p string) (func(*Node) bool, error) {
+	for _, pseudo := range []string{":popover-open", ":open"} {
+		if strings.HasSuffix(p, pseudo) {
+			base := strings.TrimSuffix(p, pseudo)
+			if base == "" {
+				base = "*"
+			}
+			if strings.Contains(base, ":") {
+				return nil, errors.New("unsupported compound pseudo-class")
+			}
+			pred, err := simplePredicate(base)
+			if err != nil {
+				return nil, err
+			}
+			return func(n *Node) bool {
+				if !pred(n) {
+					return false
+				}
+				if pseudo == ":popover-open" {
+					return n.popoverOpen
+				}
+				_, open := n.Attr("open")
+				return open && (n.tag == "details" || n.tag == "dialog")
+			}, nil
+		}
+	}
+
 	if first := strings.IndexByte(p, '['); first >= 0 {
 		base := p[:first]
 		if base == "" {

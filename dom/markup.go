@@ -73,6 +73,11 @@ func (t *Tree) SetInnerHTML(n *Node, source string) error {
 	// All checks precede mutation; old wrappers retain their detached subtrees.
 	removed := n.Children()
 	for _, c := range n.children {
+		Walk(c, func(v *Node) {
+			if v.popoverOpen {
+				t.SetPopoverOpen(v, false)
+			}
+		})
 		c.parent = nil
 		t.detached[c.id] = c
 	}
@@ -87,6 +92,7 @@ func (t *Tree) SetInnerHTML(n *Node, source string) error {
 	if len(removed)+len(n.children) > 0 {
 		t.emitMutation(Mutation{Type: "childList", Target: n, Removed: removed, Added: n.Children()})
 	}
+	t.normalizeInsertedDetails(n)
 	return nil
 }
 

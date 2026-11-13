@@ -439,7 +439,7 @@ func (s *Sandbox) notifyMutations() {
 // FlushMutations is an owner-thread checkpoint for host/shared-DOM writes.
 // Promise reactions generated inside JS use the normal microtask queue instead.
 func (s *Sandbox) FlushMutations() error {
-	if s.disabled || len(s.mutationPending) == 0 {
+	if s.disabled || len(s.mutationPending) == 0 && len(s.disclosureOrder) == 0 {
 		return nil
 	}
 	return s.Run(func(*goja.Runtime) error { return nil })

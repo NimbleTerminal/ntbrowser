@@ -222,6 +222,11 @@ func newBindingFields() bindingFields {
 }
 
 type Sandbox struct {
+	disclosurePending  map[dom.NodeID]*disclosureToggle
+	disclosureOrder    []dom.NodeID
+	disclosureTask     int
+	disclosureOverflow bool
+	popoverChanging    map[dom.NodeID]bool
 	mutationFields
 	frameFields
 	messageFields
@@ -481,6 +486,7 @@ func (s *Sandbox) Run(fn func(vm *goja.Runtime) error) (err error) {
 	}()
 	s.scheduleMutations()
 	err = fn(s.vm)
+	s.scheduleDisclosureToggles()
 	if err == nil {
 		s.scheduleMutations()
 	}
@@ -564,6 +570,12 @@ func (s *Sandbox) Close() {
 	// Cleanup that reaches outside the sandbox comes first, while the state
 	// it reads is still there.
 	s.tree.SetMutationHook(nil)
+	s.tree.SetToggleHook(nil)
+	if s.disclosureTask != 0 {
+		s.host.ClearTask(s.disclosureTask)
+	}
+	s.disclosurePending = nil
+	s.disclosureOrder = nil
 	if s.messageTaskPending {
 		s.host.ClearTask(s.messageTask)
 	}

@@ -16,6 +16,9 @@ import (
 // rendering state the page could already infer from its layout, not host
 // authority.
 type MediaState struct {
+	ReducedMotion string // empty/no-preference or reduce
+	Hover         string // empty/hover or none
+	Scripting     string // empty/enabled, initial-only, or none
 	Width, Height int
 	ColorScheme   string  // "light" or "dark"
 	Scale         float64 // device pixels per CSS pixel (window.devicePixelRatio); 0 means 1
@@ -206,9 +209,29 @@ func evalOneMediaQuery(q string, st MediaState) bool {
 			continue
 		case strings.HasPrefix(part, "("):
 			if !strings.HasSuffix(part, ")") {
-				return negate
+				return false
 			}
-			if !evalMediaFeature(strings.TrimSpace(part[1:len(part)-1]), st) {
+			feature := strings.TrimSpace(part[1 : len(part)-1])
+			name, val, has := strings.Cut(feature, ":")
+			name = strings.TrimSpace(name)
+			val = strings.TrimSpace(val)
+			if has {
+				switch name {
+				case "prefers-reduced-motion":
+					if val != "reduce" && val != "no-preference" {
+						return false
+					}
+				case "hover", "any-hover":
+					if val != "hover" && val != "none" {
+						return false
+					}
+				case "scripting":
+					if val != "none" && val != "initial-only" && val != "enabled" {
+						return false
+					}
+				}
+			}
+			if !evalMediaFeature(feature, st) {
 				result = false
 			}
 		case part == "all" || part == "screen":
@@ -308,20 +331,34 @@ func evalMediaFeature(f string, st MediaState) bool {
 			return val == "landscape"
 		}
 		return val == "portrait"
-	case "prefers-reduced-motion", "prefers-reduced-transparency", "prefers-reduced-data":
+	case "prefers-reduced-motion":
+		preference := "no-preference"
+		if st.ReducedMotion == "reduce" {
+			preference = "reduce"
+		}
+		return !hasVal && preference == "reduce" || hasVal && val == preference
+	case "prefers-reduced-transparency", "prefers-reduced-data":
 		return !hasVal || val == "no-preference"
 	case "prefers-contrast":
 		return val == "no-preference"
 	case "forced-colors", "inverted-colors":
 		return !hasVal && false || val == "none"
 	case "hover", "any-hover":
-		return !hasVal || val == "hover"
+		capability := "hover"
+		if st.Hover == "none" {
+			capability = "none"
+		}
+		return !hasVal && capability == "hover" || hasVal && val == capability
 	case "pointer", "any-pointer":
 		return !hasVal || val == "fine"
 	case "display-mode":
 		return val == "browser"
 	case "scripting":
-		return !hasVal || val == "enabled"
+		capability := "enabled"
+		if st.Scripting == "none" || st.Scripting == "initial-only" {
+			capability = st.Scripting
+		}
+		return !hasVal && capability != "none" || hasVal && val == capability
 	case "update":
 		return !hasVal || val == "fast"
 	case "color":

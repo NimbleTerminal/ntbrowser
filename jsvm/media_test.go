@@ -107,3 +107,12 @@ func TestDevicePixelRatioFollowsScale(t *testing.T) {
 	state.Scale = 3
 	probe("3|true|true|false|false")
 }
+
+func TestMediaHostPreferences(t *testing.T) {
+	st := MediaState{ReducedMotion: "reduce", Hover: "none", Scripting: "none"}
+	for q, want := range map[string]bool{"(prefers-reduced-motion)": true, "(prefers-reduced-motion: reduce)": true, "(prefers-reduced-motion: no-preference)": false, "(hover)": false, "(hover:none)": true, "(any-hover:none)": true, "(scripting)": false, "(scripting:none)": true} {
+		if got := evalMediaQuery(q, st); got != want {
+			t.Errorf("%s: %v, want %v", q, got, want)
+		}
+	}
+}

@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Declarative platform features</title>
+<style>
+body { margin: 24px; font: 16px sans-serif; color: #23304b; background: #f4f6fa }
+h1 { font-size: 28px }
+.cards { display: block }
+@supports (display: grid) { .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 16px } }
+@supports not (anchor-name: --menu) { .fallback { color: #236744 } }
+section { padding: 16px; border: 1px solid #bbc6d9; background: white }
+:popover-open { background: #e9f5ee; border: 2px solid #236744 }
+details:open > summary { font-weight: bold }
+.motion { display: none }
+@media (prefers-reduced-motion: reduce) { .motion { display: block } }
+</style>
+<h1>Built-in page controls</h1>
+<p class="fallback">This renderer uses the anchor-positioning fallback.</p>
+<p class="motion">Reduced-motion presentation is selected.</p>
+<div class="cards">
+<section>
+<h2>Exclusive details</h2>
+<details name="guide" open><summary>First section</summary><p>Opening the second section closes this one.</p></details>
+<details name="guide"><summary>Second section</summary><p>These attributes reflect the live DOM state.</p></details>
+</section>
+<section>
+<h2>Popover</h2>
+<button type="button" popovertarget="menu">Toggle more information</button>
+<div id="menu" popover><p>This box is shown in normal flow.</p><button type="button" commandfor="menu" command="hide-popover">Close</button></div>
+</section>
+</div>
+<h2>Progress and measurements</h2>
+<p>Download: <progress value="3" max="10"></progress></p>
+<p>Capacity: <meter value="0.6"></meter></p>
+<p>Waiting: <progress></progress></p>
+</html>

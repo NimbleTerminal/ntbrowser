@@ -164,7 +164,7 @@ func (s *Sandbox) installFormBindings(p *goja.Object) {
 	})
 	s.accessor(p, "name", func(t goja.Value) goja.Value {
 		n := s.node(t)
-		if !isControl(n) && n.Tag() != "form" {
+		if !isControl(n) && n.Tag() != "form" && n.Tag() != "details" {
 			return undef
 		}
 		v, _ := n.Attr("name")

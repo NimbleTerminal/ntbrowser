@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add live named-details exclusivity, summary activation, reflected open state,
+  and `:open`/`:popover-open` DOM queries and element `matches()`.
+- Add private popover state, show/hide/toggle methods, declarative popover
+  buttons/commands, cancelable beforetoggle and bounded asynchronous toggle
+  delivery. These local actions confer no navigation or trusted activation.
+- Make reduced-motion, hover, and scripting media answers reflect host state.
+
+
 ## v0.2.0 (2026-11-10)
 
 This release adds `glynx`, a browsing-focused binary on the same engine, and

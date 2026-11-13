@@ -180,7 +180,7 @@ func (l *Loop) clickControl(page *Page, target *dom.Node) bool {
 		return true
 	}
 	switch controlKind(target) {
-	case "checkbox", "radio", "button", "video":
+	case "checkbox", "radio", "button", "video", "summary":
 		l.userFocus(page, target)
 		l.activate(page, target)
 		return true
@@ -309,6 +309,27 @@ func (l *Loop) ActivateAt(gen uint64) {
 
 func (l *Loop) activate(page *Page, n *dom.Node) {
 	switch kind := controlKind(n); kind {
+	case "summary":
+		prevented, err := page.Sandbox.Dispatch(jsvm.Event{Type: "click", Target: n.ID()})
+		l.report(ignoreDisabled(err))
+		if !prevented && page == l.page && page.Tree.Attached(n) {
+			if parent := n.Parent(); parent != nil && parent.Tag() == "details" {
+				for _, child := range parent.Children() {
+					if child.Tag() == "summary" {
+						if child != n {
+							return
+						}
+						break
+					}
+				}
+				if _, open := parent.Attr("open"); open {
+					page.Tree.RemoveAttr(parent, "open")
+				} else {
+					l.report(page.Tree.SetAttr(parent, "open", ""))
+				}
+			}
+		}
+
 	case "link":
 		href := anchorHref(page, n)
 		prevented, err := page.Sandbox.Dispatch(jsvm.Event{Type: "click", Target: n.ID(), Href: href})
@@ -341,6 +362,52 @@ func (l *Loop) activate(page *Page, n *dom.Node) {
 // buttonDefault is a button's activation behavior after an unprevented
 // click: a submit button submits its form, a reset button resets it.
 func (l *Loop) buttonDefault(page *Page, n *dom.Node) {
+	if page != l.page || !page.Tree.Attached(n) {
+		return
+	}
+	if n.Tag() == "button" && !dom.Disabled(n) {
+		typ, _ := n.Attr("type")
+		if strings.EqualFold(typ, "button") || dom.FormOwner(n, page.Tree) == nil {
+			target, has := n.Attr("popovertarget")
+			action, _ := n.Attr("popovertargetaction")
+			if command, ok := n.Attr("commandfor"); ok {
+				target, has = command, true
+				kind, _ := n.Attr("command")
+				switch strings.ToLower(kind) {
+				case "show-popover":
+					action = "show"
+				case "hide-popover":
+					action = "hide"
+				case "toggle-popover":
+					action = "toggle"
+				default:
+					return
+				}
+			}
+			if has {
+				if dest := page.Tree.ByID(target); dest != nil && dest.PopoverMode() != "" {
+					if !page.killed && l.cfg.Profile.ScriptsOn() {
+						l.report(ignoreDisabled(page.Sandbox.TogglePopover(dest.ID(), action)))
+					} else {
+						open := !dest.PopoverOpen()
+						switch strings.ToLower(action) {
+						case "show":
+							open = true
+						case "hide":
+							open = false
+						}
+						if open {
+							for _, peer := range page.Tree.PopoverPeers(dest) {
+								page.Tree.SetPopoverOpen(peer, false)
+							}
+						}
+						page.Tree.SetPopoverOpen(dest, open)
+					}
+				}
+				return
+			}
+		}
+	}
 	form := dom.FormOwner(n, page.Tree)
 	if form == nil {
 		return
@@ -673,6 +740,8 @@ func (l *Loop) clickTarget(page *Page, area image.Rectangle) *dom.Node {
 
 func controlKind(n *dom.Node) string {
 	switch n.Tag() {
+	case "summary":
+		return "summary"
 	case "video":
 		return "video"
 	case "a":
