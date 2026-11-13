@@ -1079,7 +1079,7 @@ func (l *Loop) startRender() {
 	l.lastFrame = time.Now()
 	gen := l.gen.Add(1)
 	navigation := l.navGen.Load()
-	l.cfg.Trace.Record("snapshot", map[string]any{"url": page.Base, "navigation": navigation, "frame": gen, "html": html, "scripts": len(page.Tree.Scripts), "loaded": page.loaded, "disabled": page.killed, "timers": len(page.timers), "animation_frames": len(page.animation), "dropped": l.dropped.Load()})
+	l.cfg.Trace.Record("snapshot", map[string]any{"realm_frame": page.frameID, "top_level": l.cfg.frameParent == 0, "url": page.Base, "navigation": navigation, "frame": gen, "html": html, "scripts": len(page.Tree.Scripts), "loaded": page.loaded, "disabled": page.killed, "timers": len(page.timers), "animation_frames": len(page.animation), "dropped": l.dropped.Load()})
 	viewport := l.viewport()
 	if page.firstFrame {
 		viewport.Origin = image.Point{}

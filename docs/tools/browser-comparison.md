@@ -51,6 +51,19 @@ physical screenshot width; glynx's `--scale` affects that conversion.
   Chrome waits two seconds after load, then up to two seconds for fonts.
   These are bounded settling heuristics, not proof that all asynchronous work
   is complete. Increase `--settle` when investigating delayed content.
+- The **Image findings** section matches up to 128 `<img>` elements per engine
+  by absolute resource URL, including images without IDs. Glynx observations
+  come from the serializer snapshot for the captured layout generation, with
+  child realms excluded. Source anchors associate images with painted boxes;
+  multiple images sharing an anchor remain unavailable instead of guessing
+  box order. Repeated URLs, missing/undecoded images, clipped images, and
+  images outside the screenshot are explicitly marked, not counted as passes.
+  Visible crops are aligned locally, preserving their original sizes. Different
+  sizes are labelled `SIZE_DIFFERS`; equal-sized crops get a pixel difference
+  and `PIXELS_MATCH` / `PIXELS_DIFFER`. Crop allocation is capped at eight
+  million pixels. SVG backgrounds and inline SVG are not `<img>` resources.
+  Differences can still include CSS, background, occlusion, antialiasing and
+  changing remote bytes; use the crops to select an isolated regression.
 - Geometry is matched only by IDs among the first 512 selected Chrome
   elements. Duplicate IDs within that sample and absent painted boxes are
   marked unavailable. Glynx's ID-associated painted coverage is not always a
@@ -109,3 +122,31 @@ mismatch with published nthtml v0.6.0:
 The observed pixel difference was about 20.9%; it is evidence for this capture,
 not a passing/failing baseline. Live page assets can change. Screenshots and
 full page contents are generated locally rather than committed into the repo.
+
+## Rust logo diagnosis and local fix
+
+The image-level report now identifies `images/rust-logo-blk.svg` as
+`PIXELS_DIFFER` (about 18.3% of its 80×80 crop in the measured capture), with
+side-by-side logo crops. The entire-page percentage no longer has to stand
+in for a diagnosis of this small asset.
+
+The SVG's outer gear uses `fill-rule="evenodd"`. The published parser ignores
+that property, and the published rasterizer's `SetWinding(false)` is a no-op.
+The gear's filled interior therefore paints over the R. Local fixes in the
+sibling `oksvg` and `rasterx` repos add inherited/cascaded fill-rule parsing
+and an antialiased parity scan converter. Nonzero fills retain their existing
+rendering path. Tests cover nested holes, overlapping and self-intersecting
+contours, implicit closure, clipping, gradients, fractional edges and rule reset.
+
+The actual Rust SVG was parsed with the local fixed parser; its flattened draw
+commands and winding flags were replayed through the local fixed rasterizer.
+The resulting logo restores the R and interior details. This checks the two
+local fixes together without replacing any dependency in ntbrowser.
+
+**Adoption is still pending published dependency versions.** The repository
+continues to use published oksvg v0.1.6 and rasterx v0.1.0, so a normal glynx run
+still reproduces the defect. No module-cache files, module pins, sibling
+replacements, releases or pushes were used to conceal that distinction. Once
+releases are authorized, publish the renderer fixes and update the dependency
+pins, notices and regression baselines before calling the interactive browser
+fixed. The comparison/report improvements work immediately.

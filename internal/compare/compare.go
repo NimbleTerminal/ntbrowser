@@ -68,6 +68,7 @@ type Capture struct {
 	Error                         string `json:",omitempty"`
 	DroppedEvents                 int
 	MissingGlyphs                 int
+	Images                        []PageImage
 }
 type Geometry struct {
 	ID, Status string
@@ -85,6 +86,7 @@ type Report struct {
 	Note                    string
 	Glynx, Chrome           Capture
 	Geometry                []Geometry
+	Images                  []ImageComparison
 	DifferentPixels         int
 	PixelDifferencePercent  float64
 }
@@ -109,7 +111,7 @@ func (o Options) validate() error {
 	return nil
 }
 func Run(ctx context.Context, o Options) (Report, error) {
-	r := Report{Version: 1, Created: time.Now().UTC(), Options: o, Note: "Live comparison: identical initial HTML; assets, scripts and cookies are fetched independently. Fresh sessions, no saved credentials. Glynx uses its loop and published renderer, without terminal transport or OS confinement. Chrome uses its sandbox. Captures are after a fixed settling interval, not proof of network idle. Geometry compares ID-associated painted coverage, not necessarily CSS border boxes. Pixel differences include fonts and antialiasing."}
+	r := Report{Version: 2, Created: time.Now().UTC(), Options: o, Note: "Live comparison: identical initial HTML; assets, scripts and cookies are fetched independently. Fresh sessions, no saved credentials. Glynx uses its loop and published renderer, without terminal transport or OS confinement. Chrome uses its sandbox. Captures are after a fixed settling interval, not proof of network idle. Geometry compares ID-associated painted coverage, not necessarily CSS border boxes. Pixel differences include fonts and antialiasing."}
 	if e := o.validate(); e != nil {
 		return r, e
 	}
@@ -152,6 +154,10 @@ func Run(ctx context.Context, o Options) (Report, error) {
 		if err != nil {
 			return r, err
 		}
+		r.Images, err = compareImages(o.Out, r.Glynx, r.Chrome)
+		if err != nil {
+			return r, err
+		}
 		r.DifferentPixels = n
 		r.PixelDifferencePercent = 100 * float64(n) / float64(o.Width*o.Height)
 	}
@@ -181,9 +187,14 @@ func captureGlynx(ctx context.Context, o Options, src Source) (Capture, error) {
 	defer cancel()
 	events := make(chan Event, 2048)
 	var dropped atomic.Int64
+	var snapshots imageSnapshots
 	trace := diagnostics.NewObserved(nil, func(kind string, v any) {
 		// Snapshot HTML is already bounded by the DOM; omit it from the event list.
-		if kind == "snapshot" || kind == "document" {
+		if kind == "snapshot" {
+			snapshots.record(v)
+			return
+		}
+		if kind == "document" {
 			return
 		}
 		b, e := json.Marshal(v)
@@ -306,6 +317,11 @@ func captureGlynx(ctx context.Context, o Options, src Source) (Capture, error) {
 	r.Warnings = append(r.Warnings, latest.Warnings...)
 	r.Warnings = append(r.Warnings, latest.Result.Warnings...)
 	r.Boxes = latest.Result.Boxes
+	if markup := snapshots.get(latest.Gen); markup != "" {
+		r.Images = glynxImages(markup, src.URL, r.Boxes, latest.Result.Options().Images)
+	} else {
+		r.Warnings = append(r.Warnings, "Image attribution unavailable: matching serializer snapshot expired.")
+	}
 	r.MissingGlyphs = latest.Result.MissingGlyphs
 	r.Text, e = latest.Result.TTY(ctx, max(32, o.Width/10))
 	if e != nil {
