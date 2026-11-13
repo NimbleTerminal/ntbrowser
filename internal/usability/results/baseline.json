@@ -1,0 +1,1810 @@
+[
+  {
+    "Warnings": null,
+    "ID": "govuk-details",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "▸ Help with nationality ",
+    "Boxes": 9,
+    "FocusOrder": [
+      "summary:"
+    ],
+    "ActivationChangedDOM": true,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-details",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "▸ Help with nationality ",
+    "Boxes": 9,
+    "FocusOrder": [
+      "summary:"
+    ],
+    "ActivationChangedDOM": true,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-details",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "▸ Help with nationality ",
+    "Boxes": 9,
+    "FocusOrder": [
+      "summary:"
+    ],
+    "ActivationChangedDOM": true,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-details",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "▸ Help with nationality ",
+    "Boxes": 9,
+    "FocusOrder": [
+      "summary:"
+    ],
+    "ActivationChangedDOM": true,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-accordion",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "Section A\n\nWe need to know your nationality\nso we can work out which\nelections you’re entitled to\nvote in. If you cannot provide\nyour nationality, you’ll have to\nsend copies of identity\ndocuments through the post.\n\nSection B\n\n• Example item 2",
+    "Boxes": 60,
+    "FocusOrder": null,
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-accordion",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "Section A\n\nSection B",
+    "Boxes": 21,
+    "FocusOrder": null,
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-accordion",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "Section A\n\nWe need to know your nationality so we can work out which elections you’re\nentitled to vote in. If you cannot provide your nationality, you’ll have to send\ncopies of identity documents through the post.\n\nSection B\n\n• Example item 2",
+    "Boxes": 60,
+    "FocusOrder": null,
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-accordion",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "Section A\n\nSection B",
+    "Boxes": 21,
+    "FocusOrder": null,
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-checkboxes",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "How do you want to be contacted?\n\n\n\n\nEmail\n\n\n\n\nEmail address\n\n\n\n\n\nPhone\n\n\n\n\nPhone number\n\n\n\n\n\nText message\n\n\n\n\nMobile phone number\n",
+    "Boxes": 87,
+    "FocusOrder": [
+      "input:how-contacted",
+      "input:context-email",
+      "input:how-contacted-2",
+      "input:contact-phone",
+      "input:how-contacted-3",
+      "input:contact-text-message"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-checkboxes",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "How do you want to be contacted?\n\n\n\n\nEmail\n\n\n\n\n\n\nPhone\n\n\n\n\n\n\nText message\n\n",
+    "Boxes": 56,
+    "FocusOrder": [
+      "input:how-contacted",
+      "input:how-contacted-2",
+      "input:how-contacted-3"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-checkboxes",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "How do you want to be contacted?\n\n\n\n\nEmail\n\n\n\n\nEmail address\n\n\n\n\n\nPhone\n\n\n\n\nPhone number\n\n\n\n\n\nText message\n\n\n\n\nMobile phone number\n",
+    "Boxes": 87,
+    "FocusOrder": [
+      "input:how-contacted",
+      "input:context-email",
+      "input:how-contacted-2",
+      "input:contact-phone",
+      "input:how-contacted-3",
+      "input:contact-text-message"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-checkboxes",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "How do you want to be contacted?\n\n\n\n\nEmail\n\n\n\n\n\n\nPhone\n\n\n\n\n\n\nText message\n\n",
+    "Boxes": 56,
+    "FocusOrder": [
+      "input:how-contacted",
+      "input:how-contacted-2",
+      "input:how-contacted-3"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-radios",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "How do you want to be contacted?\n\n\n\n\nEmail\n\n\n\n\nEmail address\n\n\n\n\n\nPhone\n\n\n\n\nPhone number\n\n\n\n\n\nText message\n\n\n\n\nMobile phone number\n",
+    "Boxes": 78,
+    "FocusOrder": [
+      "input:how-contacted",
+      "input:context-email",
+      "input:how-contacted-2",
+      "input:contact-phone",
+      "input:how-contacted-3",
+      "input:contact-text-message"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-radios",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "How do you want to be contacted?\n\n\n\n\nEmail\n\n\n\n\n\n\nPhone\n\n\n\n\n\n\nText message\n\n",
+    "Boxes": 47,
+    "FocusOrder": [
+      "input:how-contacted",
+      "input:how-contacted-2",
+      "input:how-contacted-3"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-radios",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "How do you want to be contacted?\n\n\n\n\nEmail\n\n\n\n\nEmail address\n\n\n\n\n\nPhone\n\n\n\n\nPhone number\n\n\n\n\n\nText message\n\n\n\n\nMobile phone number\n",
+    "Boxes": 78,
+    "FocusOrder": [
+      "input:how-contacted",
+      "input:context-email",
+      "input:how-contacted-2",
+      "input:contact-phone",
+      "input:how-contacted-3",
+      "input:contact-text-message"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-radios",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "How do you want to be contacted?\n\n\n\n\nEmail\n\n\n\n\n\n\nPhone\n\n\n\n\n\n\nText message\n\n",
+    "Boxes": 47,
+    "FocusOrder": [
+      "input:how-contacted",
+      "input:how-contacted-2",
+      "input:how-contacted-3"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-input",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "National insurance number\n\nIt’s on your National Insurance\ncard, benefit letter, payslip or\nP60. For example, ‘QQ 12 34 56\nC’.\n\n Error: \n\nEnter a National Insurance\nnumber in the correct format \n",
+    "Boxes": 48,
+    "FocusOrder": [
+      "input:with-error-hint"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-input",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "National insurance number\n\nIt’s on your National Insurance\ncard, benefit letter, payslip or\nP60. For example, ‘QQ 12 34 56\nC’.\n\n Error: \n\nEnter a National Insurance\nnumber in the correct format \n",
+    "Boxes": 48,
+    "FocusOrder": [
+      "input:with-error-hint"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-input",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "National insurance number\n\nIt’s on your National Insurance card, benefit letter, payslip or P60. For\nexample, ‘QQ 12 34 56 C’.\n\n Error: \n\nEnter a National Insurance number in the correct format \n",
+    "Boxes": 48,
+    "FocusOrder": [
+      "input:with-error-hint"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-input",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "National insurance number\n\nIt’s on your National Insurance card, benefit letter, payslip or P60. For\nexample, ‘QQ 12 34 56 C’.\n\n Error: \n\nEnter a National Insurance number in the correct format \n",
+    "Boxes": 48,
+    "FocusOrder": [
+      "input:with-error-hint"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-textarea",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "Can you provide more detail?\n\nDon't include personal or\nfinancial information, eg your\nNational Insurance number or\ncredit card details.",
+    "Boxes": 32,
+    "FocusOrder": [
+      "textarea:more-detail"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-textarea",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "Can you provide more detail?\n\nDon't include personal or\nfinancial information, eg your\nNational Insurance number or\ncredit card details.",
+    "Boxes": 32,
+    "FocusOrder": [
+      "textarea:more-detail"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-textarea",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "Can you provide more detail?\n\nDon't include personal or financial information, eg your National Insurance\nnumber or credit card details.",
+    "Boxes": 32,
+    "FocusOrder": [
+      "textarea:more-detail"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-textarea",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "Can you provide more detail?\n\nDon't include personal or financial information, eg your National Insurance\nnumber or credit card details.",
+    "Boxes": 32,
+    "FocusOrder": [
+      "textarea:more-detail"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-select",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "Label text goes here\n\nHint text goes here\n\n Error: \n\nError message goes here\nGOV.UK frontend option 1 ▾",
+    "Boxes": 35,
+    "FocusOrder": [
+      "select:select-2"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-select",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "Label text goes here\n\nHint text goes here\n\n Error: \n\nError message goes here\nGOV.UK frontend option 1 ▾",
+    "Boxes": 35,
+    "FocusOrder": [
+      "select:select-2"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-select",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "Label text goes here\n\nHint text goes here\n\n Error: \n\nError message goes here\nGOV.UK frontend option 1 ▾",
+    "Boxes": 35,
+    "FocusOrder": [
+      "select:select-2"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-select",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "Label text goes here\n\nHint text goes here\n\n Error: \n\nError message goes here\nGOV.UK frontend option 1 ▾",
+    "Boxes": 35,
+    "FocusOrder": [
+      "select:select-2"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-date-input",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "What is your date of birth?\n\nFor example, 31 3 1980\n\n Error: \n\nError message goes here \n\n\n\nDay \n\n\nMonth \n\n\nYear \n\n\n",
+    "Boxes": 62,
+    "FocusOrder": [
+      "input:dob-errors-day",
+      "input:dob-errors-month",
+      "input:dob-errors-year"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-date-input",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "What is your date of birth?\n\nFor example, 31 3 1980\n\n Error: \n\nError message goes here \n\n\n\nDay \n\n\nMonth \n\n\nYear \n\n\n",
+    "Boxes": 62,
+    "FocusOrder": [
+      "input:dob-errors-day",
+      "input:dob-errors-month",
+      "input:dob-errors-year"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-date-input",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "What is your date of birth?\n\nFor example, 31 3 1980\n\n Error: \n\nError message goes here \n\n\n\nDay \n\n\nMonth \n\n\nYear \n\n\n",
+    "Boxes": 62,
+    "FocusOrder": [
+      "input:dob-errors-day",
+      "input:dob-errors-month",
+      "input:dob-errors-year"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-date-input",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "What is your date of birth?\n\nFor example, 31 3 1980\n\n Error: \n\nError message goes here \n\n\n\nDay \n\n\nMonth \n\n\nYear \n\n\n",
+    "Boxes": 62,
+    "FocusOrder": [
+      "input:dob-errors-day",
+      "input:dob-errors-month",
+      "input:dob-errors-year"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-error-summary",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "There is a problem\n\nThe date your passport was\nissued must be in the past\nEnter a postcode, like AA1 1AA",
+    "Boxes": 49,
+    "FocusOrder": [
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-error-summary",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "There is a problem\n\nThe date your passport was\nissued must be in the past\nEnter a postcode, like AA1 1AA",
+    "Boxes": 49,
+    "FocusOrder": [
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-error-summary",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "There is a problem\n\nThe date your passport was issued must be in the past\nEnter a postcode, like AA1 1AA",
+    "Boxes": 52,
+    "FocusOrder": [
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-error-summary",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "There is a problem\n\nThe date your passport was issued must be in the past\nEnter a postcode, like AA1 1AA",
+    "Boxes": 52,
+    "FocusOrder": [
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-tabs",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "Contents\n\n— Past day\n— Past week\n— Past month\n— Past year\n\nPast day\n\n┌──────────┬─────────┬─────────┐\n│ Case     │ Cases   │ Cases   │\n│ manager  │ opened  │ closed  │\n╞══════════╪═════════╪═════════╡\n│ David    │ 3       │ 0       │\n│ Francis  │         │         │\n├──────────┼─────────┼─────────┤\n│ Paul     │ 1       │ 0       │\n│ Farmer   │         │         │\n├──────────┼─────────┼─────────┤\n│ Rita     │ 2       │ 0       │\n│ Patel    │         │         │\n└──────────┴─────────┴─────────┘\n\nPast week\n\n┌──────────┬─────────┬─────────┐\n│ Case     │ Cases   │ Cases   │\n│ manager  │ opened  │ closed  │\n╞══════════╪═════════╪═════════╡\n│ David    │ 24      │ 18      │\n│ Francis  │         │         │\n├──────────┼─────────┼─────────┤\n│ Paul     │ 16      │ 20      │\n│ Farmer   │         │         │\n├──────────┼─────────┼─────────┤\n│ Rita     │ 24      │ 27      │\n│ Patel    │         │         │\n└──────────┴─────────┴─────────┘\n\nPast month\n\n┌──────────┬─────────┬─────────┐\n│ Case     │ Cases   │ Cases   │\n│ manager  │ opened  │ closed  │\n╞══════════╪═════════╪═════════╡\n│ David    │ 98      │ 95      │\n│ Francis  │         │         │\n├──────────┼─────────┼─────────┤\n│ Paul     │ 122     │ 131     │\n│ Farmer   │         │         │\n├──────────┼─────────┼─────────┤\n│ Rita     │ 126     │ 142     │\n│ Patel    │         │         │\n└──────────┴─────────┴─────────┘\n\nThere is no data for this year\nyet, check back later",
+    "Boxes": 197,
+    "FocusOrder": [
+      "a:",
+      "a:",
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-tabs",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "Contents\n\n— Past day\n— Past week\n— Past month\n— Past year\n\nPast day\n\n┌──────────┬─────────┬─────────┐\n│ Case     │ Cases   │ Cases   │\n│ manager  │ opened  │ closed  │\n╞══════════╪═════════╪═════════╡\n│ David    │ 3       │ 0       │\n│ Francis  │         │         │\n├──────────┼─────────┼─────────┤\n│ Paul     │ 1       │ 0       │\n│ Farmer   │         │         │\n├──────────┼─────────┼─────────┤\n│ Rita     │ 2       │ 0       │\n│ Patel    │         │         │\n└──────────┴─────────┴─────────┘\n\nPast week\n\n┌──────────┬─────────┬─────────┐\n│ Case     │ Cases   │ Cases   │\n│ manager  │ opened  │ closed  │\n╞══════════╪═════════╪═════════╡\n│ David    │ 24      │ 18      │\n│ Francis  │         │         │\n├──────────┼─────────┼─────────┤\n│ Paul     │ 16      │ 20      │\n│ Farmer   │         │         │\n├──────────┼─────────┼─────────┤\n│ Rita     │ 24      │ 27      │\n│ Patel    │         │         │\n└──────────┴─────────┴─────────┘\n\nPast month\n\n┌──────────┬─────────┬─────────┐\n│ Case     │ Cases   │ Cases   │\n│ manager  │ opened  │ closed  │\n╞══════════╪═════════╪═════════╡\n│ David    │ 98      │ 95      │\n│ Francis  │         │         │\n├──────────┼─────────┼─────────┤\n│ Paul     │ 122     │ 131     │\n│ Farmer   │         │         │\n├──────────┼─────────┼─────────┤\n│ Rita     │ 126     │ 142     │\n│ Patel    │         │         │\n└──────────┴─────────┴─────────┘\n\nThere is no data for this year\nyet, check back later",
+    "Boxes": 197,
+    "FocusOrder": [
+      "a:",
+      "a:",
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-tabs",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "Contents\n\n— Past day\n— Past week\n— Past month\n— Past year\n\nPast day\n\n┌───────────────┬──────────────┬──────────────┐\n│ Case manager  │ Cases opened │ Cases closed │\n╞═══════════════╪══════════════╪══════════════╡\n│ David Francis │ 3            │ 0            │\n├───────────────┼──────────────┼──────────────┤\n│ Paul Farmer   │ 1            │ 0            │\n├───────────────┼──────────────┼──────────────┤\n│ Rita Patel    │ 2            │ 0            │\n└───────────────┴──────────────┴──────────────┘\n\nPast week\n\n┌───────────────┬──────────────┬──────────────┐\n│ Case manager  │ Cases opened │ Cases closed │\n╞═══════════════╪══════════════╪══════════════╡\n│ David Francis │ 24           │ 18           │\n├───────────────┼──────────────┼──────────────┤\n│ Paul Farmer   │ 16           │ 20           │\n├───────────────┼──────────────┼──────────────┤\n│ Rita Patel    │ 24           │ 27           │\n└───────────────┴──────────────┴──────────────┘\n\nPast month\n\n┌───────────────┬──────────────┬──────────────┐\n│ Case manager  │ Cases opened │ Cases closed │\n╞═══════════════╪══════════════╪══════════════╡\n│ David Francis │ 98           │ 95           │\n├───────────────┼──────────────┼──────────────┤\n│ Paul Farmer   │ 122          │ 131          │\n├───────────────┼──────────────┼──────────────┤\n│ Rita Patel    │ 126          │ 142          │\n└───────────────┴──────────────┴──────────────┘\n\nThere is no data for this year yet, check back later",
+    "Boxes": 197,
+    "FocusOrder": [
+      "a:",
+      "a:",
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-tabs",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "Past day\nPast week\nPast month\nPast year\n\nPast day\n\n┌───────────────┬──────────────┬──────────────┐\n│ Case manager  │ Cases opened │ Cases closed │\n╞═══════════════╪══════════════╪══════════════╡\n│ David Francis │ 3            │ 0            │\n├───────────────┼──────────────┼──────────────┤\n│ Paul Farmer   │ 1            │ 0            │\n├───────────────┼──────────────┼──────────────┤\n│ Rita Patel    │ 2            │ 0            │\n└───────────────┴──────────────┴──────────────┘",
+    "Boxes": 86,
+    "FocusOrder": [
+      "a:",
+      "a:",
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-service-navigation",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "Apply for a juggling license \n\nNavigation item 1 \nNavigation item 2 \nNavigation item 3 \nNavigation item 4 ",
+    "Boxes": 37,
+    "FocusOrder": [
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-service-navigation",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "Apply for a juggling license \n\nNavigation item 1 \nNavigation item 2 \nNavigation item 3 \nNavigation item 4 ",
+    "Boxes": 37,
+    "FocusOrder": [
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-service-navigation",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "Apply for a juggling license \n\nNavigation item 1 \nNavigation item 2 \nNavigation item 3 \nNavigation item 4 ",
+    "Boxes": 37,
+    "FocusOrder": [
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-service-navigation",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "Apply for a juggling license \n\nNavigation item 1 \nNavigation item 2 \nNavigation item 3 \nNavigation item 4 ",
+    "Boxes": 37,
+    "FocusOrder": [
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-pagination",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "[SVG: diagram] Previous\n\n  page \n\n1\n2\n3\n\nNext\n\n  page \n\n[SVG: diagram]",
+    "Boxes": 41,
+    "FocusOrder": [
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-pagination",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "[SVG: diagram] Previous\n\n  page \n\n1\n2\n3\n\nNext\n\n  page \n\n[SVG: diagram]",
+    "Boxes": 41,
+    "FocusOrder": [
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-pagination",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "[SVG: diagram] Previous\n\n  page \n\n1\n2\n3\n\nNext\n\n  page \n\n[SVG: diagram]",
+    "Boxes": 41,
+    "FocusOrder": [
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-pagination",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "[SVG: diagram] Previous\n\n  page \n\n1\n2\n3\n\nNext\n\n  page \n\n[SVG: diagram]",
+    "Boxes": 41,
+    "FocusOrder": [
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-summary-list",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "Name\n\nFirstname Lastname\n\n• Edit\n  \n    name \n• Delete\n  \n    name \n\nDate of birth\n\n13/08/1980\n\nChange\n\n  date of birth \n\nContact information\n\nemail@email.com\n\nAddress line 1\nAddress line 2\nAddress line 3\nAddress line 4\nAddress line 5\n\n• Edit\n  \n    contact information \n• Change\n  \n    contact information ",
+    "Boxes": 101,
+    "FocusOrder": [
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-summary-list",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "Name\n\nFirstname Lastname\n\n• Edit\n  \n    name \n• Delete\n  \n    name \n\nDate of birth\n\n13/08/1980\n\nChange\n\n  date of birth \n\nContact information\n\nemail@email.com\n\nAddress line 1\nAddress line 2\nAddress line 3\nAddress line 4\nAddress line 5\n\n• Edit\n  \n    contact information \n• Change\n  \n    contact information ",
+    "Boxes": 101,
+    "FocusOrder": [
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-summary-list",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "Name\n\nFirstname Lastname\n\n• Edit\n  \n    name \n• Delete\n  \n    name \n\nDate of birth\n\n13/08/1980\n\nChange\n\n  date of birth \n\nContact information\n\nemail@email.com\n\nAddress line 1\nAddress line 2\nAddress line 3\nAddress line 4\nAddress line 5\n\n• Edit\n  \n    contact information \n• Change\n  \n    contact information ",
+    "Boxes": 101,
+    "FocusOrder": [
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-summary-list",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "Name\n\nFirstname Lastname\n\n• Edit\n  \n    name \n• Delete\n  \n    name \n\nDate of birth\n\n13/08/1980\n\nChange\n\n  date of birth \n\nContact information\n\nemail@email.com\n\nAddress line 1\nAddress line 2\nAddress line 3\nAddress line 4\nAddress line 5\n\n• Edit\n  \n    contact information \n• Change\n  \n    contact information ",
+    "Boxes": 101,
+    "FocusOrder": [
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-table",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "Caption 1: Months and rates\n┌──────────┬─────────┬─────────┐\n│ Month    │    Rate │    Rate │\n│ you      │     for │     for │\n│ apply    │ bicycle │ vehicle │\n│          │       s │       s │\n╞══════════╪═════════╪═════════╡\n│ January  │     £85 │     £95 │\n╞══════════╪═════════╪═════════╡\n│ February │     £75 │     £55 │\n╞══════════╪═════════╪═════════╡\n│ March    │    £165 │    £125 │\n└──────────┴─────────┴─────────┘",
+    "Boxes": 56,
+    "FocusOrder": null,
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-table",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "Caption 1: Months and rates\n┌──────────┬─────────┬─────────┐\n│ Month    │    Rate │    Rate │\n│ you      │     for │     for │\n│ apply    │ bicycle │ vehicle │\n│          │       s │       s │\n╞══════════╪═════════╪═════════╡\n│ January  │     £85 │     £95 │\n╞══════════╪═════════╪═════════╡\n│ February │     £75 │     £55 │\n╞══════════╪═════════╪═════════╡\n│ March    │    £165 │    £125 │\n└──────────┴─────────┴─────────┘",
+    "Boxes": 56,
+    "FocusOrder": null,
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-table",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "Caption 1: Months and rates\n┌─────────────────┬───────────────────┬───────────────────┐\n│ Month you apply │ Rate for bicycles │ Rate for vehicles │\n╞═════════════════╪═══════════════════╪═══════════════════╡\n│ January         │               £85 │               £95 │\n╞═════════════════╪═══════════════════╪═══════════════════╡\n│ February        │               £75 │               £55 │\n╞═════════════════╪═══════════════════╪═══════════════════╡\n│ March           │              £165 │              £125 │\n└─────────────────┴───────────────────┴───────────────────┘",
+    "Boxes": 56,
+    "FocusOrder": null,
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-table",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "Caption 1: Months and rates\n┌─────────────────┬───────────────────┬───────────────────┐\n│ Month you apply │ Rate for bicycles │ Rate for vehicles │\n╞═════════════════╪═══════════════════╪═══════════════════╡\n│ January         │               £85 │               £95 │\n╞═════════════════╪═══════════════════╪═══════════════════╡\n│ February        │               £75 │               £55 │\n╞═════════════════╪═══════════════════╪═══════════════════╡\n│ March           │              £165 │              £125 │\n└─────────────────┴───────────────────┴───────────────────┘",
+    "Boxes": 56,
+    "FocusOrder": null,
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-task-list",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "Company Directors\n\nCompleted\nRegistered company details\n\n\n\nIncomplete \nBusiness plan\n\n\n\nIncomplete ",
+    "Boxes": 39,
+    "FocusOrder": [
+      "a:",
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-task-list",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "Company Directors\n\nCompleted\nRegistered company details\n\n\n\nIncomplete \nBusiness plan\n\n\n\nIncomplete ",
+    "Boxes": 39,
+    "FocusOrder": [
+      "a:",
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-task-list",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "Company Directors\n\nCompleted\nRegistered company details\n\n\n\nIncomplete \nBusiness plan\n\n\n\nIncomplete ",
+    "Boxes": 39,
+    "FocusOrder": [
+      "a:",
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-task-list",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "Company Directors\n\nCompleted\nRegistered company details\n\n\n\nIncomplete \nBusiness plan\n\n\n\nIncomplete ",
+    "Boxes": 39,
+    "FocusOrder": [
+      "a:",
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-notification-banner",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "Success\n\nEmail sent to example@email.com",
+    "Boxes": 18,
+    "FocusOrder": null,
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-notification-banner",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "Success\n\nEmail sent to example@email.com",
+    "Boxes": 18,
+    "FocusOrder": null,
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-notification-banner",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "Success\n\nEmail sent to example@email.com",
+    "Boxes": 18,
+    "FocusOrder": null,
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-notification-banner",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "Success\n\nEmail sent to example@email.com",
+    "Boxes": 18,
+    "FocusOrder": null,
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-skip-link",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "Skip to main content",
+    "Boxes": 11,
+    "FocusOrder": [
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-skip-link",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "Skip to main content",
+    "Boxes": 11,
+    "FocusOrder": [
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-skip-link",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "Skip to main content",
+    "Boxes": 11,
+    "FocusOrder": [
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-skip-link",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "Skip to main content",
+    "Boxes": 11,
+    "FocusOrder": [
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-file-upload",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "Upload a file \n",
+    "Boxes": 14,
+    "FocusOrder": [
+      "input:file-upload-1"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-file-upload",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "Upload a file \n",
+    "Boxes": 14,
+    "FocusOrder": [
+      "input:file-upload-1"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-file-upload",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "Upload a file \n",
+    "Boxes": 14,
+    "FocusOrder": [
+      "input:file-upload-1"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-file-upload",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "Upload a file \n",
+    "Boxes": 14,
+    "FocusOrder": [
+      "input:file-upload-1"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-password-input",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "Password \n\n",
+    "Boxes": 13,
+    "FocusOrder": [
+      "input:password"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-password-input",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "Password \n\n",
+    "Boxes": 13,
+    "FocusOrder": [
+      "input:password"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-password-input",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "Password \n\n",
+    "Boxes": 13,
+    "FocusOrder": [
+      "input:password"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-password-input",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "Password \n\n",
+    "Boxes": 13,
+    "FocusOrder": [
+      "input:password"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-character-count",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "Can you provide more detail?\n\nYou can enter up to 10\ncharacters",
+    "Boxes": 25,
+    "FocusOrder": [
+      "textarea:more-detail"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-character-count",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "Can you provide more detail?\n\nYou can enter up to 10\ncharacters",
+    "Boxes": 25,
+    "FocusOrder": [
+      "textarea:more-detail"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-character-count",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "Can you provide more detail?\n\nYou can enter up to 10 characters",
+    "Boxes": 25,
+    "FocusOrder": [
+      "textarea:more-detail"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "govuk-character-count",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "Can you provide more detail?\n\nYou can enter up to 10 characters",
+    "Boxes": 25,
+    "FocusOrder": [
+      "textarea:more-detail"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-accordion",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "Personal Information\n\nName*:\n\nEmail*:\n\nPhone:\n\nExtension:\n\nCountry:\n\nCity/Province:\n\nBilling Address\n\nShipping Address",
+    "Boxes": 73,
+    "FocusOrder": [
+      "button:accordion1id",
+      "input:cufc1",
+      "input:cufc2",
+      "input:cufc3",
+      "input:cufc4",
+      "input:cufc5",
+      "input:cufc6",
+      "button:accordion2id",
+      "button:accordion3id"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-accordion",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "Personal Information\n\nName*:\n\nEmail*:\n\nPhone:\n\nExtension:\n\nCountry:\n\nCity/Province:\n\nBilling Address\n\nShipping Address",
+    "Boxes": 73,
+    "FocusOrder": [
+      "button:accordion1id",
+      "input:cufc1",
+      "input:cufc2",
+      "input:cufc3",
+      "input:cufc4",
+      "input:cufc5",
+      "input:cufc6",
+      "button:accordion2id",
+      "button:accordion3id"
+    ],
+    "ActivationChangedDOM": true,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-accordion",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "Personal Information\n\nName*:\n\nEmail*:\n\nPhone:\n\nExtension:\n\nCountry:\n\nCity/Province:\n\nBilling Address\n\nShipping Address",
+    "Boxes": 73,
+    "FocusOrder": [
+      "button:accordion1id",
+      "input:cufc1",
+      "input:cufc2",
+      "input:cufc3",
+      "input:cufc4",
+      "input:cufc5",
+      "input:cufc6",
+      "button:accordion2id",
+      "button:accordion3id"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-accordion",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "Personal Information\n\nName*:\n\nEmail*:\n\nPhone:\n\nExtension:\n\nCountry:\n\nCity/Province:\n\nBilling Address\n\nShipping Address",
+    "Boxes": 73,
+    "FocusOrder": [
+      "button:accordion1id",
+      "input:cufc1",
+      "input:cufc2",
+      "input:cufc3",
+      "input:cufc4",
+      "input:cufc5",
+      "input:cufc6",
+      "button:accordion2id",
+      "button:accordion3id"
+    ],
+    "ActivationChangedDOM": true,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-disclosure-navigation",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "About\n\nOverview\nAdministration\nFacts\nCampus Tours\nAdmissions\n\nApply\nTuition\nSign Up\nVisit\nPhoto Tour\nConnect\nAcademics\n\nColleges \u0026 Schools\nPrograms of Study\nHonors Programs\nOnline Courses\nCourse Explorer\nRegister for Class\nAcademic Calendar\nTranscripts\n\nMythical University\n\nSample content section.\nActivating a link above will\nupdate and navigate to this\nregion.",
+    "Boxes": 157,
+    "FocusOrder": [
+      "button:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "button:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "button:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-disclosure-navigation",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "About\n\nOverview\nAdministration\nFacts\nCampus Tours\nAdmissions\n\nApply\nTuition\nSign Up\nVisit\nPhoto Tour\nConnect\nAcademics\n\nColleges \u0026 Schools\nPrograms of Study\nHonors Programs\nOnline Courses\nCourse Explorer\nRegister for Class\nAcademic Calendar\nTranscripts\n\nMythical University\n\nSample content section.\nActivating a link above will\nupdate and navigate to this\nregion.",
+    "Boxes": 157,
+    "FocusOrder": [
+      "button:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "button:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "button:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": true,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-disclosure-navigation",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "About\n\nOverview\nAdministration\nFacts\nCampus Tours\nAdmissions\n\nApply\nTuition\nSign Up\nVisit\nPhoto Tour\nConnect\nAcademics\n\nColleges \u0026 Schools\nPrograms of Study\nHonors Programs\nOnline Courses\nCourse Explorer\nRegister for Class\nAcademic Calendar\nTranscripts\n\nMythical University\n\nSample content section. Activating a link above will update and navigate to this\nregion.",
+    "Boxes": 157,
+    "FocusOrder": [
+      "button:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "button:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "button:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-disclosure-navigation",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "About\n\nOverview\nAdministration\nFacts\nCampus Tours\nAdmissions\n\nApply\nTuition\nSign Up\nVisit\nPhoto Tour\nConnect\nAcademics\n\nColleges \u0026 Schools\nPrograms of Study\nHonors Programs\nOnline Courses\nCourse Explorer\nRegister for Class\nAcademic Calendar\nTranscripts\n\nMythical University\n\nSample content section. Activating a link above will update and navigate to this\nregion.",
+    "Boxes": 157,
+    "FocusOrder": [
+      "button:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "button:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "button:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:",
+      "a:"
+    ],
+    "ActivationChangedDOM": true,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-tabs-manual",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "Danish Composers\n\nMaria Ahlefeldt Carl Andersen\nIda da Fonseca Peter Müller\n\nMaria Theresia Ahlefeldt (16\nJanuary 1755 – 20 December 1810)\nwas a Danish, (originally\nGerman), composer. She is known\nas the first female composer in\nDenmark. Maria Theresia composed\nmusic for several ballets,\noperas, and plays of the royal\ntheatre. She was given good\ncritic as a composer and\ndescribed as a “virkelig\nTonekunstnerinde” ('a True\nArtist of Music').",
+    "Boxes": 109,
+    "FocusOrder": [
+      "button:tab-1",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-tabs-manual",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "Danish Composers\n\nMaria Ahlefeldt Carl Andersen\nIda da Fonseca Peter Müller\n\nMaria Theresia Ahlefeldt (16\nJanuary 1755 – 20 December 1810)\nwas a Danish, (originally\nGerman), composer. She is known\nas the first female composer in\nDenmark. Maria Theresia composed\nmusic for several ballets,\noperas, and plays of the royal\ntheatre. She was given good\ncritic as a composer and\ndescribed as a “virkelig\nTonekunstnerinde” ('a True\nArtist of Music').",
+    "Boxes": 109,
+    "FocusOrder": [
+      "button:tab-1",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": [
+      {
+        "Level": "error",
+        "Line": "uncaught in load listener: TypeError: ntbrowser/dom: unsupported selector \"[role=tablist].manual\" at http://fixture.local/apg-tabs-manual#inline-0:132:43"
+      }
+    ]
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-tabs-manual",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "Danish Composers\n\nMaria Ahlefeldt Carl Andersen Ida da Fonseca Peter Müller\n\nMaria Theresia Ahlefeldt (16 January 1755 – 20 December 1810) was a Danish,\n(originally German), composer. She is known as the first female composer in\nDenmark. Maria Theresia composed music for several ballets, operas, and plays of\nthe royal theatre. She was given good critic as a composer and described as a\n“virkelig Tonekunstnerinde” ('a True Artist of Music').",
+    "Boxes": 100,
+    "FocusOrder": [
+      "button:tab-1",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-tabs-manual",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "Danish Composers\n\nMaria Ahlefeldt Carl Andersen Ida da Fonseca Peter Müller\n\nMaria Theresia Ahlefeldt (16 January 1755 – 20 December 1810) was a Danish,\n(originally German), composer. She is known as the first female composer in\nDenmark. Maria Theresia composed music for several ballets, operas, and plays of\nthe royal theatre. She was given good critic as a composer and described as a\n“virkelig Tonekunstnerinde” ('a True Artist of Music').",
+    "Boxes": 100,
+    "FocusOrder": [
+      "button:tab-1",
+      "a:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": [
+      {
+        "Level": "error",
+        "Line": "uncaught in load listener: TypeError: ntbrowser/dom: unsupported selector \"[role=tablist].manual\" at http://fixture.local/apg-tabs-manual#inline-0:132:43"
+      }
+    ]
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-checkbox",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "Sandwich Condiments\n\nLettuce\nTomato\nMustard\nSprouts",
+    "Boxes": 21,
+    "FocusOrder": [
+      "div:",
+      "div:",
+      "div:",
+      "div:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-checkbox",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "Sandwich Condiments\n\nLettuce\nTomato\nMustard\nSprouts",
+    "Boxes": 21,
+    "FocusOrder": [
+      "div:",
+      "div:",
+      "div:",
+      "div:"
+    ],
+    "ActivationChangedDOM": true,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-checkbox",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "Sandwich Condiments\n\nLettuce\nTomato\nMustard\nSprouts",
+    "Boxes": 21,
+    "FocusOrder": [
+      "div:",
+      "div:",
+      "div:",
+      "div:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-checkbox",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "Sandwich Condiments\n\nLettuce\nTomato\nMustard\nSprouts",
+    "Boxes": 21,
+    "FocusOrder": [
+      "div:",
+      "div:",
+      "div:",
+      "div:"
+    ],
+    "ActivationChangedDOM": true,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-radio",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "Pizza Crust\nRegular crust Deep dish Thin\ncrust\n\nPizza Delivery\nPickup Home Delivery Dine in",
+    "Boxes": 29,
+    "FocusOrder": [
+      "div:",
+      "div:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-radio",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "Pizza Crust\nRegular crust Deep dish Thin\ncrust\n\nPizza Delivery\nPickup Home Delivery Dine in",
+    "Boxes": 29,
+    "FocusOrder": [
+      "div:",
+      "div:"
+    ],
+    "ActivationChangedDOM": true,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-radio",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "Pizza Crust\nRegular crust Deep dish Thin crust\n\nPizza Delivery\nPickup Home Delivery Dine in",
+    "Boxes": 29,
+    "FocusOrder": [
+      "div:",
+      "div:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-radio",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "Pizza Crust\nRegular crust Deep dish Thin crust\n\nPizza Delivery\nPickup Home Delivery Dine in",
+    "Boxes": 29,
+    "FocusOrder": [
+      "div:",
+      "div:"
+    ],
+    "ActivationChangedDOM": true,
+    "Logs": null
+  },
+  {
+    "Warnings": [
+      "svg: SVG external/active references are unsupported"
+    ],
+    "ID": "apg-button",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "This “Print” action button uses\na div element.\nPrint Page\nThis “Mute” toggle button uses\nan a element.\nMute [SVG: diagram]",
+    "Boxes": 34,
+    "FocusOrder": [
+      "div:action",
+      "a:toggle"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": [
+      "svg: SVG external/active references are unsupported"
+    ],
+    "ID": "apg-button",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "This “Print” action button uses\na div element.\nPrint Page\nThis “Mute” toggle button uses\nan a element.\nMute [SVG: diagram]",
+    "Boxes": 34,
+    "FocusOrder": [
+      "div:action",
+      "a:toggle"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": [
+      {
+        "Level": "error",
+        "Line": "uncaught in click listener: TypeError: Object has no member 'print' at http://fixture.local/apg-button#inline-0:57:15"
+      }
+    ]
+  },
+  {
+    "Warnings": [
+      "svg: SVG external/active references are unsupported"
+    ],
+    "ID": "apg-button",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "This “Print” action button uses a div element.\nPrint Page\nThis “Mute” toggle button uses an a element.\nMute [SVG: diagram]",
+    "Boxes": 34,
+    "FocusOrder": [
+      "div:action",
+      "a:toggle"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": [
+      "svg: SVG external/active references are unsupported"
+    ],
+    "ID": "apg-button",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "This “Print” action button uses a div element.\nPrint Page\nThis “Mute” toggle button uses an a element.\nMute [SVG: diagram]",
+    "Boxes": 34,
+    "FocusOrder": [
+      "div:action",
+      "a:toggle"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": [
+      {
+        "Level": "error",
+        "Line": "uncaught in click listener: TypeError: Object has no member 'print' at http://fixture.local/apg-button#inline-0:57:15"
+      }
+    ]
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-menu-button-links",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "WAI-ARIA Quick Links [SVG:\ndiagram]",
+    "Boxes": 12,
+    "FocusOrder": [
+      "button:menubutton"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-menu-button-links",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "WAI-ARIA Quick Links [SVG:\ndiagram]",
+    "Boxes": 12,
+    "FocusOrder": [
+      "button:menubutton"
+    ],
+    "ActivationChangedDOM": true,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-menu-button-links",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "WAI-ARIA Quick Links [SVG: diagram]",
+    "Boxes": 12,
+    "FocusOrder": [
+      "button:menubutton"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-menu-button-links",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "WAI-ARIA Quick Links [SVG: diagram]",
+    "Boxes": 12,
+    "FocusOrder": [
+      "button:menubutton"
+    ],
+    "ActivationChangedDOM": true,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-listbox-scrollable",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "Choose your favorite transuranic\nelement (actinide or\ntransactinide).\n\nTransuranium elements:\n\n• None\n• Neptunium\n• Plutonium\n• Americium\n• Curium\n• Berkelium\n• Californium\n• Einsteinium\n• Fermium\n• Mendelevium\n• Nobelium\n• Lawrencium\n• Rutherfordium\n• Dubnium\n• Seaborgium\n• Bohrium\n• Hassium\n• Meitnerium\n• Darmstadtium\n• Roentgenium\n• Copernicium\n• Nihonium\n• Flerovium\n• Moscovium\n• Livermorium\n• Tennessine\n• Oganesson",
+    "Boxes": 120,
+    "FocusOrder": [
+      "ul:ss_elem_list"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-listbox-scrollable",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "Choose your favorite transuranic\nelement (actinide or\ntransactinide).\n\nTransuranium elements:\n\n• None\n• Neptunium\n• Plutonium\n• Americium\n• Curium\n• Berkelium\n• Californium\n• Einsteinium\n• Fermium\n• Mendelevium\n• Nobelium\n• Lawrencium\n• Rutherfordium\n• Dubnium\n• Seaborgium\n• Bohrium\n• Hassium\n• Meitnerium\n• Darmstadtium\n• Roentgenium\n• Copernicium\n• Nihonium\n• Flerovium\n• Moscovium\n• Livermorium\n• Tennessine\n• Oganesson",
+    "Boxes": 120,
+    "FocusOrder": [
+      "ul:ss_elem_list"
+    ],
+    "ActivationChangedDOM": true,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-listbox-scrollable",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "Choose your favorite transuranic element (actinide or transactinide).\n\nTransuranium elements:\n\n• None\n• Neptunium\n• Plutonium\n• Americium\n• Curium\n• Berkelium\n• Californium\n• Einsteinium\n• Fermium\n• Mendelevium\n• Nobelium\n• Lawrencium\n• Rutherfordium\n• Dubnium\n• Seaborgium\n• Bohrium\n• Hassium\n• Meitnerium\n• Darmstadtium\n• Roentgenium\n• Copernicium\n• Nihonium\n• Flerovium\n• Moscovium\n• Livermorium\n• Tennessine\n• Oganesson",
+    "Boxes": 105,
+    "FocusOrder": [
+      "ul:ss_elem_list"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-listbox-scrollable",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "Choose your favorite transuranic element (actinide or transactinide).\n\nTransuranium elements:\n\n• None\n• Neptunium\n• Plutonium\n• Americium\n• Curium\n• Berkelium\n• Californium\n• Einsteinium\n• Fermium\n• Mendelevium\n• Nobelium\n• Lawrencium\n• Rutherfordium\n• Dubnium\n• Seaborgium\n• Bohrium\n• Hassium\n• Meitnerium\n• Darmstadtium\n• Roentgenium\n• Copernicium\n• Nihonium\n• Flerovium\n• Moscovium\n• Livermorium\n• Tennessine\n• Oganesson",
+    "Boxes": 105,
+    "FocusOrder": [
+      "ul:ss_elem_list"
+    ],
+    "ActivationChangedDOM": true,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-combobox-select-only",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "Favorite Fruit",
+    "Boxes": 13,
+    "FocusOrder": [
+      "div:combo1"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-combobox-select-only",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "Favorite Fruit",
+    "Boxes": 13,
+    "FocusOrder": [
+      "div:combo1"
+    ],
+    "ActivationChangedDOM": true,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-combobox-select-only",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "Favorite Fruit",
+    "Boxes": 13,
+    "FocusOrder": [
+      "div:combo1"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-combobox-select-only",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "Favorite Fruit",
+    "Boxes": 13,
+    "FocusOrder": [
+      "div:combo1"
+    ],
+    "ActivationChangedDOM": true,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-dialog",
+    "Width": 320,
+    "Scripts": false,
+    "Text": "Add Delivery Address",
+    "Boxes": 13,
+    "FocusOrder": [
+      "button:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-dialog",
+    "Width": 320,
+    "Scripts": true,
+    "Text": "Add Delivery Address",
+    "Boxes": 13,
+    "FocusOrder": [
+      "button:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-dialog",
+    "Width": 800,
+    "Scripts": false,
+    "Text": "Add Delivery Address",
+    "Boxes": 13,
+    "FocusOrder": [
+      "button:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  },
+  {
+    "Warnings": null,
+    "ID": "apg-dialog",
+    "Width": 800,
+    "Scripts": true,
+    "Text": "Add Delivery Address",
+    "Boxes": 13,
+    "FocusOrder": [
+      "button:"
+    ],
+    "ActivationChangedDOM": false,
+    "Logs": null
+  }
+]

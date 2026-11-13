@@ -1,0 +1,2 @@
+# Preserve upstream/template whitespace in the hashed survey fixtures.
+corpus/** -whitespace

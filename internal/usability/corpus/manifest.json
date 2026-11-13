@@ -1,0 +1,686 @@
+{
+  "upstream": {
+    "govuk": "a11bd3316363ab4702fcef81d6ce06a947c464ef",
+    "apg": "f14b2490a6728cda85fd7feafbd148b3c3eaf038"
+  },
+  "cases": [
+    {
+      "id": "govuk-details",
+      "source": "packages/govuk-frontend/src/govuk/components/details/details.yaml",
+      "example": "default",
+      "html": "govuk-details.html",
+      "css": [
+        "govuk/dist/govuk-frontend-6.6.0.min.css"
+      ],
+      "scripts": [
+        {
+          "code": "document.body.className += ' js-enabled' + ('noModule' in HTMLScriptElement.prototype ? ' govuk-frontend-supported' : '');",
+          "type": ""
+        },
+        {
+          "path": "govuk/dist/govuk-frontend-6.6.0.min.js",
+          "type": "module"
+        },
+        {
+          "code": "import { initAll } from './govuk/dist/govuk-frontend-6.6.0.min.js'; initAll();",
+          "type": "module"
+        }
+      ]
+    },
+    {
+      "id": "govuk-accordion",
+      "source": "packages/govuk-frontend/src/govuk/components/accordion/accordion.yaml",
+      "example": "default",
+      "html": "govuk-accordion.html",
+      "css": [
+        "govuk/dist/govuk-frontend-6.6.0.min.css"
+      ],
+      "scripts": [
+        {
+          "code": "document.body.className += ' js-enabled' + ('noModule' in HTMLScriptElement.prototype ? ' govuk-frontend-supported' : '');",
+          "type": ""
+        },
+        {
+          "path": "govuk/dist/govuk-frontend-6.6.0.min.js",
+          "type": "module"
+        },
+        {
+          "code": "import { initAll } from './govuk/dist/govuk-frontend-6.6.0.min.js'; initAll();",
+          "type": "module"
+        }
+      ]
+    },
+    {
+      "id": "govuk-checkboxes",
+      "source": "packages/govuk-frontend/src/govuk/components/checkboxes/checkboxes.yaml",
+      "example": "with conditional items",
+      "html": "govuk-checkboxes.html",
+      "css": [
+        "govuk/dist/govuk-frontend-6.6.0.min.css"
+      ],
+      "scripts": [
+        {
+          "code": "document.body.className += ' js-enabled' + ('noModule' in HTMLScriptElement.prototype ? ' govuk-frontend-supported' : '');",
+          "type": ""
+        },
+        {
+          "path": "govuk/dist/govuk-frontend-6.6.0.min.js",
+          "type": "module"
+        },
+        {
+          "code": "import { initAll } from './govuk/dist/govuk-frontend-6.6.0.min.js'; initAll();",
+          "type": "module"
+        }
+      ]
+    },
+    {
+      "id": "govuk-radios",
+      "source": "packages/govuk-frontend/src/govuk/components/radios/radios.yaml",
+      "example": "with conditional items",
+      "html": "govuk-radios.html",
+      "css": [
+        "govuk/dist/govuk-frontend-6.6.0.min.css"
+      ],
+      "scripts": [
+        {
+          "code": "document.body.className += ' js-enabled' + ('noModule' in HTMLScriptElement.prototype ? ' govuk-frontend-supported' : '');",
+          "type": ""
+        },
+        {
+          "path": "govuk/dist/govuk-frontend-6.6.0.min.js",
+          "type": "module"
+        },
+        {
+          "code": "import { initAll } from './govuk/dist/govuk-frontend-6.6.0.min.js'; initAll();",
+          "type": "module"
+        }
+      ]
+    },
+    {
+      "id": "govuk-input",
+      "source": "packages/govuk-frontend/src/govuk/components/input/input.yaml",
+      "example": "with error and hint",
+      "html": "govuk-input.html",
+      "css": [
+        "govuk/dist/govuk-frontend-6.6.0.min.css"
+      ],
+      "scripts": [
+        {
+          "code": "document.body.className += ' js-enabled' + ('noModule' in HTMLScriptElement.prototype ? ' govuk-frontend-supported' : '');",
+          "type": ""
+        },
+        {
+          "path": "govuk/dist/govuk-frontend-6.6.0.min.js",
+          "type": "module"
+        },
+        {
+          "code": "import { initAll } from './govuk/dist/govuk-frontend-6.6.0.min.js'; initAll();",
+          "type": "module"
+        }
+      ]
+    },
+    {
+      "id": "govuk-textarea",
+      "source": "packages/govuk-frontend/src/govuk/components/textarea/textarea.yaml",
+      "example": "with hint",
+      "html": "govuk-textarea.html",
+      "css": [
+        "govuk/dist/govuk-frontend-6.6.0.min.css"
+      ],
+      "scripts": [
+        {
+          "code": "document.body.className += ' js-enabled' + ('noModule' in HTMLScriptElement.prototype ? ' govuk-frontend-supported' : '');",
+          "type": ""
+        },
+        {
+          "path": "govuk/dist/govuk-frontend-6.6.0.min.js",
+          "type": "module"
+        },
+        {
+          "code": "import { initAll } from './govuk/dist/govuk-frontend-6.6.0.min.js'; initAll();",
+          "type": "module"
+        }
+      ]
+    },
+    {
+      "id": "govuk-select",
+      "source": "packages/govuk-frontend/src/govuk/components/select/select.yaml",
+      "example": "with hint text and error message",
+      "html": "govuk-select.html",
+      "css": [
+        "govuk/dist/govuk-frontend-6.6.0.min.css"
+      ],
+      "scripts": [
+        {
+          "code": "document.body.className += ' js-enabled' + ('noModule' in HTMLScriptElement.prototype ? ' govuk-frontend-supported' : '');",
+          "type": ""
+        },
+        {
+          "path": "govuk/dist/govuk-frontend-6.6.0.min.js",
+          "type": "module"
+        },
+        {
+          "code": "import { initAll } from './govuk/dist/govuk-frontend-6.6.0.min.js'; initAll();",
+          "type": "module"
+        }
+      ]
+    },
+    {
+      "id": "govuk-date-input",
+      "source": "packages/govuk-frontend/src/govuk/components/date-input/date-input.yaml",
+      "example": "with error message and hint",
+      "html": "govuk-date-input.html",
+      "css": [
+        "govuk/dist/govuk-frontend-6.6.0.min.css"
+      ],
+      "scripts": [
+        {
+          "code": "document.body.className += ' js-enabled' + ('noModule' in HTMLScriptElement.prototype ? ' govuk-frontend-supported' : '');",
+          "type": ""
+        },
+        {
+          "path": "govuk/dist/govuk-frontend-6.6.0.min.js",
+          "type": "module"
+        },
+        {
+          "code": "import { initAll } from './govuk/dist/govuk-frontend-6.6.0.min.js'; initAll();",
+          "type": "module"
+        }
+      ]
+    },
+    {
+      "id": "govuk-error-summary",
+      "source": "packages/govuk-frontend/src/govuk/components/error-summary/error-summary.yaml",
+      "example": "default",
+      "html": "govuk-error-summary.html",
+      "css": [
+        "govuk/dist/govuk-frontend-6.6.0.min.css"
+      ],
+      "scripts": [
+        {
+          "code": "document.body.className += ' js-enabled' + ('noModule' in HTMLScriptElement.prototype ? ' govuk-frontend-supported' : '');",
+          "type": ""
+        },
+        {
+          "path": "govuk/dist/govuk-frontend-6.6.0.min.js",
+          "type": "module"
+        },
+        {
+          "code": "import { initAll } from './govuk/dist/govuk-frontend-6.6.0.min.js'; initAll();",
+          "type": "module"
+        }
+      ]
+    },
+    {
+      "id": "govuk-tabs",
+      "source": "packages/govuk-frontend/src/govuk/components/tabs/tabs.yaml",
+      "example": "default",
+      "html": "govuk-tabs.html",
+      "css": [
+        "govuk/dist/govuk-frontend-6.6.0.min.css"
+      ],
+      "scripts": [
+        {
+          "code": "document.body.className += ' js-enabled' + ('noModule' in HTMLScriptElement.prototype ? ' govuk-frontend-supported' : '');",
+          "type": ""
+        },
+        {
+          "path": "govuk/dist/govuk-frontend-6.6.0.min.js",
+          "type": "module"
+        },
+        {
+          "code": "import { initAll } from './govuk/dist/govuk-frontend-6.6.0.min.js'; initAll();",
+          "type": "module"
+        }
+      ]
+    },
+    {
+      "id": "govuk-service-navigation",
+      "source": "packages/govuk-frontend/src/govuk/components/service-navigation/service-navigation.yaml",
+      "example": "with service name and navigation",
+      "html": "govuk-service-navigation.html",
+      "css": [
+        "govuk/dist/govuk-frontend-6.6.0.min.css"
+      ],
+      "scripts": [
+        {
+          "code": "document.body.className += ' js-enabled' + ('noModule' in HTMLScriptElement.prototype ? ' govuk-frontend-supported' : '');",
+          "type": ""
+        },
+        {
+          "path": "govuk/dist/govuk-frontend-6.6.0.min.js",
+          "type": "module"
+        },
+        {
+          "code": "import { initAll } from './govuk/dist/govuk-frontend-6.6.0.min.js'; initAll();",
+          "type": "module"
+        }
+      ]
+    },
+    {
+      "id": "govuk-pagination",
+      "source": "packages/govuk-frontend/src/govuk/components/pagination/pagination.yaml",
+      "example": "default",
+      "html": "govuk-pagination.html",
+      "css": [
+        "govuk/dist/govuk-frontend-6.6.0.min.css"
+      ],
+      "scripts": [
+        {
+          "code": "document.body.className += ' js-enabled' + ('noModule' in HTMLScriptElement.prototype ? ' govuk-frontend-supported' : '');",
+          "type": ""
+        },
+        {
+          "path": "govuk/dist/govuk-frontend-6.6.0.min.js",
+          "type": "module"
+        },
+        {
+          "code": "import { initAll } from './govuk/dist/govuk-frontend-6.6.0.min.js'; initAll();",
+          "type": "module"
+        }
+      ]
+    },
+    {
+      "id": "govuk-summary-list",
+      "source": "packages/govuk-frontend/src/govuk/components/summary-list/summary-list.yaml",
+      "example": "with actions",
+      "html": "govuk-summary-list.html",
+      "css": [
+        "govuk/dist/govuk-frontend-6.6.0.min.css"
+      ],
+      "scripts": [
+        {
+          "code": "document.body.className += ' js-enabled' + ('noModule' in HTMLScriptElement.prototype ? ' govuk-frontend-supported' : '');",
+          "type": ""
+        },
+        {
+          "path": "govuk/dist/govuk-frontend-6.6.0.min.js",
+          "type": "module"
+        },
+        {
+          "code": "import { initAll } from './govuk/dist/govuk-frontend-6.6.0.min.js'; initAll();",
+          "type": "module"
+        }
+      ]
+    },
+    {
+      "id": "govuk-table",
+      "source": "packages/govuk-frontend/src/govuk/components/table/table.yaml",
+      "example": "with head and caption",
+      "html": "govuk-table.html",
+      "css": [
+        "govuk/dist/govuk-frontend-6.6.0.min.css"
+      ],
+      "scripts": [
+        {
+          "code": "document.body.className += ' js-enabled' + ('noModule' in HTMLScriptElement.prototype ? ' govuk-frontend-supported' : '');",
+          "type": ""
+        },
+        {
+          "path": "govuk/dist/govuk-frontend-6.6.0.min.js",
+          "type": "module"
+        },
+        {
+          "code": "import { initAll } from './govuk/dist/govuk-frontend-6.6.0.min.js'; initAll();",
+          "type": "module"
+        }
+      ]
+    },
+    {
+      "id": "govuk-task-list",
+      "source": "packages/govuk-frontend/src/govuk/components/task-list/task-list.yaml",
+      "example": "default",
+      "html": "govuk-task-list.html",
+      "css": [
+        "govuk/dist/govuk-frontend-6.6.0.min.css"
+      ],
+      "scripts": [
+        {
+          "code": "document.body.className += ' js-enabled' + ('noModule' in HTMLScriptElement.prototype ? ' govuk-frontend-supported' : '');",
+          "type": ""
+        },
+        {
+          "path": "govuk/dist/govuk-frontend-6.6.0.min.js",
+          "type": "module"
+        },
+        {
+          "code": "import { initAll } from './govuk/dist/govuk-frontend-6.6.0.min.js'; initAll();",
+          "type": "module"
+        }
+      ]
+    },
+    {
+      "id": "govuk-notification-banner",
+      "source": "packages/govuk-frontend/src/govuk/components/notification-banner/notification-banner.yaml",
+      "example": "with type as success",
+      "html": "govuk-notification-banner.html",
+      "css": [
+        "govuk/dist/govuk-frontend-6.6.0.min.css"
+      ],
+      "scripts": [
+        {
+          "code": "document.body.className += ' js-enabled' + ('noModule' in HTMLScriptElement.prototype ? ' govuk-frontend-supported' : '');",
+          "type": ""
+        },
+        {
+          "path": "govuk/dist/govuk-frontend-6.6.0.min.js",
+          "type": "module"
+        },
+        {
+          "code": "import { initAll } from './govuk/dist/govuk-frontend-6.6.0.min.js'; initAll();",
+          "type": "module"
+        }
+      ]
+    },
+    {
+      "id": "govuk-skip-link",
+      "source": "packages/govuk-frontend/src/govuk/components/skip-link/skip-link.yaml",
+      "example": "default",
+      "html": "govuk-skip-link.html",
+      "css": [
+        "govuk/dist/govuk-frontend-6.6.0.min.css"
+      ],
+      "scripts": [
+        {
+          "code": "document.body.className += ' js-enabled' + ('noModule' in HTMLScriptElement.prototype ? ' govuk-frontend-supported' : '');",
+          "type": ""
+        },
+        {
+          "path": "govuk/dist/govuk-frontend-6.6.0.min.js",
+          "type": "module"
+        },
+        {
+          "code": "import { initAll } from './govuk/dist/govuk-frontend-6.6.0.min.js'; initAll();",
+          "type": "module"
+        }
+      ]
+    },
+    {
+      "id": "govuk-file-upload",
+      "source": "packages/govuk-frontend/src/govuk/components/file-upload/file-upload.yaml",
+      "example": "default",
+      "html": "govuk-file-upload.html",
+      "css": [
+        "govuk/dist/govuk-frontend-6.6.0.min.css"
+      ],
+      "scripts": [
+        {
+          "code": "document.body.className += ' js-enabled' + ('noModule' in HTMLScriptElement.prototype ? ' govuk-frontend-supported' : '');",
+          "type": ""
+        },
+        {
+          "path": "govuk/dist/govuk-frontend-6.6.0.min.js",
+          "type": "module"
+        },
+        {
+          "code": "import { initAll } from './govuk/dist/govuk-frontend-6.6.0.min.js'; initAll();",
+          "type": "module"
+        }
+      ]
+    },
+    {
+      "id": "govuk-password-input",
+      "source": "packages/govuk-frontend/src/govuk/components/password-input/password-input.yaml",
+      "example": "default",
+      "html": "govuk-password-input.html",
+      "css": [
+        "govuk/dist/govuk-frontend-6.6.0.min.css"
+      ],
+      "scripts": [
+        {
+          "code": "document.body.className += ' js-enabled' + ('noModule' in HTMLScriptElement.prototype ? ' govuk-frontend-supported' : '');",
+          "type": ""
+        },
+        {
+          "path": "govuk/dist/govuk-frontend-6.6.0.min.js",
+          "type": "module"
+        },
+        {
+          "code": "import { initAll } from './govuk/dist/govuk-frontend-6.6.0.min.js'; initAll();",
+          "type": "module"
+        }
+      ]
+    },
+    {
+      "id": "govuk-character-count",
+      "source": "packages/govuk-frontend/src/govuk/components/character-count/character-count.yaml",
+      "example": "default",
+      "html": "govuk-character-count.html",
+      "css": [
+        "govuk/dist/govuk-frontend-6.6.0.min.css"
+      ],
+      "scripts": [
+        {
+          "code": "document.body.className += ' js-enabled' + ('noModule' in HTMLScriptElement.prototype ? ' govuk-frontend-supported' : '');",
+          "type": ""
+        },
+        {
+          "path": "govuk/dist/govuk-frontend-6.6.0.min.js",
+          "type": "module"
+        },
+        {
+          "code": "import { initAll } from './govuk/dist/govuk-frontend-6.6.0.min.js'; initAll();",
+          "type": "module"
+        }
+      ]
+    },
+    {
+      "id": "apg-accordion",
+      "source": "content/patterns/accordion/examples/accordion.html",
+      "html": "apg-accordion.html",
+      "css": [
+        "apg/content/shared/css/core.css",
+        "apg/content/patterns/accordion/examples/css/accordion.css"
+      ],
+      "scripts": [
+        {
+          "path": "apg/content/patterns/accordion/examples/js/accordion.js",
+          "type": ""
+        }
+      ]
+    },
+    {
+      "id": "apg-disclosure-navigation",
+      "source": "content/patterns/disclosure/examples/disclosure-navigation.html",
+      "html": "apg-disclosure-navigation.html",
+      "css": [
+        "apg/content/shared/css/core.css",
+        "apg/content/patterns/disclosure/examples/css/disclosure-navigation.css"
+      ],
+      "scripts": [
+        {
+          "path": "apg/content/patterns/disclosure/examples/js/disclosureMenu.js",
+          "type": ""
+        }
+      ]
+    },
+    {
+      "id": "apg-tabs-manual",
+      "source": "content/patterns/tabs/examples/tabs-manual.html",
+      "html": "apg-tabs-manual.html",
+      "css": [
+        "apg/content/shared/css/core.css",
+        "apg/content/patterns/tabs/examples/css/tabs.css"
+      ],
+      "scripts": [
+        {
+          "path": "apg/content/patterns/tabs/examples/js/tabs-manual.js",
+          "type": ""
+        }
+      ]
+    },
+    {
+      "id": "apg-checkbox",
+      "source": "content/patterns/checkbox/examples/checkbox.html",
+      "html": "apg-checkbox.html",
+      "css": [
+        "apg/content/shared/css/core.css",
+        "apg/content/patterns/checkbox/examples/css/checkbox.css"
+      ],
+      "scripts": [
+        {
+          "path": "apg/content/patterns/checkbox/examples/js/checkbox.js",
+          "type": ""
+        }
+      ]
+    },
+    {
+      "id": "apg-radio",
+      "source": "content/patterns/radio/examples/radio.html",
+      "html": "apg-radio.html",
+      "css": [
+        "apg/content/shared/css/core.css",
+        "apg/content/patterns/radio/examples/css/radio.css"
+      ],
+      "scripts": [
+        {
+          "path": "apg/content/patterns/radio/examples/js/radio.js",
+          "type": ""
+        }
+      ]
+    },
+    {
+      "id": "apg-button",
+      "source": "content/patterns/button/examples/button.html",
+      "html": "apg-button.html",
+      "css": [
+        "apg/content/shared/css/core.css",
+        "apg/content/patterns/button/examples/css/button.css"
+      ],
+      "scripts": [
+        {
+          "path": "apg/content/patterns/button/examples/js/button.js",
+          "type": ""
+        }
+      ]
+    },
+    {
+      "id": "apg-menu-button-links",
+      "source": "content/patterns/menu-button/examples/menu-button-links.html",
+      "html": "apg-menu-button-links.html",
+      "css": [
+        "apg/content/shared/css/core.css",
+        "apg/content/patterns/menu-button/examples/css/menu-button-links.css"
+      ],
+      "scripts": [
+        {
+          "path": "apg/content/patterns/menu-button/examples/js/menu-button-links.js",
+          "type": ""
+        }
+      ]
+    },
+    {
+      "id": "apg-listbox-scrollable",
+      "source": "content/patterns/listbox/examples/listbox-scrollable.html",
+      "html": "apg-listbox-scrollable.html",
+      "css": [
+        "apg/content/shared/css/core.css",
+        "apg/content/patterns/listbox/examples/css/listbox.css"
+      ],
+      "scripts": [
+        {
+          "path": "apg/content/patterns/listbox/examples/js/listbox.js",
+          "type": ""
+        },
+        {
+          "path": "apg/content/patterns/listbox/examples/js/listbox-scrollable.js",
+          "type": ""
+        }
+      ]
+    },
+    {
+      "id": "apg-combobox-select-only",
+      "source": "content/patterns/combobox/examples/combobox-select-only.html",
+      "html": "apg-combobox-select-only.html",
+      "css": [
+        "apg/content/shared/css/core.css",
+        "apg/content/patterns/combobox/examples/css/select-only.css"
+      ],
+      "scripts": [
+        {
+          "path": "apg/content/patterns/combobox/examples/js/select-only.js",
+          "type": ""
+        }
+      ]
+    },
+    {
+      "id": "apg-dialog",
+      "source": "content/patterns/dialog-modal/examples/dialog.html",
+      "html": "apg-dialog.html",
+      "css": [
+        "apg/content/shared/css/core.css",
+        "apg/content/patterns/dialog-modal/examples/css/dialog.css"
+      ],
+      "scripts": [
+        {
+          "path": "apg/content/shared/js/utils.js",
+          "type": ""
+        },
+        {
+          "path": "apg/content/patterns/dialog-modal/examples/js/dialog.js",
+          "type": ""
+        }
+      ]
+    }
+  ],
+  "sha256": {
+    "govuk/dist/govuk-frontend-6.6.0.min.css": "c0bcea48a2c9bc7429b5419dbe28a3314355f89df20e2e8fb4e56cc90e64479e",
+    "govuk/dist/govuk-frontend-6.6.0.min.js": "0df90d9ba11d2daeb415b0fbaed10234c892c9c7a0f97213e772047da0fea027",
+    "apg/content/shared/css/github.css": "3183e2c601dc6f4463c0507a848c7a8cb4cc6de5c56341c1e4263a5cf6638977",
+    "govuk/LICENSE.txt": "c652f35b1f2e5b88eb49f1e8a935eec79b4761a81666ace576e1af723f4a9238",
+    "apg/LICENSE.md": "7519b8221b1bf98b4105477c2fec93323e97a1c9699b3856ec65f492e9076727",
+    "govuk-details.html": "fe89fb43cf90162fc849b970d7a445928e3bfb733f7466fc0eff5afa93102118",
+    "govuk-accordion.html": "ca9ebc0af4192f13d465bde23b40f81b8e603c4a8d7b291b28fefc9ed4d53688",
+    "govuk-checkboxes.html": "c090de65db77edd3a23447091d2c39e4bb4064ae6d41fd3bc2901415e4b26435",
+    "govuk-radios.html": "a83089bacced5c5a28ab4639f77d351b1a38613c04a7e99e16c07fd4e681d00e",
+    "govuk-input.html": "7d23715c18258cc06ca1c320f2f207a58da94a09ffec82d7dd4fff495f86296c",
+    "govuk-textarea.html": "ab64e065188a82b970aea62cf12d0354f153633bbd951672eb0ce5cb353f7733",
+    "govuk-select.html": "d9d4f57f3de1efd8367fb416555eb088eed6e3234b358dd60ff52d0a3eea295f",
+    "govuk-date-input.html": "b90066fbfd01a6108ac066ee2a6fb15a8f532d3a4f7612e2c476bf0e022b4bb8",
+    "govuk-error-summary.html": "79be02d0a5ced0012f7cff02bb97f8a5e23ba36f3d63d5059a7e6e3d02741d01",
+    "govuk-tabs.html": "93a9630598aef46c2b0f763d3f1cb8cefde3db88c471ad2a976d0390809b5e04",
+    "govuk-service-navigation.html": "9f16780e108c1db5ec81006a5d1a3b75f513ac396877939a27317ca7193cb6d8",
+    "govuk-pagination.html": "8817a2ef98b32827ef3dab5cddadcafe64164a6f3d13b7f64d506e36d714c641",
+    "govuk-summary-list.html": "06911e009a239aad563b6ccb01dbcfcc93af0269f98da4e800a7348545035507",
+    "govuk-table.html": "bdf4161504b35d61c129805e093c9fd73b73a393afff66c93b4f527b5c0ce3a6",
+    "govuk-task-list.html": "80956c52b5bb4da80f4d7297e70bc64c97eb680cd1ac989126b8fc152a3ae633",
+    "govuk-notification-banner.html": "58d94fc68f628d60329f164944f663cbeb0a48573fa365d94f6db6d8f40a1c94",
+    "govuk-skip-link.html": "335c1299b33fe7cc6c88927c66147accdbc231ba5c3c969d7ae45e2ea5991e51",
+    "govuk-file-upload.html": "90b79ce7871d6c750bcd1cf759fd8a5b3bdfd9ace1c662d17ac70295f23e8d9e",
+    "govuk-password-input.html": "559e1a4a940089a9cf34a53795edc503909bbc6e3fd36fed8596589c2f8ab305",
+    "govuk-character-count.html": "dd29d5a29e4cc213b36bb17937522460bc6c7f26402abd7ed9fc7a528d831526",
+    "apg/content/shared/css/core.css": "c4e759265a9d148f5910b86d7bec9744f029bc74b537531fa1663891c2c87435",
+    "apg/content/patterns/accordion/examples/css/accordion.css": "2ebfee0983bbb7d4f0e7d40249ca9bc7d2b284e6a5f29ce6d977de095d0d92d8",
+    "apg/content/patterns/accordion/examples/js/accordion.js": "91c470a0d52a50fa43f1400cc1f5bc9508ba26a222d97170d8aae0f3a0893788",
+    "apg-accordion.html": "a5bcb2903c79e936c67a41292f533b9fc9162dad63ccd132f17bbc1a5751ce11",
+    "apg/content/patterns/disclosure/examples/css/disclosure-navigation.css": "f8af59250e7fc5cc4ae0870c4240fbf509663fb0413af32a509ab423c61275bb",
+    "apg/content/patterns/disclosure/examples/js/disclosureMenu.js": "db8618f3db03612c3c127c915fa915509c0ecc877031baea4cc76380598b536b",
+    "apg-disclosure-navigation.html": "bd8b86b020c4e072c050edf38ad8a4ece4d379e4bf020f84a4bbbf8cd781a267",
+    "apg/content/patterns/tabs/examples/css/tabs.css": "88335e4cf3c790441dc4f79f235ae8718c86544e723f5327910c278d3c915b57",
+    "apg/content/patterns/tabs/examples/js/tabs-manual.js": "546985d94acf58e5a393989ff53abbbe9130dde6ee5549ee442326fb9be300eb",
+    "apg-tabs-manual.html": "59eea1009286e05542b3afbd6c32f69f16f6c13956b07fea55d7de959b12efa5",
+    "apg/content/patterns/checkbox/examples/css/checkbox.css": "ee4c2207e3ff6c0f4399dba4012e7ad715e51e8518fa97f1951297dc19bb9d4c",
+    "apg/content/patterns/checkbox/examples/js/checkbox.js": "cac2ee505252f9c47969c90b455364e1663c84b31edebb6f8c1d1907da034bc5",
+    "apg-checkbox.html": "8ebdf546feeba3c2bd68cd73ff44f684dd00271abb09a954ff16f81714e01bd0",
+    "apg/content/patterns/radio/examples/css/radio.css": "5652a091b391cd1c4c3356a5b19a4686bda175c688f4924d4d2b2aa13bdbdff4",
+    "apg/content/patterns/radio/examples/js/radio.js": "ec9da2c086793b1802f029cf56f74edcd506fde9f69080c61308391ea2b3591d",
+    "apg-radio.html": "f1088a70c05cd6e9930056d861565192881f0dc7ac0511d82c421e6b576b0955",
+    "apg/content/patterns/button/examples/css/button.css": "741b391a30181951081edb5e6f91e78ee210773c191d4a85268d2a5fcde9a9a1",
+    "apg/content/patterns/button/examples/js/button.js": "f71e2ac605bdc457aa03f68997f221d59e262b9ae39b9b11965ca4d54a4584db",
+    "apg-button.html": "43ff4a1265f93687c655c7518fae7cef379d6156e84cccedf27fb0b3a88ff8aa",
+    "apg/content/patterns/menu-button/examples/css/menu-button-links.css": "6391834a48d6cfe8dbcb2fc359f074684507f6ca0ade8b79234f43d2917e0ca5",
+    "apg/content/patterns/menu-button/examples/js/menu-button-links.js": "312abde6d7d705b8b485532e9221bf31cfb2dae6b20bac6adff4f47aacc3a17f",
+    "apg-menu-button-links.html": "ec3312bb30ab18f8874b3ff04fb9734eec17e6a0813acedbbe5c8e69822bf0fc",
+    "apg/content/patterns/listbox/examples/css/listbox.css": "3a5e4f6558bd7be1d4e09178beba38cd050bd8188338a80fe7eda8244f3ab130",
+    "apg/content/patterns/listbox/examples/js/listbox.js": "e792d96ec9777e4b52f66adc338e02c7db7da5de33d90205ba1475335ffa7b0b",
+    "apg/content/patterns/listbox/examples/js/listbox-scrollable.js": "774aaeda5e42b57c7e3cd16d16ec395a75c593c0bf5443e695757a0efef11d5b",
+    "apg-listbox-scrollable.html": "40b0e64b423cf065b10dfc8a9e6b975af4de036b884d5ab9e18bbf86ffd4c38f",
+    "apg/content/patterns/combobox/examples/css/select-only.css": "d9baa929f1d54d7f7d1b96b25e9fc9908c89e8a44686d723c46f0272e02990f6",
+    "apg/content/patterns/combobox/examples/js/select-only.js": "0a0c4dedd92880ded7f73008ec2b609055614d362503c6361b74dce13c9c3552",
+    "apg-combobox-select-only.html": "9a5f1c337ac0e6fe09422fe57bf21f3fed466cb55a4fe96725e45f4475feb1bb",
+    "apg/content/patterns/dialog-modal/examples/css/dialog.css": "dcd7c8e47e752cf6ad03682fb97f9347b1773b97137511839c81b2f10f1d36fc",
+    "apg/content/shared/js/utils.js": "d695af6576102b5b4ced5ceb0c405f7c51d764044e951d28e7d0c11600fb6b59",
+    "apg/content/patterns/dialog-modal/examples/js/dialog.js": "b02981c533f33c3447b31292733e06d54bf92a8335b3bc41b5f4dcd2c61a6126",
+    "apg-dialog.html": "2e9d10484147529babb63ab134272d51f1dd79f36fa2650e554091fdac68b6ac"
+  }
+}
