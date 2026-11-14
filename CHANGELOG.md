@@ -2,13 +2,40 @@
 
 ## Unreleased
 
-- Add live named-details exclusivity, summary activation, reflected open state,
-  and `:open`/`:popover-open` DOM queries and element `matches()`.
-- Add private popover state, show/hide/toggle methods, declarative popover
-  buttons/commands, cancelable beforetoggle and bounded asynchronous toggle
-  delivery. These local actions confer no navigation or trusted activation.
-- Make reduced-motion, hover, and scripting media answers reflect host state.
+## v0.3.0 (2026-11-13)
 
+This release restores detail in SVG logos, adds local Chrome/glynx comparison
+reports, and expands declarative disclosure and popover support.
+
+- **SVG rendering:** preserve even-odd holes in compound paths, including the
+  Rust blog logo, using oksvg v0.1.7 and the rasterx v0.1.1 fork. The fix works
+  with published dependencies; no local workspace is required.
+- **Comparison tooling:** add `task compare -- --out DIR URL` to capture Chrome
+  and the glynx loop at the same CSS viewport. Local reports include screenshots,
+  pixel differences, geometry and diagnostics, plus image crops matched by
+  resource URL to help distinguish image detail from page-layout differences.
+- **Disclosures and popovers:** add live named-details exclusivity, summary
+  activation, reflected open state, and `:open`/`:popover-open` DOM queries and
+  element `matches()`. Add private popover state, show/hide/toggle methods,
+  declarative buttons/commands, cancelable beforetoggle and bounded asynchronous
+  toggle delivery. These local actions confer no navigation or trusted activation.
+- **Media queries:** make reduced-motion, hover and scripting answers reflect
+  host state.
+- **Usability coverage:** add pinned GOV.UK and WAI-ARIA APG fixtures with a
+  reproducible survey of initial content, focus candidates and activation.
+  The baseline documents remaining gaps, including content hidden by partial
+  JavaScript enhancement; it is not a claim of complete widget support.
+- **Dependencies:** update Go dependencies in both modules, including Goja,
+  Lip Gloss, ntconfine, ntmediabox and ntpicture; regenerate third-party notices.
+  Retain Go 1.26.11, the WASM-capable Bubble Tea fork and WHATWG URL v0.6.2
+  (newer URL parser releases require Go 1.27 and a module-path migration).
+- **Development:** provide an optional local SVG workspace template while normal
+  tasks continue to use published dependencies with `GOWORK=off`. Consolidate
+  test timeout handling around one generous give-up deadline per package.
+
+Browser profiles and host-authority gates are unchanged. Rendering continues to
+use published nthtml v0.6.0; the new DOM state APIs do not imply full browser
+popover presentation or ES module support.
 
 ## v0.2.0 (2026-11-10)
 
