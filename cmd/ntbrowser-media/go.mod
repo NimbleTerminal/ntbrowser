@@ -4,7 +4,7 @@ go 1.26.11
 
 require (
 	nimbleterminal.dev/ntbrowser v0.0.0
-	nimbleterminal.dev/ntmediabox v0.1.0
+	nimbleterminal.dev/ntmediabox v0.2.0
 	nimbleterminal.dev/ntvideo v0.5.1
 )
 
@@ -24,19 +24,19 @@ require (
 	github.com/muesli/cancelreader v0.2.2 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/xo/terminfo v1.3.1 // indirect
-	golang.org/x/image v0.47.0 // indirect
+	golang.org/x/image v0.48.0 // indirect
 	golang.org/x/net v0.62.0 // indirect
-	golang.org/x/sync v0.24.0 // indirect
-	golang.org/x/sys v0.49.0 // indirect
-	golang.org/x/text v0.43.0 // indirect
-	nimbleterminal.dev/ntconfine v0.1.1 // indirect
-	nimbleterminal.dev/ntconfine/pkg/confine v0.1.0 // indirect
-	nimbleterminal.dev/ntmediabox/pkg/mediabox v0.1.0 // indirect
-	nimbleterminal.dev/ntpicture v0.1.5 // indirect
+	golang.org/x/sync v0.25.0 // indirect
+	golang.org/x/sys v0.50.0 // indirect
+	golang.org/x/text v0.44.0 // indirect
+	nimbleterminal.dev/ntconfine v0.2.0 // indirect
+	nimbleterminal.dev/ntconfine/pkg/confine v0.2.0 // indirect
+	nimbleterminal.dev/ntmediabox/pkg/mediabox v0.2.0 // indirect
+	nimbleterminal.dev/ntpicture v0.2.0 // indirect
 )
 
 replace nimbleterminal.dev/ntbrowser => ../..
 
 replace charm.land/bubbletea/v2 => github.com/neomantra/bubbletea/v2 v2.0.0-20261020122444-536722b0bdb6
 
-replace github.com/srwiley/rasterx => github.com/neomantra/rasterx v0.1.0
+replace github.com/srwiley/rasterx => github.com/neomantra/rasterx v0.1.1

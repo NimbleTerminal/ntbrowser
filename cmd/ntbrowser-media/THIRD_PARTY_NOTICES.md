@@ -429,7 +429,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## golang.org/x/image v0.47.0
+## golang.org/x/image v0.48.0
 
 ```
 Copyright 2009 The Go Authors.
@@ -501,7 +501,7 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## golang.org/x/sync v0.24.0
+## golang.org/x/sync v0.25.0
 
 ```
 Copyright 2009 The Go Authors.
@@ -533,7 +533,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## golang.org/x/sys v0.49.0
+## golang.org/x/sys v0.50.0
 
 ```
 Copyright 2009 The Go Authors.
@@ -565,7 +565,7 @@ THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 ```
 
-## nimbleterminal.dev/ntconfine v0.1.1
+## nimbleterminal.dev/ntconfine v0.2.0
 
 ```
 Copyright (c) 2026 Neomantra Corp. All rights reserved.
@@ -1269,7 +1269,7 @@ For more information on this, and how to apply and follow the GNU AGPL, see
 <https://www.gnu.org/licenses/>.
 ```
 
-## nimbleterminal.dev/ntconfine/pkg/confine v0.1.0
+## nimbleterminal.dev/ntconfine/pkg/confine v0.2.0
 
 ```
 MIT License
@@ -1295,7 +1295,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## nimbleterminal.dev/ntmediabox v0.1.0
+## nimbleterminal.dev/ntmediabox v0.2.0
 
 ```
 Copyright (c) 2026 Neomantra Corp. All rights reserved.
@@ -1999,7 +1999,7 @@ For more information on this, and how to apply and follow the GNU AGPL, see
 <https://www.gnu.org/licenses/>.
 ```
 
-## nimbleterminal.dev/ntmediabox/pkg/mediabox v0.1.0
+## nimbleterminal.dev/ntmediabox/pkg/mediabox v0.2.0
 
 ```
 MIT License
@@ -2025,7 +2025,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## nimbleterminal.dev/ntpicture v0.1.5
+## nimbleterminal.dev/ntpicture v0.2.0
 
 ```
 MIT License
