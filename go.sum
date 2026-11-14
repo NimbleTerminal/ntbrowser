@@ -166,8 +166,8 @@ nimbleterminal.dev/ntfonts v0.3.1 h1:edPKRRMG3mJDGEEiqYNXRSakYnx9cSr2KpVLpmzPi5o
 nimbleterminal.dev/ntfonts v0.3.1/go.mod h1:G8a7vDkY3uYxrydtdTlJ7KbZpxtL4MTimyMhkwdPr2Q=
 nimbleterminal.dev/ntfonts/cjk v0.3.1 h1:sUXLRA7U7IQc8YKZzkJ8ks3jtMcbeeaaZA21Vfbv6Es=
 nimbleterminal.dev/ntfonts/cjk v0.3.1/go.mod h1:PZj1pWP7Bfk9k8PTLhX2UzRsjSVyt3MeI9x/NqFIGss=
-nimbleterminal.dev/nthtml v0.7.0 h1:tMNVYI0sockMFdy5MzgGPbGPjwGGjqemAoJrr32L6L0=
-nimbleterminal.dev/nthtml v0.7.0/go.mod h1:TTNfhrVNxnDsq2mxNeAK36bH/9ZoAvhk3U3A4GZqwIo=
+nimbleterminal.dev/nthtml v0.7.1-0.20261114082130-141de7abe3fc h1:DufkX2CX3tvH1yxXy3DHzr2ThDUVg+18jCr0B9NqqQM=
+nimbleterminal.dev/nthtml v0.7.1-0.20261114082130-141de7abe3fc/go.mod h1:TTNfhrVNxnDsq2mxNeAK36bH/9ZoAvhk3U3A4GZqwIo=
 nimbleterminal.dev/ntmediabox v0.2.0 h1:NTbk3DKZ+cD3fzQvEQ3qnF3ZxrlfXhY2ZV+P1tLDcag=
 nimbleterminal.dev/ntmediabox v0.2.0/go.mod h1:uW9BF/dDszKo+QtOp7n1ZX7UzBqh/HCQ3G3J19CnAs0=
 nimbleterminal.dev/ntmediabox/pkg/mediabox v0.2.0 h1:ZgVXiPkIiXZT/S9NnjgfXhrceDKNbgTLsOF6JWgWUCE=

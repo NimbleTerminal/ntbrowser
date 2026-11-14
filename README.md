@@ -132,8 +132,8 @@ WASM compilation, notices, builds, and a 30-second DOM fuzz run. Tasks set
 `GOWORK=off CGO_ENABLED=0`. Override the fuzz duration with `task ci DURATION=10s`;
 `task check` remains available for checks without builds or fuzzing.
 
-Dependencies use published module versions, including nthtml v0.7.0 and
-nttypeset v0.3.0. No sibling library checkouts are required. The media helper's
+Dependencies use published module versions, including an nthtml commit pin
+for the CSS parser fix and nttypeset v0.3.0; see `go.mod` for exact versions. No sibling library checkouts are required. The media helper's
 replacement of ntbrowser points to this repository's root module.
 ntbrowser retains the WASM-capable Bubble Tea fork for its compile-only gate.
 Run `task notices` after dependency changes.

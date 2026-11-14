@@ -15,7 +15,7 @@ require (
 	nimbleterminal.dev/ntconfine v0.2.0
 	nimbleterminal.dev/ntfonts v0.3.1
 	nimbleterminal.dev/ntfonts/cjk v0.3.1
-	nimbleterminal.dev/nthtml v0.7.0
+	nimbleterminal.dev/nthtml v0.7.1-0.20261114082130-141de7abe3fc
 	nimbleterminal.dev/ntmediabox v0.2.0
 	nimbleterminal.dev/ntpicture v0.2.0
 	nimbleterminal.dev/nttypeset v0.3.0

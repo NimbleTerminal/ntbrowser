@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Pin the nthtml CSS parser fix by commit, without a new release tag, to prevent
+  malformed UTF-8 and Unicode `var()` queries from panicking during stylesheet
+  admission and rendering.
+
+- Give behavioral example tests explicit script, animation and paint budgets so
+  race instrumentation does not turn the RAF example into a watchdog test.
+
 ## v0.3.1 (2026-11-14)
 
 - Keep browser-comparison captures waiting for the current frame when the paint

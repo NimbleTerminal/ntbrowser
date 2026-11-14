@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	"nimbleterminal.dev/ntbrowser/jsvm"
 	"nimbleterminal.dev/ntbrowser/netpolicy"
 )
 
@@ -28,7 +29,12 @@ func loadExample(t *testing.T, name string, srv *httptest.Server) (*Loop, chanSi
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
 	sink := make(chanSink, 4096)
-	l := New(ctx, Config{Profile: testProfile, Width: 400, MinFrame: time.Millisecond}, sink)
+	// These fixtures assert browser behavior, not wall-clock watchdog limits.
+	// Give animation callbacks the same admitted budget as animation_test.go;
+	// the default 8 ms can expire under race instrumentation on shared runners.
+	p := testProfile
+	p.FrameBudgetMillis = 50
+	l := New(ctx, Config{Profile: p, Script: jsvm.Config{Slice: patience}, PaintDeadline: patience, Width: 400, MinFrame: time.Millisecond}, sink)
 	go l.Run()
 	var f *netpolicy.Fetcher
 	base := "https://example.test/"
