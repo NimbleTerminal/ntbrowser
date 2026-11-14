@@ -287,33 +287,9 @@ func captureGlynxWithPaintDeadline(ctx context.Context, o Options, src Source, p
 	// Freeze capture inputs before shutdown; they are immutable render results.
 	// Ask the same serial painter for the exact viewport, avoiding the terminal
 	// band's row/column ceilings. Keep the result-generation check intact.
-	request := func() {
-		area := image.Rect(0, 0, o.Width, o.Height).Intersect(latest.Result.Bounds())
-		l.Paint(nthtml.PaintRequest{Result: latest.Result, Revision: latest.Gen, Sequence: 1, Context: ctx, Plan: nthtml.PaintPlan{Area: area, Scale: 1}})
-	}
-	request()
-	var raster image.Image
-	for raster == nil {
-		select {
-		case <-ctx.Done():
-			return r, ctx.Err()
-		case msg := <-sink.ch:
-			switch m := msg.(type) {
-			case loop.FrameMsg:
-				if m.Err == nil && m.Result != nil && m.Painted != nil {
-					latest = m
-					request()
-				}
-			case nthtml.PaintReady:
-				if m.Request.Result != latest.Result {
-					continue
-				}
-				if m.Err != nil {
-					return r, m.Err
-				}
-				raster = m.Image
-			}
-		}
+	latest, raster, e := captureViewport(ctx, o, latest, sink.ch, l.Paint)
+	if e != nil {
+		return r, fmt.Errorf("capture viewport: %w", e)
 	}
 	shot := image.NewRGBA(image.Rect(0, 0, o.Width, o.Height))
 	draw.Draw(shot, shot.Bounds(), image.NewUniform(color.White), image.Point{}, draw.Src)
@@ -350,6 +326,47 @@ drain:
 	r.Screenshot = "glynx.png"
 	return r, writePNG(filepath.Join(o.Out, r.Screenshot), shot)
 }
+
+// captureViewport follows frame replacement without accepting stale pixels.
+// A canceled old request is normal when layout finishes ahead of its FrameMsg.
+func captureViewport(ctx context.Context, o Options, latest loop.FrameMsg, messages <-chan tea.Msg, paint func(nthtml.PaintRequest)) (loop.FrameMsg, image.Image, error) {
+	request := func() {
+		area := image.Rect(0, 0, o.Width, o.Height).Intersect(latest.Result.Bounds())
+		paint(nthtml.PaintRequest{Result: latest.Result, Revision: latest.Gen, Sequence: 1, Context: ctx, Plan: nthtml.PaintPlan{Area: area, Scale: 1}})
+	}
+	request()
+	var raster image.Image
+	for raster == nil {
+		select {
+		case <-ctx.Done():
+			return latest, nil, ctx.Err()
+		case msg := <-messages:
+			switch m := msg.(type) {
+			case loop.FrameMsg:
+				if m.Err == nil && m.Result != nil && m.Painted != nil {
+					latest = m
+					request()
+				}
+			case nthtml.PaintReady:
+				if m.Request.Result != latest.Result || m.Request.Revision != latest.Gen {
+					continue
+				}
+				if errors.Is(m.Err, context.Canceled) && ctx.Err() == nil {
+					// The worker has already installed a newer frame; its owner-loop
+					// notification may still be queued. Wait for that frame and request it.
+					continue
+				}
+				if m.Err != nil {
+					return latest, nil, m.Err
+				}
+				raster = m.Image
+			}
+		}
+	}
+
+	return latest, raster, nil
+}
+
 func rect(r image.Rectangle) Rect {
 	return Rect{float64(r.Min.X), float64(r.Min.Y), float64(r.Dx()), float64(r.Dy())}
 }

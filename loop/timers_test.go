@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"nimbleterminal.dev/ntbrowser/jsvm"
 )
 
 // A page that floods setTimeout hits MaxTimers (256): the excess throws,
@@ -17,7 +19,9 @@ func TestTimerFloodIsCappedAndLoopStaysResponsive(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	sink := make(chanSink, 4096)
-	l := New(ctx, Config{Profile: testProfile, Width: 200, MinFrame: time.Millisecond}, sink)
+	// This tests timer admission, not the script watchdog. Exception-heavy
+	// registration can exceed the production slice under race instrumentation.
+	l := New(ctx, Config{Script: jsvm.Config{Slice: patience}, Profile: testProfile, Width: 200, MinFrame: time.Millisecond}, sink)
 	go l.Run()
 	l.LoadPage(`<body><p id="p">0</p><script>
 	  setTimeout(() => { document.getElementById("p").textContent = "alive"; }, 1); // registered before the flood: once saturated, nothing else gets a slot
@@ -26,18 +30,22 @@ func TestTimerFloodIsCappedAndLoopStaysResponsive(t *testing.T) {
 	  console.log("timers " + made + " " + refused);
 	</script></body>`, "https://example.test/", nil)
 	sawCap, sawAlive := false, false
+	var logs []string
 	deadline := time.After(patience)
 	for !(sawCap && sawAlive) {
 		select {
 		case <-deadline:
-			t.Fatalf("cap=%v alive=%v", sawCap, sawAlive)
+			t.Fatalf("cap=%v alive=%v logs=%q", sawCap, sawAlive, logs)
 		case m := <-sink:
 			switch v := m.(type) {
 			case LogMsg:
+				if len(logs) < 20 {
+					logs = append(logs, v.Level+": "+v.Line)
+				}
 				if strings.HasPrefix(v.Line, "timers ") {
 					var made, refused int
 					fmt.Sscanf(v.Line, "timers %d %d", &made, &refused)
-					sawCap = made <= 255 && refused > 0 && made+refused == 2000 // 255: the alive timer holds a slot
+					sawCap = made == 255 && refused == 1745 // 255: the alive timer holds a slot
 				}
 			case FrameMsg:
 				if v.Err == nil {
