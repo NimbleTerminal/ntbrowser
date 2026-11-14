@@ -192,7 +192,7 @@ first band with each layout and handles later scroll/zoom requests with a
 two-second deadline. Search, selection, focus and hit-testing retain global CSS
 coordinates. While painting is pending, the previous band stays visible; input
 against an outdated DOM is rejected. DOM/layout limits still apply, and TTY uses
-the whole text layout. See [the viewport design](docs/design/2026-11-05-ntbrowser-viewport-rendering-design.md).
+the whole text layout.
 
 The resident band is bounded to two screens of terminal pixels, one screen on
 viewports above 4 Mpx, through the picture's raster cap; the first band is
@@ -507,8 +507,6 @@ last rendered page remains available when scripting is disabled.
   │  loop.LogMsg ───► status line (sanitized)│◄─────┤ FrameMsg{Gen, *document.Result}  ◄──────┼───┤                  │
   └──────────────────────────────────────────┘      └─────────────────────────────────────────┘   └──────────────────┘
 ```
-
-Design: [docs/design/2026-10-25-ntbrowser-architecture-design.md](docs/design/2026-10-25-ntbrowser-architecture-design.md).
 
 ## License
 

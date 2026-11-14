@@ -4,8 +4,7 @@
 // Package profile is ntbrowser's security profile: one position for each gate,
 // the complete list of ways out of the sandbox. A profile is built before the
 // program starts, passed by value, and frozen; nothing a page can reach reads
-// or changes it. The zero Profile has every gate closed. See
-// docs/design/2026-10-31-ntbrowser-profiles-content-design.md §5.
+// or changes it. The zero Profile has every gate closed.
 package profile
 
 import (

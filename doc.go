@@ -8,6 +8,5 @@
 // fetch), or nthtml itself; every frame re-serializes the tree to HTML and
 // nthtml re-renders it off the UI goroutine.
 //
-// See docs/design/2026-10-25-ntbrowser-architecture-design.md for
-// the design this module implements.
+// See README.md for the architecture and supported runtime behavior.
 package ntbrowser
