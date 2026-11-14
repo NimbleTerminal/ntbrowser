@@ -1064,18 +1064,24 @@ func hasClass(n *Node, cls string) bool {
 // Text and attribute values are escaped by x/net/html, so a script cannot
 // smuggle markup through textContent or setAttribute.
 func (t *Tree) Serialize() string {
+	html, _ := t.serializePresentation()
+	return html
+}
+
+func (t *Tree) serializePresentation() (string, []string) {
+	var openPopovers []string
 	var b strings.Builder
 	seen := map[string]bool{} // hrefs whose <style> twin was written in this call
 	t.ids = map[string]bool{} // ids already written in this call (frameID)
-	t.write(&b, t.root, seen, false)
+	t.write(&b, t.root, seen, false, &openPopovers)
 	t.ids = nil
 	t.releaseOrphanStyles(seen)
-	return b.String()
+	return b.String(), openPopovers
 }
 
 // inSVG is true inside an <svg> subtree (SVG namespace), where names are
 // written with their SVG spelling (svgcase.go).
-func (t *Tree) write(b *strings.Builder, n *Node, seen map[string]bool, inSVG bool) {
+func (t *Tree) write(b *strings.Builder, n *Node, seen map[string]bool, inSVG bool, openPopovers *[]string) {
 	switch n.kind {
 	case Text:
 		if n.parent != nil && (n.parent.tag == "style") {
@@ -1086,7 +1092,7 @@ func (t *Tree) write(b *strings.Builder, n *Node, seen map[string]bool, inSVG bo
 		return
 	case Element:
 		if f, ok := t.frames[n.id]; ok && n.tag == "iframe" {
-			t.writeFrame(b, n, f)
+			t.writeFrame(b, n, f, openPopovers)
 			return
 		}
 		if n.tag == "noscript" || n.tag == "script" {
@@ -1099,6 +1105,9 @@ func (t *Tree) write(b *strings.Builder, n *Node, seen map[string]bool, inSVG bo
 			b.WriteString(tag)
 			own, _ := n.Attr("id")
 			id := frameID(n, t.ids[own])
+			if n.popoverOpen {
+				*openPopovers = append(*openPopovers, id)
+			}
 			if own != "" {
 				t.ids[own] = true
 			}
@@ -1130,7 +1139,7 @@ func (t *Tree) write(b *strings.Builder, n *Node, seen map[string]bool, inSVG bo
 		}
 		childSVG := inSVG && n.tag != "foreignobject" // foreignObject content is HTML again
 		for _, c := range n.children {
-			t.write(b, c, seen, childSVG)
+			t.write(b, c, seen, childSVG, openPopovers)
 		}
 		if n.tag != "#document" && !voidElement(n.tag) {
 			b.WriteString("</")

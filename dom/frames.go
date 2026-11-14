@@ -18,11 +18,23 @@ func (t *Tree) SerializeFrames(frames map[NodeID]FrameImage) string {
 	defer func() { t.frames = nil }()
 	return t.Serialize()
 }
-func (t *Tree) writeFrame(b *strings.Builder, n *Node, f FrameImage) {
+
+// SerializePresentation snapshots HTML and the matching renderer-only IDs of
+// shown popovers together. Neither IDs nor shown state become DOM attributes.
+func (t *Tree) SerializePresentation(frames map[NodeID]FrameImage) (string, []string) {
+	t.frames = frames
+	defer func() { t.frames = nil }()
+	return t.serializePresentation()
+}
+
+func (t *Tree) writeFrame(b *strings.Builder, n *Node, f FrameImage, openPopovers *[]string) {
 	own, _ := n.Attr("id")
 	id := frameID(n, t.ids[own])
 	if id == "" {
 		id = syntheticID(n.id)
+	}
+	if n.popoverOpen {
+		*openPopovers = append(*openPopovers, id)
 	}
 	if own != "" {
 		t.ids[own] = true
@@ -30,7 +42,7 @@ func (t *Tree) writeFrame(b *strings.Builder, n *Node, f FrameImage) {
 	b.WriteString("<img")
 	for _, a := range n.attrs {
 		switch a.Name {
-		case "class", "style", "title":
+		case "class", "style", "title", "popover":
 		default:
 			continue
 		}

@@ -3,14 +3,15 @@
 
 // Package subres loads a page's subresources (stylesheets, images, CSS
 // backgrounds) for ntbrowser. This file holds the CSS text tools: a rule
-// counter that mirrors nthtml's budget, the @import scanner and the url()
-// absolutizer. All three share one tokenizer that understands comments,
-// strings and nested parentheses, and nothing else about CSS.
+// counter backed by nthtml, the @import scanner and the url() absolutizer.
+// The latter two share a tokenizer for comments, strings and parentheses.
 package subres
 
 import (
 	"net/url"
 	"strings"
+
+	"nimbleterminal.dev/nthtml/document"
 )
 
 // Import is one leading @import statement of a stylesheet.
@@ -94,130 +95,15 @@ func (sc *scanner) next(stops string) int {
 	return -1
 }
 
-// matchBrace returns the index of the '}' closing the '{' at open, or -1.
-func matchBrace(s string, open int) int {
-	sc := &scanner{s: s, i: open + 1}
-	depth := 1
-	for {
-		idx := sc.next("{}")
-		if idx < 0 {
-			return -1
-		}
-		if s[idx] == '{' {
-			depth++
-		} else {
-			depth--
-			if depth == 0 {
-				return idx
-			}
-		}
-		sc.i = idx + 1
-	}
-}
-
-// splitTopLevel splits s on top-level commas (outside strings, parentheses
-// and brackets), trimming each part and dropping empty ones.
-func splitTopLevel(s string) []string {
-	var out []string
-	sc := &scanner{s: s}
-	start := 0
-	for {
-		idx := sc.next(",")
-		if idx < 0 {
-			break
-		}
-		out = appendPart(out, s[start:idx])
-		sc.i = idx + 1
-		start = sc.i
-	}
-	return appendPart(out, s[start:])
-}
-
-func appendPart(out []string, part string) []string {
-	if p := strings.TrimSpace(stripComments(part)); p != "" {
-		out = append(out, p)
-	}
-	return out
-}
-
-// stripComments removes /* */ comments exactly as nthtml's parseCSS does
-// (no replacement text, an unterminated comment eats the rest).
-func stripComments(s string) string {
-	for {
-		i := strings.Index(s, "/*")
-		if i < 0 {
-			return s
-		}
-		j := strings.Index(s[i+2:], "*/")
-		if j < 0 {
-			return s[:i]
-		}
-		s = s[:i] + s[i+2+j+2:]
-	}
-}
-
-func isMediaPrelude(prelude string) bool {
-	if len(prelude) < 6 || !strings.EqualFold(prelude[:6], "@media") {
-		return false
-	}
-	if len(prelude) == 6 {
-		return true
-	}
-	c := prelude[6]
-	return isCSSSpace(c) || c == '(' || c == '/'
-}
-
-// CountRules counts what nthtml counts against Limits.Rules: every
-// comma-separated selector of every style rule, at any depth inside @media
-// blocks whatever their condition; nothing inside other at-rule blocks
-// (@supports, @font-face, @keyframes, @layer), which nthtml skips; statement
-// at-rules, strings and comments skipped. An unparseable group still counts
-// its parts (over-counting is the safe direction).
+// CountRules uses nthtml's bounded parser, including nesting, layers and
+// @supports. A parser limit failure exceeds every supported loader rule budget,
+// so the sheet is rejected before it can fail a whole frame during rendering.
 func CountRules(css string) int {
-	return countBlock(stripComments(strings.TrimPrefix(css, "\uFEFF")))
-}
-
-func countBlock(s string) int {
-	n := 0
-	sc := &scanner{s: s}
-	for {
-		sc.skipTrivia()
-		if sc.i >= len(s) {
-			return n
-		}
-		start := sc.i
-		var idx int
-		if s[start] == '@' {
-			idx = sc.next("{;") // nthtml's scanPreludeEnd: an at-rule prelude ends only at ';' or '{'
-		} else {
-			idx = sc.next("{;}")
-		}
-		if idx < 0 {
-			return n
-		}
-		switch s[idx] {
-		case ';':
-			sc.i = idx + 1 // a statement (@import, @charset, stray ';')
-		case '}':
-			sc.i = idx + 1 // stray close brace: skip
-		case '{':
-			close := matchBrace(s, idx)
-			if close < 0 {
-				return n
-			}
-			prelude := strings.TrimSpace(s[start:idx])
-			body := s[idx+1 : close]
-			switch {
-			case strings.HasPrefix(prelude, "@"):
-				if isMediaPrelude(prelude) {
-					n += countBlock(body)
-				}
-			default:
-				n += len(splitTopLevel(prelude))
-			}
-			sc.i = close + 1
-		}
+	n, err := document.CSSRuleCount(css)
+	if err != nil {
+		return document.MaxLimits.Rules + 1
 	}
+	return n
 }
 
 // Imports returns the sheet's leading @import statements (after an optional

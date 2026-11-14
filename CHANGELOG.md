@@ -19,8 +19,13 @@ reports, and expands declarative disclosure and popover support.
   element `matches()`. Add private popover state, show/hide/toggle methods,
   declarative buttons/commands, cancelable beforetoggle and bounded asynchronous
   toggle delivery. These local actions confer no navigation or trusted activation.
-- **Media queries:** make reduced-motion, hover and scripting answers reflect
-  host state.
+- **Renderer integration:** adopt nthtml v0.7.0 and pass immutable popover state
+  to CSS and chunked rendering. Closed popovers stay hidden; shown popovers
+  render in flow and receive `:popover-open` styling. Use bounded `@supports`
+  evaluation and the renderer's parser for stylesheet rule admission, including
+  nested selectors and cascade layers.
+- **Media queries:** make CSS and `matchMedia` reduced-motion, hover and scripting
+  answers reflect the same host state.
 - **Usability coverage:** add pinned GOV.UK and WAI-ARIA APG fixtures with a
   reproducible survey of initial content, focus candidates and activation.
   The baseline documents remaining gaps, including content hidden by partial
@@ -33,9 +38,9 @@ reports, and expands declarative disclosure and popover support.
   tasks continue to use published dependencies with `GOWORK=off`. Consolidate
   test timeout handling around one generous give-up deadline per package.
 
-Browser profiles and host-authority gates are unchanged. Rendering continues to
-use published nthtml v0.6.0; the new DOM state APIs do not imply full browser
-popover presentation or ES module support.
+Browser profiles and host-authority gates are unchanged. Rendering uses published
+nthtml v0.7.0. Popovers have no top-layer or modal semantics, and ES modules
+remain unsupported.
 
 ## v0.2.0 (2026-11-10)
 

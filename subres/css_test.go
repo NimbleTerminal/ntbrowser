@@ -31,6 +31,9 @@ func TestCountRulesAgreesWithNthtml(t *testing.T) {
 		"media-ws":    "@media\n\t(min-width: 1px){a{color:red} b{color:blue}}",
 		"media-print": "@media print{a,b{}} c{}",
 		"supports":    "@supports (display:grid){a{}} b{}",
+		"unsupported": "@supports (position-area:block-end){a{}} b{}",
+		"layers":      "@layer base {a,b{}} @layer other {c{}}",
+		"nesting":     "a,b {color:red; & > p, & > q {color:blue} @supports (display:grid){display:grid; & > span{color:green}}}",
 		"strings":     "a[title=\"x,y\"]{} b:not(.c,.d){} /* , } */ e{}",
 		"nested":      "@media screen{@media (min-width:1px){a{} b{}} c{}} d{}",
 		// nthtml's prelude scanner stops only at ';' or '{', never at '}'

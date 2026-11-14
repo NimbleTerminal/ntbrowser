@@ -1043,7 +1043,7 @@ func (l *Loop) startRender() {
 		l.dropPage(l.page)
 	}
 	page := l.page
-	opts := document.Options{HoverSource: page.hoverSource, DisableDiagrams: page.diagramsDisabled, ViewportHeight: l.cfg.FrameHeight, NoImage: !l.cfg.Chunked, Width: l.cfg.Width, ColorScheme: l.cfg.ColorScheme, Limits: l.cfg.RenderLimit, Fonts: l.cfg.Fonts, FallbackFaces: fallbackFaces}
+	opts := document.Options{State: l.renderState(), HoverSource: page.hoverSource, DisableDiagrams: page.diagramsDisabled, ViewportHeight: l.cfg.FrameHeight, NoImage: !l.cfg.Chunked, Width: l.cfg.Width, ColorScheme: l.cfg.ColorScheme, Limits: l.cfg.RenderLimit, Fonts: l.cfg.Fonts, FallbackFaces: fallbackFaces}
 	var loaderWarnings []string
 	if page.diagramsDisabled {
 		loaderWarnings = append(loaderWarnings, diagramFallbackWarning)
@@ -1069,10 +1069,8 @@ func (l *Loop) startRender() {
 	}
 	chunkState, chunkReq := page.chunkState, page.chunkReq
 	useChunks := l.cfg.Chunked
-	var html string
-	if !useChunks || chunkState == nil || rebuildChunks {
-		html = page.Tree.SerializeFrames(frameHTML) // immutable snapshot after injection
-	}
+	html, openPopovers := page.Tree.SerializePresentation(frameHTML)
+	opts.State.OpenPopovers = openPopovers
 	page.Tree.ClearDirty()
 	l.pendingFrame = len(page.animation) > 0
 	l.renderInFlight = true
@@ -1148,7 +1146,7 @@ func (l *Loop) renderFrame(f *frameJob, worker *paintWorker) {
 		}
 		renderDocument := func() {
 			if f.useChunks {
-				if f.chunkState == nil || f.rebuildChunks || f.chunkState.width != f.opts.Width || f.chunkState.diagramsDisabled != f.opts.DisableDiagrams {
+				if f.chunkState == nil || f.rebuildChunks || f.chunkState.width != f.opts.Width || f.chunkState.diagramsDisabled != f.opts.DisableDiagrams || f.chunkState.media != f.opts.State.Media {
 					old := f.chunkState
 					f.chunkState, f.err = newChunkRender(ctx, doc, f.opts)
 					if f.err == nil && old != nil && f.chunkReq.index == old.index && f.chunkReq.anchor == "" && old.place != "" {

@@ -33,7 +33,7 @@ func FuzzCountRules(f *testing.F) {
 	ctx := context.Background()
 	f.Fuzz(func(t *testing.T, css string) {
 		n := CountRules(css)
-		if n < 0 || n > len(css) {
+		if n < 0 || n > document.MaxLimits.Rules+1 {
 			t.Fatalf("CountRules = %d for %d bytes", n, len(css))
 		}
 		if len(css) > 4096 || strings.ContainsAny(css, "<\x00") {

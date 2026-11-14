@@ -36,6 +36,7 @@ type chunkRequest struct {
 // transfers its pointer between workers; it never reads the engine or layouts.
 type chunkRender struct {
 	diagramsDisabled bool
+	media            document.MediaPreferences
 	source           *mappedChunks
 	cache            *nttypeset.Chunked
 	width            int
@@ -102,7 +103,7 @@ func newChunkRender(ctx context.Context, doc *document.Document, opts document.O
 	if err != nil {
 		return nil, err
 	}
-	return &chunkRender{diagramsDisabled: opts.DisableDiagrams, source: source, cache: cache, width: opts.Width, doc: doc}, nil
+	return &chunkRender{media: opts.State.Media, diagramsDisabled: opts.DisableDiagrams, source: source, cache: cache, width: opts.Width, doc: doc}, nil
 }
 
 func chunkRasterLimits(lim document.Limits) (pixels, height int) {
