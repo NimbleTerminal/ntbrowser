@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## v0.3.1 (2026-11-14)
+
 - Keep browser-comparison captures waiting for the current frame when the paint
   worker cancels a superseded request before delivering its replacement frame.
 - Separate the timer-cap regression from the script watchdog's execution-speed
