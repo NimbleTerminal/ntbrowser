@@ -16,6 +16,9 @@ import (
 	"nimbleterminal.dev/nthtml/document"
 )
 
+// Give up on stuck CI work without making runner speed part of the assertion.
+const patience = time.Minute
+
 func testOptions(t *testing.T) Options {
 	return Options{URL: "https://example.test/", Out: t.TempDir(), Width: 1200, Height: 900, Scheme: "light", Scripts: true, Settle: 100 * time.Millisecond}
 }
@@ -87,8 +90,8 @@ func TestCaptureUsesLoopScriptsAndExactViewport(t *testing.T) {
 	for _, scripts := range []bool{false, true} {
 		o := testOptions(t)
 		o.Scripts = scripts
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		r, e := captureGlynx(ctx, o, Source{URL: o.URL, HTML: `<body style="margin:0"><h1 id="title">before</h1><a href="/logo"><img src="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%224%22%20height=%224%22%3E%3Crect%20width=%224%22%20height=%224%22%20fill=%22blue%22/%3E%3C/svg%3E"></a><div style="height:2000px;background:#abc">long page</div><script>document.getElementById('title').textContent='after';</script>`})
+		ctx, cancel := context.WithTimeout(context.Background(), patience)
+		r, e := captureGlynxWithPaintDeadline(ctx, o, Source{URL: o.URL, HTML: `<body style="margin:0"><h1 id="title">before</h1><a href="/logo"><img src="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%224%22%20height=%224%22%3E%3Crect%20width=%224%22%20height=%224%22%20fill=%22blue%22/%3E%3C/svg%3E"></a><div style="height:2000px;background:#abc">long page</div><script>document.getElementById('title').textContent='after';</script>`}, patience)
 		cancel()
 		if e != nil {
 			t.Fatal(e)
@@ -124,7 +127,7 @@ func TestChromeSharedDocument(t *testing.T) {
 	for _, scripts := range []bool{false, true} {
 		o := testOptions(t)
 		o.Scripts = scripts
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), patience)
 		r, e := captureChrome(ctx, o, Source{URL: o.URL, ContentType: "text/html", Status: 200, HTML: `<link rel="icon" href="data:,"><h1 id="title">shared HTML</h1><a href="/logo"><img src="data:image/svg+xml,%3Csvg%20xmlns=%22http://www.w3.org/2000/svg%22%20width=%224%22%20height=%224%22%3E%3Crect%20width=%224%22%20height=%224%22%20fill=%22blue%22/%3E%3C/svg%3E"></a><script>document.getElementById('title').textContent='script ran';</script>`})
 		cancel()
 		if e != nil {

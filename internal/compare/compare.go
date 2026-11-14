@@ -182,6 +182,12 @@ func (s captureSink) Send(m tea.Msg) {
 	}
 }
 func captureGlynx(ctx context.Context, o Options, src Source) (Capture, error) {
+	return captureGlynxWithPaintDeadline(ctx, o, src, 0)
+}
+
+// Tests may allow slower instrumented painting. The production entry point
+// passes zero to retain the loop's normal paint deadline.
+func captureGlynxWithPaintDeadline(ctx context.Context, o Options, src Source, paintDeadline time.Duration) (Capture, error) {
 	r := Capture{Engine: "glynx loop (published nthtml)", URL: src.URL}
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -224,7 +230,7 @@ func captureGlynx(ctx context.Context, o Options, src Source) (Capture, error) {
 	policy.Cookies = cookies.New()
 	sc := subres.Config{Mode: subres.ModeAny, MaxSheetBytes: b.StylesheetBytes, MaxStylesheets: b.Stylesheets, MaxImageBytes: b.ImageBytes, MaxImages: b.Images}
 	sink := captureSink{ctx: ctx, ch: make(chan tea.Msg, 256)}
-	l := loop.New(ctx, loop.Config{Profile: p, Width: o.Width, ColorScheme: o.Scheme, Trace: trace, MinFrame: 16 * time.Millisecond, Script: jsvm.Config{HeapBudget: b.HeapBudgetMiB << 20}, DOMLimits: dom.Limits{ExternalStyleBytes: b.StylesheetTotalBytes, TotalBytes: b.PageBytes}, RenderLimit: document.Limits{Rules: b.CSSRules}, Subresources: sc, SubresourceTransport: app.SubresourceTransport(policy, sc)}, sink)
+	l := loop.New(ctx, loop.Config{PaintDeadline: paintDeadline, Profile: p, Width: o.Width, ColorScheme: o.Scheme, Trace: trace, MinFrame: 16 * time.Millisecond, Script: jsvm.Config{HeapBudget: b.HeapBudgetMiB << 20}, DOMLimits: dom.Limits{ExternalStyleBytes: b.StylesheetTotalBytes, TotalBytes: b.PageBytes}, RenderLimit: document.Limits{Rules: b.CSSRules}, Subresources: sc, SubresourceTransport: app.SubresourceTransport(policy, sc)}, sink)
 	// Exact CSS-pixel viewport; terminal cell geometry and Kitty transport are not compared.
 	l.SetViewport(nthtml.PaintViewport{Cols: o.Width, Rows: o.Height, CellWidth: 1, CellHeight: 1, MaxRasterPixels: o.Width * o.Height * 2})
 	go l.Run()
